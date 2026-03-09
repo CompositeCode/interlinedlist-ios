@@ -1,0 +1,156 @@
+//
+//  APIClient.swift
+//  InterlinedList
+//
+
+import Foundation
+
+enum APIError: Error {
+    case invalidURL
+    case noData
+    case decoding(Error)
+    case server(String)
+    case status(Int)
+    case network(Error)
+}
+
+final class APIClient {
+    static let shared = APIClient()
+    private let baseURL: String
+    private let session: URLSession
+    private(set) var bearerToken: String?
+
+    private let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        return d
+    }()
+
+    private let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.keyEncodingStrategy = .convertToSnakeCase
+        return e
+    }()
+
+    init(baseURL: String = "https://interlinedlist.com", session: URLSession = .shared) {
+        self.baseURL = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+        self.session = session
+    }
+
+    func setBearerToken(_ token: String?) {
+        bearerToken = token
+    }
+
+    // MARK: - Auth
+
+    func login(email: String, password: String) async throws -> String {
+        struct Body: Encodable {
+            let email: String
+            let password: String
+        }
+        struct Response: Decodable {
+            let token: String
+        }
+        let response: Response = try await post("/api/auth/sync-token", body: Body(email: email, password: password), authenticated: false)
+        return response.token
+    }
+
+    func currentUser() async throws -> User {
+        struct Response: Decodable {
+            let user: User
+        }
+        let response: Response = try await get("/api/user")
+        return response.user
+    }
+
+    func register(email: String, username: String, password: String, displayName: String?) async throws {
+        struct Body: Encodable {
+            let email: String
+            let username: String
+            let password: String
+            let displayName: String?
+        }
+        struct Response: Decodable {
+            let message: String?
+            let user: User?
+        }
+        let _: Response = try await post("/api/auth/register", body: Body(email: email, username: username, password: password, displayName: displayName), authenticated: false)
+    }
+
+    // MARK: - Messages
+
+    func messages(limit: Int = 50, offset: Int = 0, onlyMine: Bool = false) async throws -> (messages: [Message], pagination: Pagination?) {
+        var components = URLComponents(string: baseURL + "/api/messages")!
+        components.queryItems = [
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "offset", value: String(offset)),
+        ]
+        if onlyMine {
+            components.queryItems?.append(URLQueryItem(name: "onlyMine", value: "true"))
+        }
+        let pathWithQuery = "/api/messages" + (components.percentEncodedQuery.map { "?" + $0 } ?? "")
+        let response: MessagesResponse = try await get(pathWithQuery)
+        return (response.messages, response.pagination)
+    }
+
+    func postMessage(content: String, publiclyVisible: Bool? = nil) async throws -> Message {
+        struct Response: Decodable {
+            let data: Message?
+        }
+        let body = CreateMessageBody(content: content, publiclyVisible: publiclyVisible)
+        let response: Response = try await post("/api/messages", body: body)
+        guard let message = response.data else {
+            throw APIError.noData
+        }
+        return message
+    }
+
+    // MARK: - Private helpers
+
+
+    private func get<T: Decodable>(_ path: String) async throws -> T {
+        let urlString = baseURL + path
+        guard let url = URL(string: urlString) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func post<T: Decodable, B: Encodable>(_ path: String, body: B, authenticated: Bool = true) async throws -> T {
+        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if authenticated, let token = bearerToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = try encoder.encode(body)
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func checkResponse(data: Data, response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse else { return }
+        if http.statusCode == 401 {
+            throw APIError.status(401)
+        }
+        if http.statusCode >= 400 {
+            if let err = try? decoder.decode(ErrorResponse.self, from: data) {
+                throw APIError.server(err.error)
+            }
+            throw APIError.status(http.statusCode)
+        }
+    }
+}
+
+private struct ErrorResponse: Decodable {
+    let error: String
+}

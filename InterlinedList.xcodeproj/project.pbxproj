@@ -1,0 +1,327 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1B1C1D1E1F10001 /* InterlinedListApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10002 /* InterlinedListApp.swift */; };
+		A1B1C1D1E1F10003 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10004 /* RootView.swift */; };
+		A1B1C1D1E1F10005 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10006 /* User.swift */; };
+		A1B1C1D1E1F10007 /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10008 /* Message.swift */; };
+		A1B1C1D1E1F10009 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1000A /* KeychainService.swift */; };
+		A1B1C1D1E1F1000B /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1000C /* APIClient.swift */; };
+		A1B1C1D1E1F1000D /* AuthState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1000E /* AuthState.swift */; };
+		A1B1C1D1E1F1000F /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10010 /* LoginView.swift */; };
+		A1B1C1D1E1F10011 /* RegisterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10012 /* RegisterView.swift */; };
+		A1B1C1D1E1F10013 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10014 /* MainTabView.swift */; };
+		A1B1C1D1E1F10015 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10016 /* FeedView.swift */; };
+		A1B1C1D1E1F10017 /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10018 /* ComposeView.swift */; };
+		A1B1C1D1E1F10019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1001A /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A1B1C1D1E1F10000 /* InterlinedList.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = InterlinedList.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B1C1D1E1F10002 /* InterlinedListApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterlinedListApp.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10004 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10006 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10008 /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F1000A /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F1000C /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F1000E /* AuthState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthState.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10010 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10012 /* RegisterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10014 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10016 /* FeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10018 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F1001A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A1B1C1D1E1F10022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1B1C1D1E1F1001B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A1B1C1D1E1F1001C /* InterlinedList */ = {
+			isa = PBXGroup;
+			children = (
+				A1B1C1D1E1F1001D /* InterlinedList */,
+				A1B1C1D1E1F1001E /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A1B1C1D1E1F1001D /* InterlinedList */ = {
+			isa = PBXGroup;
+			children = (
+				A1B1C1D1E1F10002 /* InterlinedListApp.swift */,
+				A1B1C1D1E1F1001F /* Models */,
+				A1B1C1D1E1F10020 /* Services */,
+				A1B1C1D1E1F10021 /* Views */,
+				A1B1C1D1E1F1001A /* Assets.xcassets */,
+				A1B1C1D1E1F10022 /* Info.plist */,
+			);
+			path = InterlinedList;
+			sourceTree = "<group>";
+		};
+		A1B1C1D1E1F1001E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A1B1C1D1E1F10000 /* InterlinedList.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A1B1C1D1E1F1001F /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A1B1C1D1E1F10006 /* User.swift */,
+				A1B1C1D1E1F10008 /* Message.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A1B1C1D1E1F10020 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A1B1C1D1E1F1000A /* KeychainService.swift */,
+				A1B1C1D1E1F1000C /* APIClient.swift */,
+				A1B1C1D1E1F1000E /* AuthState.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A1B1C1D1E1F10021 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A1B1C1D1E1F10004 /* RootView.swift */,
+				A1B1C1D1E1F10010 /* LoginView.swift */,
+				A1B1C1D1E1F10012 /* RegisterView.swift */,
+				A1B1C1D1E1F10014 /* MainTabView.swift */,
+				A1B1C1D1E1F10016 /* FeedView.swift */,
+				A1B1C1D1E1F10018 /* ComposeView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A1B1C1D1E1F10023 /* InterlinedList */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B1C1D1E1F10024 /* Build configuration list for PBXNativeTarget "InterlinedList" */;
+			buildPhases = (
+				A1B1C1D1E1F10025 /* Sources */,
+				A1B1C1D1E1F1001B /* Frameworks */,
+				A1B1C1D1E1F10026 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = InterlinedList;
+			productName = InterlinedList;
+			productReference = A1B1C1D1E1F10000 /* InterlinedList.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A1B1C1D1E1F10027 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+			};
+			buildConfigurationList = A1B1C1D1E1F10028 /* Build configuration list for PBXProject "InterlinedList" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A1B1C1D1E1F1001C;
+			productRefGroup = A1B1C1D1E1F1001E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A1B1C1D1E1F10023 /* InterlinedList */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A1B1C1D1E1F10026 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B1C1D1E1F10019 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A1B1C1D1E1F10025 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B1C1D1E1F10001 /* InterlinedListApp.swift in Sources */,
+				A1B1C1D1E1F10003 /* RootView.swift in Sources */,
+				A1B1C1D1E1F10005 /* User.swift in Sources */,
+				A1B1C1D1E1F10007 /* Message.swift in Sources */,
+				A1B1C1D1E1F10009 /* KeychainService.swift in Sources */,
+				A1B1C1D1E1F1000B /* APIClient.swift in Sources */,
+				A1B1C1D1E1F1000D /* AuthState.swift in Sources */,
+				A1B1C1D1E1F1000F /* LoginView.swift in Sources */,
+				A1B1C1D1E1F10011 /* RegisterView.swift in Sources */,
+				A1B1C1D1E1F10013 /* MainTabView.swift in Sources */,
+				A1B1C1D1E1F10015 /* FeedView.swift in Sources */,
+				A1B1C1D1E1F10017 /* ComposeView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A1B1C1D1E1F10029 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A1B1C1D1E1F1002A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_OPTIMIZATION_LEVEL = s;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A1B1C1D1E1F1002B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = InterlinedList/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.interlinedlist.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A1B1C1D1E1F1002C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = InterlinedList/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.interlinedlist.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A1B1C1D1E1F10024 /* Build configuration list for PBXNativeTarget "InterlinedList" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B1C1D1E1F1002B /* Debug */,
+				A1B1C1D1E1F1002C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B1C1D1E1F10028 /* Build configuration list for PBXProject "InterlinedList" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B1C1D1E1F10029 /* Debug */,
+				A1B1C1D1E1F1002A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A1B1C1D1E1F10027 /* Project object */;
+}
