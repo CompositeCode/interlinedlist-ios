@@ -46,6 +46,7 @@ struct ComposeView: View {
                     .disabled(isLoading || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("New post")
             .navigationBarTitleDisplayMode(.inline)
             .alert("Posted", isPresented: $showSuccess) {

@@ -60,6 +60,7 @@ struct RegisterView: View {
                     .disabled(isLoading || email.isEmpty || username.isEmpty || password.count < 8)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Sign up")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

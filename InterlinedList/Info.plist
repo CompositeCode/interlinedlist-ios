@@ -47,5 +47,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- Optional: set to your backend URL (e.g. http://localhost:3000) to test Bearer auth against a different host -->
+	<key>ILAPIBaseURL</key>
+	<string></string>
 </dict>
 </plist>

@@ -1,0 +1,2 @@
+{"timestamp":1773101981317,"message":"401 response","location":"APIClient.swift:checkResponse","data":{"bodyPreview":"{\"error\":\"Unauthorized\"}","responseURL":"https:\/\/interlinedlist.com\/api\/user"},"sessionId":"db1bb0","hypothesisId":"401-detail"}
+{"message":"401 response","timestamp":1773101990879,"hypothesisId":"401-detail","sessionId":"db1bb0","location":"APIClient.swift:checkResponse","data":{"responseURL":"https:\/\/interlinedlist.com\/api\/user","bodyPreview":"{\"error\":\"Unauthorized\"}"}}

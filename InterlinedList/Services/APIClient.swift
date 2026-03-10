@@ -32,8 +32,11 @@ final class APIClient {
         return e
     }()
 
-    init(baseURL: String = "https://interlinedlist.com", session: URLSession = .shared) {
-        self.baseURL = baseURL.hasSuffix("/") ? String(baseURL.dropLast()) : baseURL
+    init(baseURL: String? = nil, session: URLSession = .shared) {
+        let defaultBase = "https://interlinedlist.com"
+        let plistOverride = (Bundle.main.infoDictionary?["ILAPIBaseURL"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolved = (plistOverride?.isEmpty == false ? plistOverride : nil) ?? baseURL ?? defaultBase
+        self.baseURL = resolved.hasSuffix("/") ? String(resolved.dropLast()) : resolved
         self.session = session
     }
 
@@ -109,8 +112,7 @@ final class APIClient {
 
 
     private func get<T: Decodable>(_ path: String) async throws -> T {
-        let urlString = baseURL + path
-        guard let url = URL(string: urlString) else { throw APIError.invalidURL }
+        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Accept")

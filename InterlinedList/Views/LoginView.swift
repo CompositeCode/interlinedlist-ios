@@ -60,11 +60,13 @@ struct LoginView: View {
                     .disabled(isLoading || email.isEmpty || password.isEmpty)
 
                     Button("Create account") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         showRegister = true
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Login")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showRegister) {
@@ -73,6 +75,11 @@ struct LoginView: View {
             }
         }
         .onAppear { errorMessage = nil }
+        .onChange(of: showRegister) { _, isShowing in
+            if isShowing {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+        }
     }
 
     private func signIn() async {
@@ -84,7 +91,7 @@ struct LoginView: View {
         } catch APIError.server(let message) {
             errorMessage = message
         } catch APIError.status(401) {
-            errorMessage = "Invalid email or password."
+            errorMessage = "Invalid email or password, or the server does not accept app login yet."
         } catch {
             errorMessage = "Connection failed. Please try again."
         }

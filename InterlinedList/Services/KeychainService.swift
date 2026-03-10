@@ -35,7 +35,9 @@ enum KeychainService {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess,
               let data = result as? Data,
-              let token = String(data: data, encoding: .utf8) else { return nil }
+              let token = String(data: data, encoding: .utf8) else {
+            return nil
+        }
         return token
     }
 

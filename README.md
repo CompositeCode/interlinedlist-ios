@@ -23,3 +23,8 @@ iPhone app for [InterlinedList](https://interlinedlist.com): sign in with email/
 ## Configuration
 
 The app uses `https://interlinedlist.com` by default. To point at another instance, change the `baseURL` in `APIClient.swift` (or make it configurable via a build setting / plist).
+
+## Known console messages (safe to ignore)
+
+- **"Error creating the CFMessagePort needed to communicate with PPT"** — Comes from Apple’s internal PPT (Performance Power Tools) in UIKit. It’s a known simulator/device message, not from this app, and doesn’t affect behavior. Clean build (Shift+Cmd+K), restart Xcode/simulator, or update Xcode/iOS if it bothers you.
+- **"Failed to send CA Event for app launch measurements … FirstFramePresentationMetric"** — The system tries to report launch metrics and sometimes fails (e.g. in simulator). Also not from app code and safe to ignore.

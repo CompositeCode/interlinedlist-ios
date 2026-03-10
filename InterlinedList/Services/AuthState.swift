@@ -37,13 +37,21 @@ final class AuthState: ObservableObject {
     }
 
     func login(email: String, password: String) async throws {
-        let token = try await api.login(email: email, password: password)
-        guard KeychainService.saveToken(token) else {
-            throw APIError.server("Failed to save session")
+        do {
+            let token = try await api.login(email: email, password: password)
+            guard KeychainService.saveToken(token) else {
+                throw APIError.server("Failed to save session")
+            }
+            api.setBearerToken(token)
+            do {
+                let currentUser = try await api.currentUser()
+                user = currentUser
+            } catch APIError.status(401) {
+                throw APIError.server("Session was created but the server rejected it. The server may need an update to support app login.")
+            }
+        } catch {
+            throw error
         }
-        api.setBearerToken(token)
-        let currentUser = try await api.currentUser()
-        user = currentUser
     }
 
     func register(email: String, username: String, password: String, displayName: String?) async throws {
