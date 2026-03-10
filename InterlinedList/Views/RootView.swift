@@ -13,6 +13,7 @@ struct RootView: View {
             if authState.isRestoring {
                 ProgressView("Loading…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(minWidth: 44, minHeight: 44)
             } else if authState.isLoggedIn {
                 MainTabView()
             } else {

@@ -19,8 +19,8 @@ struct LoginView: View {
                 Section {
                     Image("Logo")
                         .resizable()
-                        .scaledToFit()
                         .frame(width: 80, height: 80)
+                        .clipped()
                         .frame(maxWidth: .infinity)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 20, leading: 0, bottom: 10, trailing: 0))
@@ -51,7 +51,7 @@ struct LoginView: View {
                         HStack {
                             if isLoading {
                                 ProgressView()
-                                    .scaleEffect(0.9)
+                                    .frame(width: 20, height: 20)
                             }
                             Text("Log in")
                                 .frame(maxWidth: .infinity)

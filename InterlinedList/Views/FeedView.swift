@@ -18,6 +18,7 @@ struct FeedView: View {
                 if isLoading && messages.isEmpty {
                     ProgressView("Loading messages…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(minWidth: 44, minHeight: 44)
                 } else if let error = errorMessage, messages.isEmpty {
                     ContentUnavailableView {
                         Label("Unable to load", systemImage: "exclamationmark.triangle")
@@ -37,6 +38,7 @@ struct FeedView: View {
                             HStack {
                                 Spacer()
                                 ProgressView()
+                                    .frame(width: 24, height: 24)
                                 Spacer()
                             }
                             .onAppear {
@@ -56,8 +58,8 @@ struct FeedView: View {
                     HStack(spacing: 8) {
                         Image("Logo")
                             .resizable()
-                            .scaledToFit()
                             .frame(width: 28, height: 28)
+                            .clipped()
                         Text("InterlinedList")
                             .font(.headline)
                     }

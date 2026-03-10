@@ -51,7 +51,7 @@ struct RegisterView: View {
                         HStack {
                             if isLoading {
                                 ProgressView()
-                                    .scaleEffect(0.9)
+                                    .frame(width: 20, height: 20)
                             }
                             Text("Create account")
                                 .frame(maxWidth: .infinity)
