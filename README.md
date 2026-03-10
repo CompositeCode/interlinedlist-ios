@@ -1,6 +1,6 @@
 # InterlinedList iOS
 
-iPhone app for [InterlinedList](https://interlinedlist.com): sign in with email/password (sync token), view the feed, and post text messages.
+iPhone app for [InterlinedList](https://interlinedlist.com): sign in with email/password (sync token), view the feed, post and reply to messages, and switch between feed, lists, documents, and profile via a top navigation bar.
 
 ## Requirements
 
@@ -13,16 +13,31 @@ iPhone app for [InterlinedList](https://interlinedlist.com): sign in with email/
 2. Choose an iPhone simulator or a connected device.
 3. Press **Run** (⌘R).
 
+## Navigation
+
+A **top bar** (tab-style) runs across the app with four items, left to right:
+
+- **Home** – Messages feed. Tap the pencil in the toolbar to compose a new post.
+- **Lists** – Placeholder (lists not yet implemented in the app).
+- **Documents** – Placeholder (documents not yet implemented in the app).
+- **Profile** – User avatar and display name; **Log out** is here.
+
 ## Features
 
 - **Login / Register** – Email and password; token is stored in Keychain so you stay logged in.
-- **Feed** – Lists messages from the site (pull to refresh).
-- **Compose** – Text-only posts with an optional “Public” toggle.
-- **Log out** – Via the profile menu in the top-right.
+- **Feed (Home)** – Messages from the site with pull-to-refresh and infinite scroll. Each message shows:
+  - Author, date, content, and a lock icon when the message is private.
+  - Optional **previews** (link cards, images, video) with a “Show previews” toggle at the top of the feed.
+  - **Reply** and **Delete** (Delete only for your own messages). Reply opens a sheet to post a reply.
+- **Compose** – Opened from the feed via the pencil button. Text posts with:
+  - **Public** toggle (default comes from your account setting).
+  - **Character count** from your account’s max message length.
+  - **Advanced bar** (gear): toggles a row of icons (image, video, Mastodon, Bluesky, LinkedIn, calendar). Bar visibility default comes from your “Show advanced post settings” setting. Icon actions are not implemented yet.
+- **Profile** – Avatar, display name, username, and Log out.
 
 ## Configuration
 
-The app uses `https://interlinedlist.com` by default. To point at another instance, change the `baseURL` in `APIClient.swift` (or make it configurable via a build setting / plist).
+- **API base URL** – The app uses `https://interlinedlist.com` by default. To use another instance (e.g. local or staging), set the `ILAPIBaseURL` key in `Info.plist` to the base URL (e.g. `http://localhost:3000`). Leave it empty to use production.
 
 ## Known console messages (safe to ignore)
 
