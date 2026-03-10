@@ -173,12 +173,21 @@ struct MessageRow: View {
         return message.userId == uid
     }
 
+    private var isPrivate: Bool {
+        message.publiclyVisible == false
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(message.authorDisplay)
                     .font(.subheadline)
                     .fontWeight(.medium)
+                if isPrivate {
+                    Image(systemName: "lock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Text(formatDate(message.createdAt))
                     .font(.caption)
