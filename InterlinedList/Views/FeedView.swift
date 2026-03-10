@@ -15,6 +15,7 @@ struct FeedView: View {
     @State private var replyToMessage: Message?
     @State private var messageToDelete: Message?
     @State private var deleteError: String?
+    @State private var showCompose = false
 
     var body: some View {
         NavigationStack {
@@ -83,6 +84,17 @@ struct FeedView: View {
                             .font(.headline)
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showCompose = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+            }
+            .sheet(isPresented: $showCompose) {
+                ComposeView()
+                    .environmentObject(authState)
             }
             .task {
                 await loadMessages()
