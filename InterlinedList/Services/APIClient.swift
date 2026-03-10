@@ -96,16 +96,36 @@ final class APIClient {
         return (response.messages, response.pagination)
     }
 
-    func postMessage(content: String, publiclyVisible: Bool? = nil) async throws -> Message {
+    func postMessage(content: String, publiclyVisible: Bool? = nil, parentId: String? = nil) async throws -> Message {
         struct Response: Decodable {
             let data: Message?
         }
-        let body = CreateMessageBody(content: content, publiclyVisible: publiclyVisible)
+        let body = CreateMessageBody(content: content, publiclyVisible: publiclyVisible, parentId: parentId)
         let response: Response = try await post("/api/messages", body: body)
         guard let message = response.data else {
             throw APIError.noData
         }
         return message
+    }
+
+    func deleteMessage(id: String) async throws {
+        var request = URLRequest(url: URL(string: baseURL + "/api/messages/" + id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)!)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { return }
+        if http.statusCode == 401 {
+            throw APIError.status(401)
+        }
+        if http.statusCode >= 400 {
+            if http.statusCode == 403 {
+                throw APIError.server("You can only delete your own messages.")
+            }
+            throw APIError.status(http.statusCode)
+        }
     }
 
     // MARK: - Private helpers

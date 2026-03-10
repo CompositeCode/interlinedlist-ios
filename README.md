@@ -26,5 +26,10 @@ The app uses `https://interlinedlist.com` by default. To point at another instan
 
 ## Known console messages (safe to ignore)
 
-- **"Error creating the CFMessagePort needed to communicate with PPT"** — Comes from Apple’s internal PPT (Performance Power Tools) in UIKit. It’s a known simulator/device message, not from this app, and doesn’t affect behavior. Clean build (Shift+Cmd+K), restart Xcode/simulator, or update Xcode/iOS if it bothers you.
-- **"Failed to send CA Event for app launch measurements … FirstFramePresentationMetric"** — The system tries to report launch metrics and sometimes fails (e.g. in simulator). Also not from app code and safe to ignore.
+These come from the system or simulator, not from app logic. They do not indicate bugs in this app.
+
+- **"Error creating the CFMessagePort needed to communicate with PPT"** — Apple’s internal PPT in UIKit. Known simulator/device message; doesn’t affect behavior.
+- **"Failed to send CA Event for app launch measurements … FirstFramePresentationMetric"** — System launch metrics sometimes fail in simulator. Safe to ignore.
+- **"[RTIInputSystemClient …] perform input operation requires a valid sessionID"** — System text input/emoji (RTI) can log this when the keyboard is involved during a transition. The app dismisses the keyboard before presenting reply/delete so this is less likely; if it still appears, it’s system-only and safe to ignore.
+- **"Unable to simultaneously satisfy constraints"** involving **SystemInputAssistantView**, **UIRemoteKeyboardPlaceholderView**, **assistantHeight** — These are in the system keyboard/input assistant UI. iOS recovers by breaking a constraint; no app fix. Dismissing the keyboard before opening sheets/alerts can reduce how often it happens.
+- **"nw_endpoint_flow_failed_with_error"**, **"nw_connection_copy_*"**, **"Socket is not connected"** — Low-level Network framework logs from failed or cancelled connections (e.g. network unreachable, request cancelled). Can appear when the system or app cancels requests. Safe to ignore unless the app’s own API calls are failing in the UI.
