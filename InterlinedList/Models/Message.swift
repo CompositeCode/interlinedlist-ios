@@ -12,6 +12,26 @@ struct MessageUser: Codable {
     let avatar: String?
 }
 
+/// Link preview metadata for one URL in a message.
+struct LinkMetadataItem: Codable {
+    let url: String
+    let platform: String?
+    let metadata: LinkMetadataItemContent?
+    let fetchStatus: String?
+}
+
+struct LinkMetadataItemContent: Codable {
+    let thumbnail: String?
+    let title: String?
+    let description: String?
+    let text: String?
+    let type: String?
+}
+
+struct LinkMetadata: Codable {
+    let links: [LinkMetadataItem]
+}
+
 struct Message: Codable, Identifiable {
     let id: String
     let content: String
@@ -22,11 +42,20 @@ struct Message: Codable, Identifiable {
     let user: MessageUser?
     let imageUrls: [String]?
     let videoUrls: [String]?
+    let linkMetadata: LinkMetadata?
+    let parentId: String?
 
     var authorDisplay: String {
         guard let user = user else { return "Unknown" }
         let name = user.displayName?.isEmpty == false ? (user.displayName ?? user.username) : user.username
         return name
+    }
+
+    var hasPreviews: Bool {
+        let hasLinks = (linkMetadata?.links.isEmpty == false) ?? false
+        let hasImages = (imageUrls?.isEmpty == false) ?? false
+        let hasVideos = (videoUrls?.isEmpty == false) ?? false
+        return hasLinks || hasImages || hasVideos
     }
 }
 
@@ -45,6 +74,7 @@ struct Pagination: Codable {
 struct CreateMessageBody: Encodable {
     let content: String
     let publiclyVisible: Bool?
+    let parentId: String?
 }
 
 struct CreateMessageResponse: Codable {

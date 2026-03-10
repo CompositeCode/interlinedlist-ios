@@ -11,6 +11,11 @@ struct FeedView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var pagination: Pagination?
+    @State private var showPreviews = true
+    @State private var replyToMessage: Message?
+    @State private var messageToDelete: Message?
+    @State private var deleteError: String?
+    @State private var showCompose = false
 
     var body: some View {
         NavigationStack {
@@ -18,6 +23,7 @@ struct FeedView: View {
                 if isLoading && messages.isEmpty {
                     ProgressView("Loading messages…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(minWidth: 44, minHeight: 44)
                 } else if let error = errorMessage, messages.isEmpty {
                     ContentUnavailableView {
                         Label("Unable to load", systemImage: "exclamationmark.triangle")
@@ -30,13 +36,29 @@ struct FeedView: View {
                     }
                 } else {
                     List {
+                        Section {
+                            Toggle("Show previews", isOn: $showPreviews)
+                        }
                         ForEach(messages) { message in
-                            MessageRow(message: message)
+                            MessageRow(
+                                message: message,
+                                currentUserId: authState.user?.id,
+                                showPreviews: showPreviews,
+                                onReply: {
+                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                    replyToMessage = message
+                                },
+                                onDelete: {
+                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                                    messageToDelete = message
+                                }
+                            )
                         }
                         if let pagination = pagination, pagination.hasMore, !isLoading {
                             HStack {
                                 Spacer()
                                 ProgressView()
+                                    .frame(width: 24, height: 24)
                                 Spacer()
                             }
                             .onAppear {
@@ -56,12 +78,23 @@ struct FeedView: View {
                     HStack(spacing: 8) {
                         Image("Logo")
                             .resizable()
-                            .scaledToFit()
                             .frame(width: 28, height: 28)
+                            .clipped()
                         Text("InterlinedList")
                             .font(.headline)
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showCompose = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+            }
+            .sheet(isPresented: $showCompose) {
+                ComposeView()
+                    .environmentObject(authState)
             }
             .task {
                 await loadMessages()
@@ -71,6 +104,41 @@ struct FeedView: View {
                     Task { await loadMessages() }
                 }
             }
+            .sheet(item: $replyToMessage, onDismiss: { replyToMessage = nil }) { message in
+                ComposeView(replyTo: message)
+                    .environmentObject(authState)
+            }
+            .alert("Delete message?", isPresented: Binding(
+                get: { messageToDelete != nil },
+                set: { if !$0 { messageToDelete = nil; deleteError = nil } }
+            )) {
+                Button("Cancel", role: .cancel) {
+                    messageToDelete = nil
+                    deleteError = nil
+                }
+                Button("Delete", role: .destructive) {
+                    guard let msg = messageToDelete else { return }
+                    deleteError = nil
+                    Task { await deleteMessage(msg) }
+                }
+            } message: {
+                Text(deleteError ?? "This cannot be undone.")
+            }
+        }
+    }
+
+    private func deleteMessage(_ message: Message) async {
+        do {
+            try await APIClient.shared.deleteMessage(id: message.id)
+            messageToDelete = nil
+            messages.removeAll { $0.id == message.id }
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+            messageToDelete = nil
+        } catch APIError.server(let text) {
+            deleteError = text
+        } catch {
+            deleteError = "Failed to delete."
         }
     }
 
@@ -107,6 +175,19 @@ struct FeedView: View {
 
 struct MessageRow: View {
     let message: Message
+    let currentUserId: String?
+    let showPreviews: Bool
+    let onReply: () -> Void
+    let onDelete: () -> Void
+
+    private var canDelete: Bool {
+        guard let uid = currentUserId else { return false }
+        return message.userId == uid
+    }
+
+    private var isPrivate: Bool {
+        message.publiclyVisible == false
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -114,6 +195,11 @@ struct MessageRow: View {
                 Text(message.authorDisplay)
                     .font(.subheadline)
                     .fontWeight(.medium)
+                if isPrivate {
+                    Image(systemName: "lock.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Text(formatDate(message.createdAt))
                     .font(.caption)
@@ -121,8 +207,84 @@ struct MessageRow: View {
             }
             Text(message.content)
                 .font(.body)
+            if showPreviews && message.hasPreviews {
+                previewSection
+            }
+            HStack(spacing: 12) {
+                Button {
+                    onReply()
+                } label: {
+                    Label("Reply", systemImage: "arrowshape.turn.up.left")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                if canDelete {
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var previewSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let urls = message.imageUrls, !urls.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(urls.prefix(8), id: \.self) { urlString in
+                            if let url = URL(string: urlString) {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFill()
+                                    case .failure:
+                                        Image(systemName: "photo")
+                                            .foregroundStyle(.secondary)
+                                    default:
+                                        ProgressView()
+                                            .frame(width: 60, height: 60)
+                                    }
+                                }
+                                .frame(width: 80, height: 80)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                            }
+                        }
+                    }
+                }
+                .frame(height: 86)
+            }
+            if let links = message.linkMetadata?.links, !links.isEmpty {
+                ForEach(Array(links.enumerated()), id: \.offset) { _, link in
+                    if let meta = link.metadata {
+                        LinkPreviewBlock(link: link, meta: meta)
+                    }
+                }
+            }
+            if let urls = message.videoUrls, !urls.isEmpty, let first = urls.first, let url = URL(string: first) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Video")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Link(destination: url) {
+                        Label(first, systemImage: "play.rectangle")
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+        }
+        .padding(.top, 4)
     }
 
     private func formatDate(_ iso: String) -> String {
@@ -134,5 +296,49 @@ struct MessageRow: View {
             return f.localizedString(for: date, relativeTo: Date())
         }
         return iso
+    }
+}
+
+private struct LinkPreviewBlock: View {
+    let link: LinkMetadataItem
+    let meta: LinkMetadataItemContent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let thumb = meta.thumbnail, let url = URL(string: thumb) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .failure:
+                        EmptyView()
+                    default:
+                        ProgressView()
+                            .frame(width: 44, height: 44)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 120)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            if let title = meta.title, !title.isEmpty {
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .lineLimit(2)
+            }
+            if let desc = meta.description, !desc.isEmpty {
+                Text(desc)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(8)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

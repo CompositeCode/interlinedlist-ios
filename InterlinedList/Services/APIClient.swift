@@ -32,6 +32,12 @@ final class APIClient {
         return e
     }()
 
+    /// Encoder that keeps camelCase keys (for APIs that expect camelCase in the request body, e.g. POST /api/messages).
+    private let camelCaseEncoder: JSONEncoder = {
+        let e = JSONEncoder()
+        return e
+    }()
+
     init(baseURL: String? = nil, session: URLSession = .shared) {
         let defaultBase = "https://interlinedlist.com"
         let plistOverride = (Bundle.main.infoDictionary?["ILAPIBaseURL"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -96,16 +102,46 @@ final class APIClient {
         return (response.messages, response.pagination)
     }
 
-    func postMessage(content: String, publiclyVisible: Bool? = nil) async throws -> Message {
+    func postMessage(content: String, publiclyVisible: Bool? = nil, parentId: String? = nil) async throws -> Message {
         struct Response: Decodable {
             let data: Message?
         }
-        let body = CreateMessageBody(content: content, publiclyVisible: publiclyVisible)
-        let response: Response = try await post("/api/messages", body: body)
-        guard let message = response.data else {
-            throw APIError.noData
+        let body = CreateMessageBody(content: content, publiclyVisible: publiclyVisible, parentId: parentId)
+        // Backend expects camelCase (publiclyVisible, parentId); snake_case would send publicly_visible and be ignored.
+        guard let url = URL(string: baseURL + "/api/messages") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        request.httpBody = try camelCaseEncoder.encode(body)
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+        let decoded: Response = try decoder.decode(Response.self, from: data)
+        guard let message = decoded.data else { throw APIError.noData }
         return message
+    }
+
+    func deleteMessage(id: String) async throws {
+        var request = URLRequest(url: URL(string: baseURL + "/api/messages/" + id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)!)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { return }
+        if http.statusCode == 401 {
+            throw APIError.status(401)
+        }
+        if http.statusCode >= 400 {
+            if http.statusCode == 403 {
+                throw APIError.server("You can only delete your own messages.")
+            }
+            throw APIError.status(http.statusCode)
+        }
     }
 
     // MARK: - Private helpers
