@@ -124,6 +124,31 @@ final class APIClient {
         return message
     }
 
+    // MARK: - Lists
+
+    func listsAndFolders() async throws -> (folders: [ListFolder], lists: [UserList]) {
+        // Folders are supplementary — silently ignore non-auth failures (endpoint may not exist).
+        let folders: [ListFolder]
+        do {
+            let response: FoldersResponse = try await get("/api/folders")
+            folders = response.folders
+        } catch APIError.status(401) {
+            throw APIError.status(401)
+        } catch {
+            folders = []
+        }
+
+        // Lists are required — propagate errors so the UI can surface them.
+        let listsResponse: ListsResponse = try await get("/api/lists")
+        return (folders, listsResponse.lists)
+    }
+
+    func listItems(listId: String) async throws -> [ListItem] {
+        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let response: ListItemsResponse = try await get("/api/lists/\(encoded)/items")
+        return response.items
+    }
+
     func deleteMessage(id: String) async throws {
         var request = URLRequest(url: URL(string: baseURL + "/api/messages/" + id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)!)
         request.httpMethod = "DELETE"

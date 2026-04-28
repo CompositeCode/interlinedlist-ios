@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xcodebuild -scheme InterlinedList -destination 'platform=iOS Simulator,name=iPhone 16' build)",
+      "Bash(identify /Users/adron/Codez/interlinedlist-ios/interlinedlist-logo-only.png)",
+      "Bash(sips -g all /Users/adron/Codez/interlinedlist-ios/interlinedlist-logo-only.png)",
+      "Bash(sips -g all /Users/adron/Codez/interlinedlist-ios/interlinedlist.png)",
+      "Bash(sips --version)",
+      "Bash(convert --version)",
+      "Bash(magick interlinedlist.png -crop 1400x1400+290+1350 /tmp/mark_crop.png)",
+      "Bash(magick /tmp/mark_crop.png -resize 1024x1024 /tmp/mark_1024_test.png)",
+      "Bash(magick /Users/adron/Codez/interlinedlist-ios/interlinedlist.png -crop 1150x1150+375+1450 /tmp/mark_crop2.png)",
+      "Bash(magick /tmp/mark_crop2.png -resize 1024x1024 /tmp/mark_1024_test2.png)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios mv interlinedlist-logo-only.png Resources/interlinedlist-logo-only.png)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios mv interlinedlist.png Resources/interlinedlist.png)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios mv interlinedlist.svg Resources/interlinedlist.svg)"
+    ]
+  }
+}
