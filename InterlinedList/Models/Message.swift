@@ -52,9 +52,9 @@ struct Message: Codable, Identifiable {
     }
 
     var hasPreviews: Bool {
-        let hasLinks = (linkMetadata?.links.isEmpty == false) ?? false
-        let hasImages = (imageUrls?.isEmpty == false) ?? false
-        let hasVideos = (videoUrls?.isEmpty == false) ?? false
+        let hasLinks = linkMetadata?.links.isEmpty == false
+        let hasImages = imageUrls?.isEmpty == false
+        let hasVideos = videoUrls?.isEmpty == false
         return hasLinks || hasImages || hasVideos
     }
 }
