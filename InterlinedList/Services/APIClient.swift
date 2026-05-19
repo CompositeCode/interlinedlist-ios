@@ -175,9 +175,9 @@ final class APIClient {
         do {
             let response: FoldersResponse = try await get("/api/folders")
             folders = response.folders
-        } catch APIError.status(401) {
-            throw APIError.status(401)
         } catch {
+            // Folders are supplementary; treat all errors (including 401 from Bearer-only servers)
+            // as "no folders." Auth is validated independently by the /api/lists call below.
             folders = []
         }
 
@@ -188,8 +188,14 @@ final class APIClient {
 
     func listItems(listId: String) async throws -> [ListItem] {
         let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
-        let response: ListItemsResponse = try await get("/api/lists/\(encoded)/items")
-        return response.items
+        // /data is the current endpoint; /items is legacy. Single-item responses use "row" so
+        // the collection key is likely "rows", but we fall back to the legacy "items" key.
+        struct DataResponse: Decodable {
+            let rows: [ListItem]?
+            let items: [ListItem]?
+        }
+        let response: DataResponse = try await get("/api/lists/\(encoded)/data")
+        return response.rows ?? response.items ?? []
     }
 
     func createList(title: String, description: String?, isPublic: Bool) async throws -> UserList {
