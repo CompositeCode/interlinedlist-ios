@@ -22,6 +22,18 @@
 		A1B1C1D1E1F10019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1001A /* Assets.xcassets */; };
 		A1B1C1D1E1F1002D /* List.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1002E /* List.swift */; };
 		A1B1C1D1E1F1002F /* ListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10030 /* ListsView.swift */; };
+		A1B1C1D1E1F10031 /* EditMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10032 /* EditMessageView.swift */; };
+		A1B1C1D1E1F10033 /* MessageThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10034 /* MessageThreadView.swift */; };
+		A1B1C1D1E1F10035 /* CreateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10036 /* CreateListView.swift */; };
+		A1B1C1D1E1F10037 /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10038 /* UserProfileView.swift */; };
+		A1B1C1D1E1F10039 /* ScheduledMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1003A /* ScheduledMessagesView.swift */; };
+		A2B2C2D2E2F20041 /* AppNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F20042 /* AppNotification.swift */; };
+		A2B2C2D2E2F20043 /* FollowState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F20044 /* FollowState.swift */; };
+		A2B2C2D2E2F20045 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F20046 /* NotificationsView.swift */; };
+		A2B2C2D2E2F20047 /* FollowRequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F20048 /* FollowRequestsView.swift */; };
+		A2B2C2D2E2F20049 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F2004A /* EditProfileView.swift */; };
+		A3C3D3E3F3A30051 /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C3D3E3F3A30052 /* Document.swift */; };
+		A3C3D3E3F3A30053 /* DocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C3D3E3F3A30054 /* DocumentsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,7 +53,19 @@
 		A1B1C1D1E1F1001A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1B1C1D1E1F1002E /* List.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = List.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10030 /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListsView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10032 /* EditMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMessageView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10034 /* MessageThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageThreadView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10036 /* CreateListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateListView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10038 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F1003A /* ScheduledMessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledMessagesView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2B2C2D2E2F20042 /* AppNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNotification.swift; sourceTree = "<group>"; };
+		A2B2C2D2E2F20044 /* FollowState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowState.swift; sourceTree = "<group>"; };
+		A2B2C2D2E2F20046 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		A2B2C2D2E2F20048 /* FollowRequestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowRequestsView.swift; sourceTree = "<group>"; };
+		A2B2C2D2E2F2004A /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
+		A3C3D3E3F3A30052 /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
+		A3C3D3E3F3A30054 /* DocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +114,9 @@
 				A1B1C1D1E1F10006 /* User.swift */,
 				A1B1C1D1E1F10008 /* Message.swift */,
 				A1B1C1D1E1F1002E /* List.swift */,
+				A2B2C2D2E2F20042 /* AppNotification.swift */,
+				A2B2C2D2E2F20044 /* FollowState.swift */,
+				A3C3D3E3F3A30052 /* Document.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -114,6 +141,15 @@
 				A1B1C1D1E1F10016 /* FeedView.swift */,
 				A1B1C1D1E1F10018 /* ComposeView.swift */,
 				A1B1C1D1E1F10030 /* ListsView.swift */,
+				A1B1C1D1E1F10032 /* EditMessageView.swift */,
+				A1B1C1D1E1F10034 /* MessageThreadView.swift */,
+				A1B1C1D1E1F10036 /* CreateListView.swift */,
+				A1B1C1D1E1F10038 /* UserProfileView.swift */,
+				A1B1C1D1E1F1003A /* ScheduledMessagesView.swift */,
+				A2B2C2D2E2F20046 /* NotificationsView.swift */,
+				A2B2C2D2E2F20048 /* FollowRequestsView.swift */,
+				A2B2C2D2E2F2004A /* EditProfileView.swift */,
+				A3C3D3E3F3A30054 /* DocumentsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -196,6 +232,18 @@
 				A1B1C1D1E1F10017 /* ComposeView.swift in Sources */,
 				A1B1C1D1E1F1002D /* List.swift in Sources */,
 				A1B1C1D1E1F1002F /* ListsView.swift in Sources */,
+				A1B1C1D1E1F10031 /* EditMessageView.swift in Sources */,
+				A1B1C1D1E1F10033 /* MessageThreadView.swift in Sources */,
+				A1B1C1D1E1F10035 /* CreateListView.swift in Sources */,
+				A1B1C1D1E1F10037 /* UserProfileView.swift in Sources */,
+				A1B1C1D1E1F10039 /* ScheduledMessagesView.swift in Sources */,
+				A2B2C2D2E2F20041 /* AppNotification.swift in Sources */,
+				A2B2C2D2E2F20043 /* FollowState.swift in Sources */,
+				A2B2C2D2E2F20045 /* NotificationsView.swift in Sources */,
+				A2B2C2D2E2F20047 /* FollowRequestsView.swift in Sources */,
+				A2B2C2D2E2F20049 /* EditProfileView.swift in Sources */,
+				A3C3D3E3F3A30051 /* Document.swift in Sources */,
+				A3C3D3E3F3A30053 /* DocumentsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

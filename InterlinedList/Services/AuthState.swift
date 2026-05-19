@@ -65,6 +65,10 @@ final class AuthState: ObservableObject {
         user = nil
     }
 
+    func updateUser(_ updated: User) {
+        user = updated
+    }
+
     func handleUnauthorized() {
         logout()
     }

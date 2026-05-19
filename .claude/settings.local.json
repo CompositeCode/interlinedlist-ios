@@ -14,7 +14,17 @@
       "Bash(grep -r* InterlinedList*)",
       "Bash(git diff*)",
       "Bash(git log*)",
-      "Bash(git status)"
+      "Bash(git status)",
+      "WebFetch(domain:interlinedlist.com)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios/.claude/worktrees/agent-a043ee9887bfb04fd diff --stat HEAD)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios/.claude/worktrees/agent-a043ee9887bfb04fd log --oneline -10)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios/.claude/worktrees/agent-a043ee9887bfb04fd status)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios status)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios branch)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios log --oneline -5)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios diff --stat HEAD)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios/.claude/worktrees/agent-a11553991aeb72c5f log --oneline -5)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios/.claude/worktrees/agent-a11553991aeb72c5f diff --stat HEAD)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

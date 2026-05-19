@@ -10,6 +10,8 @@ struct ListsView: View {
     @State private var treeNodes: [ListTreeNode] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var showCreateList = false
+    @State private var createError: String?
 
     var body: some View {
         NavigationStack {
@@ -38,7 +40,9 @@ struct ListsView: View {
                 } else {
                     List {
                         ForEach(treeNodes) { node in
-                            ListTreeNodeRow(node: node)
+                            ListTreeNodeRow(node: node, onDeleteList: { list in
+                                Task { await deleteList(list) }
+                            })
                         }
                     }
                     .listStyle(.sidebar)
@@ -50,12 +54,38 @@ struct ListsView: View {
                 ListDetailView(list: list)
                     .environmentObject(authState)
             }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showCreateList = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showCreateList) {
+                CreateListView { _ in
+                    Task { await loadLists() }
+                }
+            }
             .task {
                 await loadLists()
             }
             .refreshable {
                 await loadLists()
             }
+        }
+    }
+
+    private func deleteList(_ list: UserList) async {
+        do {
+            try await APIClient.shared.deleteList(id: list.id)
+            await loadLists()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            // Reload anyway to reflect server state
+            await loadLists()
         }
     }
 
@@ -80,13 +110,14 @@ struct ListsView: View {
 
 struct ListTreeNodeRow: View {
     let node: ListTreeNode
+    let onDeleteList: (UserList) -> Void
     @State private var isExpanded = true
 
     var body: some View {
         if let children = node.children {
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
-                    ListTreeNodeRow(node: child)
+                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList)
                 }
             } label: {
                 Label(node.name, systemImage: "folder.fill")
@@ -95,6 +126,13 @@ struct ListTreeNodeRow: View {
         } else if let list = node.list {
             NavigationLink(value: list) {
                 Label(node.name, systemImage: "list.bullet")
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button(role: .destructive) {
+                    onDeleteList(list)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
             }
         }
     }
@@ -106,15 +144,19 @@ struct ListDetailView: View {
     let list: UserList
     @EnvironmentObject var authState: AuthState
     @State private var items: [ListItem] = []
+    @State private var checkStates: [String: Bool] = [:]
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var newItemText = ""
+    @State private var addItemError: String?
+    @State private var isAdding = false
 
     var body: some View {
         Group {
-            if isLoading {
+            if isLoading && items.isEmpty {
                 ProgressView("Loading…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error = errorMessage {
+            } else if let error = errorMessage, items.isEmpty {
                 ContentUnavailableView {
                     Label("Unable to load", systemImage: "exclamationmark.triangle")
                 } description: {
@@ -125,16 +167,51 @@ struct ListDetailView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if items.isEmpty {
-                ContentUnavailableView {
-                    Label("Empty List", systemImage: "list.bullet")
-                } description: {
-                    Text("This list has no items yet.")
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(items) { item in
-                    ListItemRow(item: item)
+                List {
+                    if items.isEmpty && !isLoading {
+                        ContentUnavailableView {
+                            Label("Empty List", systemImage: "list.bullet")
+                        } description: {
+                            Text("This list has no items yet.")
+                        }
+                    } else {
+                        ForEach(items) { item in
+                            ListItemRow(
+                                item: item,
+                                isChecked: checkStates[item.id] ?? (item.checked ?? false),
+                                onToggle: { Task { await toggleItem(item) } }
+                            )
+                        }
+                        .onDelete { indexSet in
+                            for index in indexSet {
+                                let item = items[index]
+                                Task { await deleteItem(item) }
+                            }
+                        }
+                    }
+                    Section {
+                        HStack {
+                            TextField("Add item…", text: $newItemText)
+                            Button {
+                                Task { await addItem() }
+                            } label: {
+                                if isAdding {
+                                    ProgressView()
+                                        .frame(width: 20, height: 20)
+                                } else {
+                                    Text("Add")
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(isAdding || newItemText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                        if let error = addItemError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
                 }
             }
         }
@@ -148,12 +225,60 @@ struct ListDetailView: View {
         }
     }
 
+    private func addItem() async {
+        addItemError = nil
+        isAdding = true
+        defer { isAdding = false }
+        let text = newItemText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        do {
+            let item = try await APIClient.shared.addListItem(listId: list.id, content: text)
+            items.append(item)
+            newItemText = ""
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.server(let msg) {
+            addItemError = msg
+        } catch {
+            addItemError = "Failed to add item."
+        }
+    }
+
+    private func deleteItem(_ item: ListItem) async {
+        do {
+            try await APIClient.shared.deleteListItem(listId: list.id, itemId: item.id)
+            items.removeAll { $0.id == item.id }
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            await loadItems()
+        }
+    }
+
+    private func toggleItem(_ item: ListItem) async {
+        let current = checkStates[item.id] ?? (item.checked ?? false)
+        let next = !current
+        checkStates[item.id] = next
+        do {
+            let updated = try await APIClient.shared.toggleListItem(listId: list.id, itemId: item.id, checked: next)
+            checkStates[item.id] = updated.checked ?? next
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+            checkStates[item.id] = current
+        } catch {
+            checkStates[item.id] = current
+        }
+    }
+
     private func loadItems() async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
         do {
             items = try await APIClient.shared.listItems(listId: list.id)
+            for item in items {
+                checkStates[item.id] = item.checked ?? false
+            }
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch APIError.server(let msg) {
@@ -168,14 +293,20 @@ struct ListDetailView: View {
 
 struct ListItemRow: View {
     let item: ListItem
+    let isChecked: Bool
+    let onToggle: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: item.checked == true ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(item.checked == true ? Color.green : Color.secondary)
+            Button { onToggle() } label: {
+                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isChecked ? Color.green : Color.secondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(isChecked ? "Uncheck item" : "Check item")
             Text(item.content)
-                .strikethrough(item.checked == true)
-                .foregroundStyle(item.checked == true ? Color.secondary : Color.primary)
+                .strikethrough(isChecked)
+                .foregroundStyle(isChecked ? Color.secondary : Color.primary)
         }
         .padding(.vertical, 2)
     }
