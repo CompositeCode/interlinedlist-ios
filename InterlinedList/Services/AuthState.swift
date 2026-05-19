@@ -31,8 +31,16 @@ final class AuthState: ObservableObject {
         do {
             let currentUser = try await api.currentUser()
             user = currentUser
-        } catch {
+        } catch APIError.status(401) {
+            // Session token is explicitly rejected — clear it.
             logout()
+        } catch {
+            // Network error, decode failure, server error — token may still be valid.
+            // Keep the user logged in; individual views will surface their own errors.
+            if user == nil {
+                // No user was ever set this launch, so there's nothing to keep.
+                logout()
+            }
         }
     }
 
@@ -70,6 +78,18 @@ final class AuthState: ObservableObject {
     }
 
     func handleUnauthorized() {
-        logout()
+        // An endpoint returned 401, but that doesn't prove the session is dead —
+        // some endpoints only accept session-cookie auth and will reject a valid Bearer token.
+        // Re-validate against /api/user before deciding to log out.
+        Task {
+            do {
+                let currentUser = try await api.currentUser()
+                user = currentUser  // Session still valid; refresh user data.
+            } catch APIError.status(401) {
+                logout()  // /api/user itself rejected the token — genuinely expired.
+            } catch {
+                // Network error — token may still be valid; don't log out.
+            }
+        }
     }
 }

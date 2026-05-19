@@ -252,8 +252,13 @@ final class APIClient {
 
     // MARK: - Documents
 
-    func documents() async throws -> [Document] {
-        let response: DocumentsResponse = try await get("/api/documents")
+    func documents(folderId: String? = nil) async throws -> [Document] {
+        var path = "/api/documents"
+        if let folderId, !folderId.isEmpty,
+           let encoded = folderId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            path += "?folderId=\(encoded)"
+        }
+        let response: DocumentsResponse = try await get(path)
         return response.documents
     }
 

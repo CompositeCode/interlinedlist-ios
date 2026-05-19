@@ -24,7 +24,8 @@
       "Bash(git -C /Users/adron/Codez/interlinedlist-ios log --oneline -5)",
       "Bash(git -C /Users/adron/Codez/interlinedlist-ios diff --stat HEAD)",
       "Bash(git -C /Users/adron/Codez/interlinedlist-ios/.claude/worktrees/agent-a11553991aeb72c5f log --oneline -5)",
-      "Bash(git -C /Users/adron/Codez/interlinedlist-ios/.claude/worktrees/agent-a11553991aeb72c5f diff --stat HEAD)"
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios/.claude/worktrees/agent-a11553991aeb72c5f diff --stat HEAD)",
+      "Bash(xargs ls *)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

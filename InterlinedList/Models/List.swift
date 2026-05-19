@@ -39,6 +39,8 @@ struct ListTreeNode: Identifiable {
     let list: UserList?
 
     static func buildTree(folders: [ListFolder], lists: [UserList]) -> [ListTreeNode] {
+        let knownFolderIds = Set(folders.map { $0.id })
+
         func folderNode(_ folder: ListFolder) -> ListTreeNode {
             let childFolders = folders
                 .filter { !($0.parentId ?? "").isEmpty && $0.parentId == folder.id }
@@ -54,9 +56,13 @@ struct ListTreeNode: Identifiable {
             ListTreeNode(id: list.id, name: list.name, children: nil, list: list)
         }
 
-        // Treat nil and empty-string the same — some API implementations send "" instead of null.
         let rootFolders = folders.filter { ($0.parentId ?? "").isEmpty }.map { folderNode($0) }
-        let rootLists = lists.filter { ($0.folderId ?? "").isEmpty }.map { listNode($0) }
+        // Show a list at root if it has no folderId, an empty folderId, or a folderId that
+        // doesn't match any returned folder (e.g. when /api/folders silently returned []).
+        let rootLists = lists.filter {
+            let fid = $0.folderId ?? ""
+            return fid.isEmpty || !knownFolderIds.contains(fid)
+        }.map { listNode($0) }
         return rootFolders + rootLists
     }
 }

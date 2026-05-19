@@ -84,7 +84,7 @@ struct DocumentsView: View {
             if !rootFolders.isEmpty {
                 Section("Folders") {
                     ForEach(rootFolders) { folder in
-                        NavigationLink(destination: DocumentFolderView(folder: folder, allFolders: allFolders, allDocuments: allDocuments)) {
+                        NavigationLink(destination: DocumentFolderView(folder: folder)) {
                             Label(folder.name, systemImage: "folder")
                         }
                     }
@@ -141,26 +141,63 @@ struct DocumentsView: View {
 
 private struct DocumentFolderView: View {
     let folder: DocumentFolder
-    let allFolders: [DocumentFolder]
-    let allDocuments: [Document]
 
     @EnvironmentObject var authState: AuthState
+    @State private var subfolders: [DocumentFolder] = []
+    @State private var documents: [Document] = []
+    @State private var isLoading = false
     @State private var showCreate = false
-
-    private var subfolders: [DocumentFolder] {
-        allFolders.filter { $0.parentId == folder.id }
-    }
-
-    private var documents: [Document] {
-        allDocuments.filter { $0.folderId == folder.id }
-    }
+    @State private var showCreateFolder = false
 
     var body: some View {
+        Group {
+            if isLoading && documents.isEmpty && subfolders.isEmpty {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                folderList
+            }
+        }
+        .navigationTitle(folder.name)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showCreate = true
+                    } label: {
+                        Label("New Document", systemImage: "doc.badge.plus")
+                    }
+                    Button {
+                        showCreateFolder = true
+                    } label: {
+                        Label("New Folder", systemImage: "folder.badge.plus")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("New item in \(folder.name)")
+            }
+        }
+        .refreshable { await load() }
+        .task { await load() }
+        .sheet(isPresented: $showCreate) {
+            CreateDocumentView(folderId: folder.id) { newDoc in
+                documents.insert(newDoc, at: 0)
+            }
+        }
+        .sheet(isPresented: $showCreateFolder) {
+            CreateDocumentFolderView(parentId: folder.id) { newFolder in
+                subfolders.append(newFolder)
+            }
+        }
+    }
+
+    private var folderList: some View {
         List {
             if !subfolders.isEmpty {
                 Section("Folders") {
                     ForEach(subfolders) { sub in
-                        NavigationLink(destination: DocumentFolderView(folder: sub, allFolders: allFolders, allDocuments: allDocuments)) {
+                        NavigationLink(destination: DocumentFolderView(folder: sub)) {
                             Label(sub.name, systemImage: "folder")
                         }
                     }
@@ -168,30 +205,47 @@ private struct DocumentFolderView: View {
             }
             Section("Documents") {
                 ForEach(documents) { doc in
-                    NavigationLink(destination: DocumentDetailView(document: doc, onUpdate: { _ in }, onDelete: { _ in })) {
+                    NavigationLink(destination: DocumentDetailView(document: doc, onUpdate: { updated in
+                        if let idx = documents.firstIndex(where: { $0.id == updated.id }) {
+                            documents[idx] = updated
+                        }
+                    }, onDelete: { id in
+                        documents.removeAll { $0.id == id }
+                    })) {
                         DocumentRow(document: doc)
                     }
                 }
-                if documents.isEmpty {
+                .onDelete { offsets in
+                    Task { await deleteDocuments(at: offsets) }
+                }
+                if documents.isEmpty && !isLoading {
                     Text("No documents in this folder.")
                         .foregroundStyle(.secondary)
                         .font(.subheadline)
                 }
             }
         }
-        .navigationTitle(folder.name)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showCreate = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel("New document in \(folder.name)")
-            }
-        }
-        .sheet(isPresented: $showCreate) {
-            CreateDocumentView(folderId: folder.id) { _ in }
+    }
+
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            async let fTask = APIClient.shared.documentFolders()
+            async let dTask = APIClient.shared.documents(folderId: folder.id)
+            let (allFolders, docs) = try await (fTask, dTask)
+            subfolders = allFolders.filter { $0.parentId == folder.id }
+            documents = docs
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch { }
+    }
+
+    private func deleteDocuments(at offsets: IndexSet) async {
+        let toDelete = offsets.map { documents[$0] }
+        documents.remove(atOffsets: offsets)
+        for doc in toDelete {
+            try? await APIClient.shared.deleteDocument(id: doc.id)
         }
     }
 }
@@ -285,6 +339,7 @@ private struct CreateDocumentView: View {
     var onSave: (Document) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authState: AuthState
     @State private var title = ""
     @State private var content = ""
     @State private var isPublic = false
@@ -338,6 +393,8 @@ private struct CreateDocumentView: View {
             )
             onSave(doc)
             dismiss()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
         } catch APIError.status(403) {
             errorMessage = "Requires active subscription."
         } catch APIError.server(let msg) {
@@ -353,6 +410,7 @@ private struct EditDocumentView: View {
     var onSave: (Document) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authState: AuthState
     @State private var title: String
     @State private var content: String
     @State private var isPublic: Bool
@@ -414,6 +472,8 @@ private struct EditDocumentView: View {
             )
             onSave(updated)
             dismiss()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
         } catch APIError.status(403) {
             errorMessage = "Requires active subscription."
         } catch APIError.server(let msg) {
