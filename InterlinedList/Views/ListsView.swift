@@ -98,10 +98,11 @@ struct ListsView: View {
             treeNodes = ListTreeNode.buildTree(folders: folders, lists: lists)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
+            errorMessage = "Session expired or not authorized. Try logging out and back in."
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {
-            errorMessage = "Connection failed. Please try again."
+            errorMessage = error.localizedDescription
         }
     }
 }
@@ -114,7 +115,26 @@ struct ListTreeNodeRow: View {
     @State private var isExpanded = true
 
     var body: some View {
-        if let children = node.children {
+        if let children = node.children, let list = node.list {
+            // Parent list: navigatable header + expandable children
+            DisclosureGroup(isExpanded: $isExpanded) {
+                ForEach(children) { child in
+                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList)
+                }
+            } label: {
+                NavigationLink(value: list) {
+                    Label(node.name, systemImage: "list.bullet.indent")
+                }
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button(role: .destructive) {
+                    onDeleteList(list)
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        } else if let children = node.children {
+            // API folder (no associated list)
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
                     ListTreeNodeRow(node: child, onDeleteList: onDeleteList)
@@ -124,6 +144,7 @@ struct ListTreeNodeRow: View {
                     .foregroundStyle(.primary)
             }
         } else if let list = node.list {
+            // Leaf list
             NavigationLink(value: list) {
                 Label(node.name, systemImage: "list.bullet")
             }

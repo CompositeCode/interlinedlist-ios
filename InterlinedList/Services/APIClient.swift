@@ -4,6 +4,9 @@
 //
 
 import Foundation
+import os.log
+
+private let apiLog = Logger(subsystem: "com.interlinedlist.app", category: "APIClient")
 
 enum APIError: Error {
     case invalidURL
@@ -201,7 +204,7 @@ final class APIClient {
     func createList(title: String, description: String?, isPublic: Bool) async throws -> UserList {
         struct Body: Encodable { let title: String; let description: String?; let isPublic: Bool }
         struct Response: Decodable { let list: UserList? }
-        let response: Response = try await post("/api/lists", body: Body(title: title, description: description, isPublic: isPublic))
+        let response: Response = try await postCamel("/api/lists", body: Body(title: title, description: description, isPublic: isPublic))
         guard let list = response.list else { throw APIError.noData }
         return list
     }
@@ -440,6 +443,26 @@ final class APIClient {
 
     // MARK: - Private helpers
 
+    private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
+        let method = request.httpMethod ?? "GET"
+        let path = request.url?.path ?? ""
+        apiLog.debug("\(method) \(path) auth=\(request.value(forHTTPHeaderField: "Authorization") != nil)")
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if status >= 400 {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            apiLog.error("\(method) \(path) → \(status): \(body)")
+        } else {
+            apiLog.debug("\(method) \(path) → \(status) (\(data.count) bytes)")
+        }
+        try checkResponse(data: data, response: response)
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            apiLog.error("Decode failed for \(path): \(error)")
+            throw error
+        }
+    }
 
     private func get<T: Decodable>(_ path: String) async throws -> T {
         guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
@@ -449,9 +472,7 @@ final class APIClient {
         if let token = bearerToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
-        return try decoder.decode(T.self, from: data)
+        return try await perform(request)
     }
 
     private func put<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
@@ -460,13 +481,9 @@ final class APIClient {
         request.httpMethod = "PUT"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         request.httpBody = try encoder.encode(body)
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
-        return try decoder.decode(T.self, from: data)
+        return try await perform(request)
     }
 
     private func patch<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
@@ -475,13 +492,9 @@ final class APIClient {
         request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         request.httpBody = try encoder.encode(body)
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
-        return try decoder.decode(T.self, from: data)
+        return try await perform(request)
     }
 
     private func post<T: Decodable, B: Encodable>(_ path: String, body: B, authenticated: Bool = true) async throws -> T {
@@ -494,9 +507,18 @@ final class APIClient {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         request.httpBody = try encoder.encode(body)
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
-        return try decoder.decode(T.self, from: data)
+        return try await perform(request)
+    }
+
+    private func postCamel<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
+        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(body)
+        return try await perform(request)
     }
 
     private func checkResponse(data: Data, response: URLResponse) throws {
