@@ -5,6 +5,75 @@
 
 import Foundation
 
+// MARK: - JSON value type for dynamic rowData fields
+
+enum JSONValue: Codable, Equatable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case null
+
+    var displayString: String {
+        switch self {
+        case .string(let s): return s
+        case .number(let n): return n.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(n)) : String(n)
+        case .bool(let b): return b ? "Yes" : "No"
+        case .null: return ""
+        }
+    }
+
+    var boolValue: Bool? {
+        if case .bool(let b) = self { return b }
+        return nil
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let b = try? c.decode(Bool.self) { self = .bool(b); return }
+        if let n = try? c.decode(Double.self) { self = .number(n); return }
+        if let s = try? c.decode(String.self) { self = .string(s); return }
+        if c.decodeNil() { self = .null; return }
+        throw DecodingError.typeMismatch(JSONValue.self, .init(codingPath: decoder.codingPath, debugDescription: "Unsupported JSON value type"))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .string(let s): try c.encode(s)
+        case .number(let n): try c.encode(n)
+        case .bool(let b): try c.encode(b)
+        case .null: try c.encodeNil()
+        }
+    }
+}
+
+// MARK: - List property schema
+
+struct ListPropertyDef: Codable, Identifiable {
+    let id: String
+    let propertyKey: String
+    let propertyName: String
+    let propertyType: String
+    let displayOrder: Int
+    let isVisible: Bool
+    let isRequired: Bool
+    let defaultValue: String?
+    let helpText: String?
+    let placeholder: String?
+}
+
+struct ListDetailData: Decodable {
+    let id: String
+    let title: String
+    let properties: [ListPropertyDef]
+}
+
+struct ListDetailResponse: Decodable {
+    let data: ListDetailData
+}
+
+// MARK: - Core list models
+
 struct UserList: Identifiable, Codable, Hashable {
     let id: String
     let name: String
@@ -32,9 +101,8 @@ struct ListFolder: Identifiable, Codable {
 
 struct ListItem: Identifiable, Codable {
     let id: String
-    let content: String
-    let checked: Bool?
-    let order: Int?
+    let rowData: [String: JSONValue]
+    let rowNumber: Int?
     let createdAt: String?
 }
 
@@ -94,8 +162,4 @@ struct ListsResponse: Decodable {
 
 struct FoldersResponse: Decodable {
     let folders: [ListFolder]
-}
-
-struct ListItemsResponse: Decodable {
-    let items: [ListItem]
 }

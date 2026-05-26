@@ -191,14 +191,18 @@ final class APIClient {
 
     func listItems(listId: String) async throws -> [ListItem] {
         let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
-        // /data is the current endpoint; /items is legacy. Single-item responses use "row" so
-        // the collection key is likely "rows", but we fall back to the legacy "items" key.
         struct DataResponse: Decodable {
             let rows: [ListItem]?
             let items: [ListItem]?
         }
         let response: DataResponse = try await get("/api/lists/\(encoded)/data")
         return response.rows ?? response.items ?? []
+    }
+
+    func listSchema(listId: String) async throws -> [ListPropertyDef] {
+        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let response: ListDetailResponse = try await get("/api/lists/\(encoded)")
+        return response.data.properties
     }
 
     func createList(title: String, description: String?, isPublic: Bool) async throws -> UserList {
@@ -220,23 +224,21 @@ final class APIClient {
         try checkResponse(data: data, response: response)
     }
 
-    func toggleListItem(listId: String, itemId: String, checked: Bool) async throws -> ListItem {
-        struct RowData: Encodable { let checked: Bool }
-        struct Body: Encodable { let rowData: RowData }
+    func updateRow(listId: String, itemId: String, key: String, value: JSONValue) async throws -> ListItem {
+        struct Body: Encodable { let data: [String: JSONValue] }
         struct Response: Decodable { let row: ListItem? }
         let encodedList = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
         let encodedItem = itemId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? itemId
-        let response: Response = try await put("/api/lists/\(encodedList)/data/\(encodedItem)", body: Body(rowData: RowData(checked: checked)))
+        let response: Response = try await put("/api/lists/\(encodedList)/data/\(encodedItem)", body: Body(data: [key: value]))
         guard let item = response.row else { throw APIError.noData }
         return item
     }
 
-    func addListItem(listId: String, content: String) async throws -> ListItem {
-        struct RowData: Encodable { let content: String }
-        struct Body: Encodable { let rowData: RowData }
+    func addListItem(listId: String, firstPropertyKey: String, value: String) async throws -> ListItem {
+        struct Body: Encodable { let data: [String: JSONValue] }
         struct Response: Decodable { let row: ListItem? }
         let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
-        let response: Response = try await post("/api/lists/\(encoded)/data", body: Body(rowData: RowData(content: content)))
+        let response: Response = try await post("/api/lists/\(encoded)/data", body: Body(data: [firstPropertyKey: .string(value)]))
         guard let item = response.row else { throw APIError.noData }
         return item
     }

@@ -84,7 +84,6 @@ struct ListsView: View {
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch {
-            // Reload anyway to reflect server state
             await loadLists()
         }
     }
@@ -116,7 +115,6 @@ struct ListTreeNodeRow: View {
 
     var body: some View {
         if let children = node.children, let list = node.list {
-            // Parent list: navigatable header + expandable children
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
                     ListTreeNodeRow(node: child, onDeleteList: onDeleteList)
@@ -134,7 +132,6 @@ struct ListTreeNodeRow: View {
                 }
             }
         } else if let children = node.children {
-            // API folder (no associated list)
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
                     ListTreeNodeRow(node: child, onDeleteList: onDeleteList)
@@ -144,7 +141,6 @@ struct ListTreeNodeRow: View {
                     .foregroundStyle(.primary)
             }
         } else if let list = node.list {
-            // Leaf list
             NavigationLink(value: list) {
                 Label(node.name, systemImage: "list.bullet")
             }
@@ -164,13 +160,20 @@ struct ListTreeNodeRow: View {
 struct ListDetailView: View {
     let list: UserList
     @EnvironmentObject var authState: AuthState
+    @State private var schema: [ListPropertyDef] = []
     @State private var items: [ListItem] = []
-    @State private var checkStates: [String: Bool] = [:]
+    @State private var pendingUpdates: [String: [String: JSONValue]] = [:]
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var newItemText = ""
     @State private var addItemError: String?
     @State private var isAdding = false
+
+    private var addableProperty: ListPropertyDef? {
+        schema
+            .filter { $0.isVisible && ["text", "textarea", "email", "url"].contains($0.propertyType) }
+            .min(by: { $0.displayOrder < $1.displayOrder })
+    }
 
     var body: some View {
         Group {
@@ -184,7 +187,7 @@ struct ListDetailView: View {
                     Text(error)
                 } actions: {
                     Button("Retry") {
-                        Task { await loadItems() }
+                        Task { await loadData() }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -198,10 +201,13 @@ struct ListDetailView: View {
                         }
                     } else {
                         ForEach(items) { item in
-                            ListItemRow(
+                            DynamicItemRow(
                                 item: item,
-                                isChecked: checkStates[item.id] ?? (item.checked ?? false),
-                                onToggle: { Task { await toggleItem(item) } }
+                                schema: schema,
+                                pendingUpdates: pendingUpdates[item.id] ?? [:],
+                                onUpdateField: { key, value in
+                                    Task { await updateField(item: item, key: key, value: value) }
+                                }
                             )
                         }
                         .onDelete { indexSet in
@@ -212,26 +218,7 @@ struct ListDetailView: View {
                         }
                     }
                     Section {
-                        HStack {
-                            TextField("Add item…", text: $newItemText)
-                            Button {
-                                Task { await addItem() }
-                            } label: {
-                                if isAdding {
-                                    ProgressView()
-                                        .frame(width: 20, height: 20)
-                                } else {
-                                    Text("Add")
-                                }
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(isAdding || newItemText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
-                        if let error = addItemError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
+                        addItemFooter
                     }
                 }
             }
@@ -239,10 +226,40 @@ struct ListDetailView: View {
         .navigationTitle(list.name)
         .navigationBarTitleDisplayMode(.large)
         .task {
-            await loadItems()
+            await loadData()
         }
         .refreshable {
-            await loadItems()
+            await loadData()
+        }
+    }
+
+    @ViewBuilder
+    private var addItemFooter: some View {
+        if let prop = addableProperty {
+            HStack {
+                TextField(prop.placeholder ?? prop.propertyName, text: $newItemText)
+                Button {
+                    Task { await addItem() }
+                } label: {
+                    if isAdding {
+                        ProgressView()
+                            .frame(width: 20, height: 20)
+                    } else {
+                        Text("Add")
+                    }
+                }
+                .buttonStyle(.borderless)
+                .disabled(isAdding || newItemText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            if let error = addItemError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        } else if !schema.isEmpty {
+            Text("Add item not supported for this list type")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -252,8 +269,9 @@ struct ListDetailView: View {
         defer { isAdding = false }
         let text = newItemText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        let key = addableProperty?.propertyKey ?? "content"
         do {
-            let item = try await APIClient.shared.addListItem(listId: list.id, content: text)
+            let item = try await APIClient.shared.addListItem(listId: list.id, firstPropertyKey: key, value: text)
             items.append(item)
             newItemText = ""
         } catch APIError.status(401) {
@@ -272,63 +290,230 @@ struct ListDetailView: View {
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch {
-            await loadItems()
+            await loadData()
         }
     }
 
-    private func toggleItem(_ item: ListItem) async {
-        let current = checkStates[item.id] ?? (item.checked ?? false)
-        let next = !current
-        checkStates[item.id] = next
+    private func updateField(item: ListItem, key: String, value: JSONValue) async {
+        pendingUpdates[item.id, default: [:]][key] = value
         do {
-            let updated = try await APIClient.shared.toggleListItem(listId: list.id, itemId: item.id, checked: next)
-            checkStates[item.id] = updated.checked ?? next
+            let updated = try await APIClient.shared.updateRow(listId: list.id, itemId: item.id, key: key, value: value)
+            if let idx = items.firstIndex(where: { $0.id == item.id }) {
+                items[idx] = updated
+            }
+            pendingUpdates[item.id]?[key] = nil
         } catch APIError.status(401) {
             authState.handleUnauthorized()
-            checkStates[item.id] = current
+            pendingUpdates[item.id]?[key] = nil
         } catch {
-            checkStates[item.id] = current
+            pendingUpdates[item.id]?[key] = nil
         }
     }
 
-    private func loadItems() async {
+    private func loadData() async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
         do {
-            items = try await APIClient.shared.listItems(listId: list.id)
-            for item in items {
-                checkStates[item.id] = item.checked ?? false
-            }
+            async let schemaTask = APIClient.shared.listSchema(listId: list.id)
+            async let itemsTask = APIClient.shared.listItems(listId: list.id)
+            let (fetchedSchema, fetchedItems) = try await (schemaTask, itemsTask)
+            schema = fetchedSchema
+            items = fetchedItems
+            pendingUpdates = [:]
         } catch APIError.status(401) {
             authState.handleUnauthorized()
+            errorMessage = "Session expired or not authorized."
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {
-            errorMessage = "Failed to load items."
+            errorMessage = "Failed to load list."
         }
     }
 }
 
-// MARK: - List item row
+// MARK: - Dynamic item row
 
-struct ListItemRow: View {
+struct DynamicItemRow: View {
     let item: ListItem
-    let isChecked: Bool
-    let onToggle: () -> Void
+    let schema: [ListPropertyDef]
+    let pendingUpdates: [String: JSONValue]
+    let onUpdateField: (String, JSONValue) -> Void
+    @State private var isExpanded = false
+
+    private var visibleProps: [ListPropertyDef] {
+        schema.filter { $0.isVisible }
+    }
+
+    private var primaryProp: ListPropertyDef? {
+        visibleProps.first
+    }
+
+    private var remainingProps: [ListPropertyDef] {
+        visibleProps.count > 1 ? Array(visibleProps.dropFirst()) : []
+    }
+
+    private func effectiveValue(for key: String) -> JSONValue {
+        pendingUpdates[key] ?? item.rowData[key] ?? .null
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button { onToggle() } label: {
-                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isChecked ? Color.green : Color.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                if let prop = primaryProp {
+                    FieldValueView(
+                        value: effectiveValue(for: prop.propertyKey),
+                        propertyType: prop.propertyType,
+                        label: prop.propertyName,
+                        showLabel: false,
+                        onToggle: prop.propertyType == "boolean" ? { newVal in
+                            onUpdateField(prop.propertyKey, newVal)
+                        } : nil
+                    )
+                } else {
+                    // Schema not yet loaded — show first rowData value as fallback
+                    Text(item.rowData.sorted(by: { $0.key < $1.key }).first?.value.displayString ?? "—")
+                        .foregroundStyle(.primary)
+                }
+                Spacer()
+                if !remainingProps.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+                    } label: {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(isExpanded ? "Collapse details" : "Expand details")
+                }
+            }
+            .padding(.vertical, 4)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(remainingProps) { prop in
+                        FieldValueView(
+                            value: effectiveValue(for: prop.propertyKey),
+                            propertyType: prop.propertyType,
+                            label: prop.propertyName,
+                            showLabel: true,
+                            onToggle: prop.propertyType == "boolean" ? { newVal in
+                                onUpdateField(prop.propertyKey, newVal)
+                            } : nil
+                        )
+                    }
+                }
+                .padding(.leading, 4)
+                .padding(.bottom, 6)
+            }
+        }
+    }
+}
+
+// MARK: - Field value renderer
+
+struct FieldValueView: View {
+    let value: JSONValue
+    let propertyType: String
+    let label: String
+    let showLabel: Bool
+    let onToggle: ((JSONValue) -> Void)?
+
+    private var isBool: Bool { value.boolValue == true }
+
+    var body: some View {
+        if showLabel {
+            LabeledContent(label) {
+                fieldContent
+            }
+        } else {
+            fieldContent
+        }
+    }
+
+    @ViewBuilder
+    private var fieldContent: some View {
+        switch propertyType {
+        case "boolean":
+            Button {
+                onToggle?(.bool(!isBool))
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isBool ? "checkmark.square.fill" : "square")
+                        .foregroundStyle(isBool ? Color.accentColor : Color.secondary)
+                    if !showLabel {
+                        Text(label)
+                            .foregroundStyle(.primary)
+                    }
+                }
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel(isChecked ? "Uncheck item" : "Check item")
-            Text(item.content)
-                .strikethrough(isChecked)
-                .foregroundStyle(isChecked ? Color.secondary : Color.primary)
+            .accessibilityLabel("\(label): \(isBool ? "checked" : "unchecked")")
+
+        case "date":
+            Text(formattedDate(value.displayString))
+                .foregroundStyle(.primary)
+
+        case "url":
+            let raw = value.displayString
+            if !raw.isEmpty, let url = URL(string: raw) {
+                Link(raw, destination: url)
+            } else {
+                Text(raw).foregroundStyle(.primary)
+            }
+
+        case "email":
+            let raw = value.displayString
+            if !raw.isEmpty, let url = URL(string: "mailto:\(raw)") {
+                Link(raw, destination: url)
+            } else {
+                Text(raw).foregroundStyle(.primary)
+            }
+
+        default:
+            Text(value.displayString)
+                .foregroundStyle(.primary)
         }
-        .padding(.vertical, 2)
+    }
+
+    private func formattedDate(_ raw: String) -> String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso.date(from: raw) {
+            return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .none)
+        }
+        iso.formatOptions = [.withInternetDateTime]
+        if let date = iso.date(from: raw) {
+            return DateFormatter.localizedString(from: date, dateStyle: .medium, timeStyle: .none)
+        }
+        return raw
+    }
+}
+
+// MARK: - Previews
+
+#Preview("Lists view") {
+    ListsView()
+        .environmentObject(AuthState())
+}
+
+#Preview("Dynamic row — multi-column") {
+    let schema = [
+        ListPropertyDef(id: "1", propertyKey: "title", propertyName: "Title", propertyType: "text", displayOrder: 0, isVisible: true, isRequired: true, defaultValue: nil, helpText: nil, placeholder: nil),
+        ListPropertyDef(id: "2", propertyKey: "read", propertyName: "Have Read", propertyType: "boolean", displayOrder: 1, isVisible: true, isRequired: false, defaultValue: nil, helpText: nil, placeholder: nil),
+        ListPropertyDef(id: "3", propertyKey: "price", propertyName: "Price", propertyType: "number", displayOrder: 2, isVisible: true, isRequired: false, defaultValue: nil, helpText: nil, placeholder: nil),
+    ]
+    let item = ListItem(id: "r1", rowData: ["title": .string("Dune"), "read": .bool(true), "price": .number(14.99)], rowNumber: 1, createdAt: nil)
+    return List {
+        DynamicItemRow(item: item, schema: schema, pendingUpdates: [:], onUpdateField: { _, _ in })
+    }
+}
+
+#Preview("Field value — boolean") {
+    List {
+        FieldValueView(value: .bool(true), propertyType: "boolean", label: "Completed", showLabel: false, onToggle: { _ in })
+        FieldValueView(value: .bool(false), propertyType: "boolean", label: "Completed", showLabel: true, onToggle: { _ in })
+        FieldValueView(value: .string("hello@example.com"), propertyType: "email", label: "Email", showLabel: true, onToggle: nil)
     }
 }
