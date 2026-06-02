@@ -79,6 +79,7 @@ struct UserList: Identifiable, Codable, Hashable {
     let name: String
     let description: String?
     let folderId: String?
+    let isPublic: Bool?
     let createdAt: String
     let updatedAt: String?
     let itemCount: Int?
@@ -86,7 +87,7 @@ struct UserList: Identifiable, Codable, Hashable {
     // Server sends "title" for name and "parentId" for the list-in-list hierarchy.
     // convertFromSnakeCase is bypassed when CodingKeys are present, so use exact JSON keys.
     enum CodingKeys: String, CodingKey {
-        case id, description, createdAt, updatedAt, itemCount
+        case id, description, createdAt, updatedAt, itemCount, isPublic
         case name = "title"
         case folderId = "parentId"
     }
@@ -162,4 +163,17 @@ struct ListsResponse: Decodable {
 
 struct FoldersResponse: Decodable {
     let folders: [ListFolder]
+}
+
+// MARK: - List connections
+
+struct ListConnection: Identifiable, Codable {
+    let id: String
+    let sourceListId: String
+    let targetListId: String
+    let createdAt: String?
+}
+
+struct ConnectionsResponse: Decodable {
+    let connections: [ListConnection]
 }

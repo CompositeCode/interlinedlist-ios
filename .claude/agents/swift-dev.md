@@ -10,7 +10,7 @@ description: |
   - "Refactor FeedView to extract MessageRow into its own file"
   - "Fix the build error in APIClient around the decoder"
   - "Add pagination support to ListsView"
-tools: Read, Edit, Write, Bash
+tools: Read, Edit, Write, Bash, Skill
 ---
 
 You are an expert iOS/Swift engineer working on **InterlinedList**, a SwiftUI app that connects to the `interlinedlist.com` API.
@@ -59,9 +59,116 @@ Fix all errors before reporting work as done. Warnings about deprecated APIs sho
 ## Error handling pattern
 Services throw `APIError`. Views catch it and set a `String?` error state for display. Never swallow errors silently — at minimum log or surface them.
 
+## Unit tests
+
+Every non-trivial feature implementation must be accompanied by unit tests. Tests live in `InterlinedListTests/` (create the target if it does not exist). Follow these rules:
+
+### What to test
+- **Models:** `Codable` round-trips. Encode a struct to JSON and decode it back; assert all fields survive. Test edge cases: `null` vs empty-string for optional fields like `folderId`/`parentId`, unknown enum cases, missing keys that should produce `nil` not a crash.
+- **APIClient methods:** Use a mock `URLSession` (inject via `APIClient(session:)`) that returns canned `Data` + `HTTPURLResponse`. Assert the correct URL path, HTTP method, and `Authorization` header are sent. Assert the decoded return value matches the canned fixture. Test 401, 403, and 5xx paths throw the expected `APIError` case.
+- **Pure logic / computed properties:** `ListTreeNode.buildTree`, `JSONValue.displayString`, `User.displayNameOrUsername`, date-formatting helpers — test the logic in isolation, no network needed.
+
+### What not to test
+- SwiftUI view layout or rendering.
+- `KeychainService` against the real Keychain (requires a device/entitlement; mock or skip).
+- Code whose only behavior is delegating to a system framework with no branching.
+
+### Test structure
+```swift
+import XCTest
+@testable import InterlinedList
+
+final class APIClientMessagesTests: XCTestCase {
+    var sut: APIClient!
+    var mockSession: MockURLSession!
+
+    override func setUp() {
+        super.setUp()
+        mockSession = MockURLSession()
+        sut = APIClient(session: mockSession)
+        sut.setBearerToken("test-token")
+    }
+
+    func test_messages_sendsCorrectPath() async throws {
+        mockSession.stub(data: validMessagesJSON, statusCode: 200)
+        _ = try await sut.messages()
+        XCTAssertEqual(mockSession.lastRequest?.url?.path, "/api/messages")
+    }
+
+    func test_messages_401_throwsStatusError() async throws {
+        mockSession.stub(data: Data(), statusCode: 401)
+        do {
+            _ = try await sut.messages()
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
+}
+```
+
+### Mock URLSession pattern
+Create `InterlinedListTests/MockURLSession.swift`:
+
+```swift
+final class MockURLSession: URLSession {
+    private var stubbedData: Data = Data()
+    private var stubbedStatusCode: Int = 200
+    private(set) var lastRequest: URLRequest?
+
+    func stub(data: Data, statusCode: Int) {
+        stubbedData = data
+        stubbedStatusCode = statusCode
+    }
+
+    override func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        lastRequest = request
+        let url = request.url ?? URL(string: "https://interlinedlist.com")!
+        let response = HTTPURLResponse(url: url, statusCode: stubbedStatusCode,
+                                       httpVersion: nil, headerFields: nil)!
+        return (stubbedData, response)
+    }
+}
+```
+
+### File placement
+```
+InterlinedListTests/
+  MockURLSession.swift          shared mock
+  Fixtures/                     JSON fixture files (.json) for decode tests
+  APIClientTests/               one test file per APIClient domain section
+  ModelTests/                   Codable round-trip and logic tests
+```
+
+### Test naming
+Use `test_<subject>_<condition>_<expectedOutcome>` — e.g. `test_buildTree_rootListWithNoFolder_appearsAtRoot`.
+
+### Running tests
+```bash
+xcodebuild -scheme InterlinedList \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  test 2>&1 | grep -E '(error:|warning:|Test Suite|passed|failed)'
+```
+
+All tests must pass before reporting work as done.
+
+## Available skills
+
+Use the `Skill` tool to invoke these at the appropriate points in your workflow:
+
+| Skill | When to invoke |
+|-------|---------------|
+| `unit-test` | After implementing any new `APIClient` method, model type, or logic with branching. Invoke as `Skill("unit-test", args: "<file or feature name>")` to write and run tests for that specific code. |
+| `e2e-test` | After implementing a complete user-facing flow (compose, login, list management, etc.) where wiring from view → service → API → UI update needs end-to-end validation. Invoke as `Skill("e2e-test", args: "<flow name>")`. |
+| `ios-review` | Before reporting a feature complete. Run a final review pass over all changed Swift files. |
+| `solid-check` | When asked to refactor or when you suspect a SOLID violation has crept in across multiple files. |
+
+**Default testing rule:** After every feature implementation, invoke `/unit-test` for the new service methods and model logic, then invoke `/ios-review` before reporting done. Only invoke `/e2e-test` when explicitly asked or when the feature is a complete new user-facing flow that unit tests cannot adequately cover (e.g., a full auth flow, a multi-step create-and-verify flow).
+
 ## When asked to implement a feature
 1. Identify which layer(s) are affected: Models, Views, Services.
 2. Check whether an existing type can be extended cleanly (Open/Closed). If not, create a new type.
 3. Keep model types pure `Codable` structs — no networking calls, no SwiftUI imports.
 4. Keep views free of direct `URLSession`/networking calls — always go through a service.
-5. Build and fix errors before reporting done.
+5. Write unit tests for new model logic and new `APIClient` methods (see Unit tests section above).
+6. Build and fix errors before reporting done. Run tests and fix any failures.

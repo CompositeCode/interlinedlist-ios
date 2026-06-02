@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct UserProfileView: View {
     let username: String
@@ -23,6 +24,11 @@ struct UserProfileView: View {
     @State private var followCounts: FollowCounts?
     @State private var isFollowLoading = false
     @State private var followError: String?
+    @State private var isExporting: ExportType? = nil
+    @State private var exportedData: Data? = nil
+    @State private var exportFilename: String = "export.csv"
+    @State private var showShareSheet = false
+    @State private var exportError: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -43,6 +49,10 @@ struct UserProfileView: View {
                 } else {
                     listsTab
                 }
+
+                if authState.user?.username == username {
+                    exportSection
+                }
             }
             .navigationTitle("@\(username)")
             .navigationBarTitleDisplayMode(.inline)
@@ -57,6 +67,11 @@ struct UserProfileView: View {
             .onChange(of: selectedTab) { _, tab in
                 if tab == 1 && lists.isEmpty && listsError == nil {
                     Task { await loadLists() }
+                }
+            }
+            .sheet(isPresented: $showShareSheet) {
+                if let data = exportedData {
+                    ShareSheet(data: data, filename: exportFilename)
                 }
             }
         }
@@ -251,6 +266,69 @@ struct UserProfileView: View {
         }
     }
 
+    @ViewBuilder
+    private var exportSection: some View {
+        Divider()
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Export Your Data")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+            exportButton(label: "Messages", type: .messages)
+            exportButton(label: "Lists", type: .lists)
+            exportButton(label: "Follows", type: .follows)
+            if let err = exportError {
+                Text(err)
+                    .foregroundStyle(.red)
+                    .font(.caption)
+                    .padding(.horizontal)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.bottom, 16)
+    }
+
+    @ViewBuilder
+    private func exportButton(label: String, type: ExportType) -> some View {
+        Button {
+            Task { await export(type) }
+        } label: {
+            HStack {
+                if isExporting == type {
+                    ProgressView().frame(width: 20, height: 20)
+                }
+                Text("Export \(label) (CSV)")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "square.and.arrow.up")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+        }
+        .disabled(isExporting != nil)
+        .accessibilityLabel("Export \(label) as CSV")
+    }
+
+    private func export(_ type: ExportType) async {
+        exportError = nil
+        isExporting = type
+        defer { isExporting = nil }
+        do {
+            let data = try await APIClient.shared.exportCSV(type)
+            exportedData = data
+            exportFilename = "\(type.rawValue)-export.csv"
+            showShareSheet = true
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.server(let msg) {
+            exportError = msg
+        } catch {
+            exportError = "Export failed. Please try again."
+        }
+    }
+
     private func toggleFollow() async {
         guard let userId = targetUserId else { return }
         isFollowLoading = true
@@ -276,6 +354,19 @@ struct UserProfileView: View {
             followError = "Action failed. Please try again."
         }
     }
+}
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let data: Data
+    let filename: String
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        try? data.write(to: url)
+        return UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 private struct PublicMessageRow: View {

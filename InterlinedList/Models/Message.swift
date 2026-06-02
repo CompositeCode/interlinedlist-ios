@@ -82,6 +82,7 @@ struct CreateMessageBody: Encodable {
     let tags: [String]?
     let scheduledAt: String?
     let imageUrls: [String]?
+    let videoUrls: [String]?
 }
 
 struct CreateMessageResponse: Codable {

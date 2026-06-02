@@ -17,10 +17,14 @@ enum APIError: Error {
     case network(Error)
 }
 
+enum ExportType: String, CaseIterable {
+    case messages, lists, follows
+}
+
 final class APIClient {
     static let shared = APIClient()
     private let baseURL: String
-    private let session: URLSession
+    private let session: URLSessionProtocol
     private(set) var bearerToken: String?
 
     private let decoder: JSONDecoder = {
@@ -41,7 +45,7 @@ final class APIClient {
         return e
     }()
 
-    init(baseURL: String? = nil, session: URLSession = .shared) {
+    init(baseURL: String? = nil, session: URLSessionProtocol = URLSession.shared) {
         let defaultBase = "https://interlinedlist.com"
         let plistOverride = (Bundle.main.infoDictionary?["ILAPIBaseURL"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolved = (plistOverride?.isEmpty == false ? plistOverride : nil) ?? baseURL ?? defaultBase
@@ -108,11 +112,11 @@ final class APIClient {
         return (response.messages, response.pagination)
     }
 
-    func postMessage(content: String, publiclyVisible: Bool? = nil, parentId: String? = nil, tags: [String]? = nil, scheduledAt: String? = nil, imageUrls: [String]? = nil) async throws -> Message {
+    func postMessage(content: String, publiclyVisible: Bool? = nil, parentId: String? = nil, tags: [String]? = nil, scheduledAt: String? = nil, imageUrls: [String]? = nil, videoUrls: [String]? = nil) async throws -> Message {
         struct Response: Decodable {
             let data: Message?
         }
-        let body = CreateMessageBody(content: content, publiclyVisible: publiclyVisible, parentId: parentId, tags: tags, scheduledAt: scheduledAt, imageUrls: imageUrls)
+        let body = CreateMessageBody(content: content, publiclyVisible: publiclyVisible, parentId: parentId, tags: tags, scheduledAt: scheduledAt, imageUrls: imageUrls, videoUrls: videoUrls)
         // Backend expects camelCase (publiclyVisible, parentId); snake_case would send publicly_visible and be ignored.
         guard let url = URL(string: baseURL + "/api/messages") else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
@@ -331,6 +335,29 @@ final class APIClient {
         return try decoder.decode(UploadResponse.self, from: responseData).url
     }
 
+    // MARK: - Video upload
+
+    func uploadVideo(data: Data, mimeType: String) async throws -> String {
+        guard let url = URL(string: baseURL + "/api/messages/videos/upload") else { throw APIError.invalidURL }
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let ext = mimeType.contains("mp4") ? "mp4" : "mov"
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"video\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+        let (responseData, response) = try await session.data(for: request)
+        try checkResponse(data: responseData, response: response)
+        struct UploadResponse: Decodable { let url: String }
+        return try decoder.decode(UploadResponse.self, from: responseData).url
+    }
+
     // MARK: - People
 
     func publicMessages(username: String, limit: Int = 50, offset: Int = 0) async throws -> (messages: [Message], pagination: Pagination?) {
@@ -443,7 +470,50 @@ final class APIClient {
         }
     }
 
+    // MARK: - Exports
+
+    func exportCSV(_ type: ExportType) async throws -> Data {
+        return try await getRawData("/api/exports/\(type.rawValue)")
+    }
+
+    // MARK: - List Connections
+
+    func listConnections() async throws -> [ListConnection] {
+        let response: ConnectionsResponse = try await get("/api/lists/connections")
+        return response.connections
+    }
+
+    func createListConnection(sourceListId: String, targetListId: String) async throws -> ListConnection {
+        struct Body: Encodable { let sourceListId: String; let targetListId: String }
+        struct R: Decodable { let connection: ListConnection? }
+        let r: R = try await postCamel("/api/lists/connections",
+                                       body: Body(sourceListId: sourceListId, targetListId: targetListId))
+        guard let conn = r.connection else { throw APIError.noData }
+        return conn
+    }
+
+    func deleteListConnection(id: String) async throws {
+        let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/lists/connections/\(enc)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
     // MARK: - Private helpers
+
+    private func getRawData(_ path: String) async throws -> Data {
+        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+        return data
+    }
 
     private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
         let method = request.httpMethod ?? "GET"

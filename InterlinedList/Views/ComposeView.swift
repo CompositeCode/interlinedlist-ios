@@ -24,6 +24,9 @@ struct ComposeView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var uploadedImageURL: String?
     @State private var isUploadingImage = false
+    @State private var selectedVideo: PhotosPickerItem?
+    @State private var uploadedVideoURL: String?
+    @State private var isUploadingVideo = false
     @State private var scheduledDate: Date?
     @State private var showSchedulePicker = false
 
@@ -58,6 +61,9 @@ struct ComposeView: View {
                     }
                     if let url = uploadedImageURL {
                         uploadedImagePreview(url: url)
+                    }
+                    if let url = uploadedVideoURL {
+                        uploadedVideoPreview(url: url)
                     }
                 }
 
@@ -96,6 +102,8 @@ struct ComposeView: View {
                     content = ""
                     uploadedImageURL = nil
                     selectedPhoto = nil
+                    uploadedVideoURL = nil
+                    selectedVideo = nil
                     scheduledDate = nil
                     showSchedulePicker = false
                     applyUserDefaults()
@@ -142,13 +150,23 @@ struct ComposeView: View {
                     .buttonStyle(.borderless)
                     .disabled(isUploadingImage)
                     .accessibilityLabel("Attach photo")
-                    Button { } label: {
-                        Image(systemName: "video.fill")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
+                    PhotosPicker(selection: $selectedVideo, matching: .videos) {
+                        if isUploadingVideo {
+                            ProgressView()
+                                .frame(width: 20, height: 20)
+                        } else {
+                            Image(systemName: uploadedVideoURL != nil ? "video.fill" : "video")
+                                .font(.body)
+                                .foregroundStyle(uploadedVideoURL != nil ? Color.accentColor : Color.secondary)
+                        }
                     }
                     .buttonStyle(.borderless)
-                    .disabled(true)
+                    .disabled(isUploadingVideo)
+                    .accessibilityLabel("Attach video")
+                    .onChange(of: selectedVideo) { _, newItem in
+                        guard let newItem else { return }
+                        Task { await uploadVideo(newItem) }
+                    }
                     Button { } label: {
                         Text("M")
                             .font(.caption.weight(.semibold))
@@ -247,6 +265,43 @@ struct ComposeView: View {
         }
     }
 
+    @ViewBuilder
+    private func uploadedVideoPreview(url: String) -> some View {
+        HStack {
+            Image(systemName: "video.fill")
+                .foregroundStyle(.secondary)
+            Text("Video attached")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button {
+                uploadedVideoURL = nil
+                selectedVideo = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Remove attached video")
+        }
+    }
+
+    private func uploadVideo(_ item: PhotosPickerItem) async {
+        isUploadingVideo = true
+        errorMessage = nil
+        defer { isUploadingVideo = false }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else { return }
+            let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "video/mp4"
+            uploadedVideoURL = try await APIClient.shared.uploadVideo(data: data, mimeType: mimeType)
+        } catch APIError.status(403) {
+            errorMessage = "Video upload requires an active subscription."
+            selectedVideo = nil
+        } catch {
+            errorMessage = "Failed to upload video. Please try again."
+            selectedVideo = nil
+        }
+    }
+
     private func uploadPhoto(_ item: PhotosPickerItem) async {
         isUploadingImage = true
         errorMessage = nil
@@ -275,6 +330,7 @@ struct ComposeView: View {
             ISO8601DateFormatter().string(from: $0)
         }
         let urls = uploadedImageURL.map { [$0] }
+        let videoUrls = uploadedVideoURL.map { [$0] }
         do {
             _ = try await APIClient.shared.postMessage(
                 content: text,
@@ -282,7 +338,8 @@ struct ComposeView: View {
                 parentId: replyTo?.id,
                 tags: tagList.isEmpty ? nil : tagList,
                 scheduledAt: isoScheduled,
-                imageUrls: urls
+                imageUrls: urls,
+                videoUrls: videoUrls
             )
             showSuccess = true
             if isReply {

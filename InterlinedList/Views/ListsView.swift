@@ -121,7 +121,7 @@ struct ListTreeNodeRow: View {
                 }
             } label: {
                 NavigationLink(value: list) {
-                    Label(node.name, systemImage: "list.bullet.indent")
+                    ListNameWithVisibility(name: node.name, isPublic: list.isPublic)
                 }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -142,7 +142,7 @@ struct ListTreeNodeRow: View {
             }
         } else if let list = node.list {
             NavigationLink(value: list) {
-                Label(node.name, systemImage: "list.bullet")
+                ListNameWithVisibility(name: node.name, isPublic: list.isPublic)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
@@ -150,6 +150,28 @@ struct ListTreeNodeRow: View {
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+            }
+        }
+    }
+}
+
+private struct ListNameWithVisibility: View {
+    let name: String
+    let isPublic: Bool?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(name)
+            if isPublic == true {
+                Image(systemName: "globe")
+                    .font(.caption)
+                    .foregroundStyle(Color.green)
+                    .accessibilityLabel("Public")
+            } else {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
+                    .accessibilityLabel("Private")
             }
         }
     }
@@ -168,6 +190,9 @@ struct ListDetailView: View {
     @State private var newItemText = ""
     @State private var addItemError: String?
     @State private var isAdding = false
+    @State private var connections: [ListConnection] = []
+    @State private var allLists: [UserList] = []
+    @State private var showAddConnection = false
 
     private var addableProperty: ListPropertyDef? {
         schema
@@ -220,6 +245,44 @@ struct ListDetailView: View {
                     Section {
                         addItemFooter
                     }
+                    Section {
+                        if connections.isEmpty {
+                            Text("No connections yet")
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                        } else {
+                            ForEach(connections) { conn in
+                                let otherListId = conn.sourceListId == list.id ? conn.targetListId : conn.sourceListId
+                                let otherList = allLists.first { $0.id == otherListId }
+                                HStack {
+                                    Image(systemName: "link")
+                                        .foregroundStyle(.secondary)
+                                    Text(otherList?.name ?? otherListId)
+                                }
+                            }
+                            .onDelete { indexSet in
+                                Task {
+                                    for index in indexSet {
+                                        let conn = connections[index]
+                                        try? await APIClient.shared.deleteListConnection(id: conn.id)
+                                        connections.remove(at: index)
+                                    }
+                                }
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text("Connections")
+                            Spacer()
+                            Button {
+                                showAddConnection = true
+                            } label: {
+                                Image(systemName: "plus")
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Add connection")
+                        }
+                    }
                 }
             }
         }
@@ -230,6 +293,32 @@ struct ListDetailView: View {
         }
         .refreshable {
             await loadData()
+        }
+        .sheet(isPresented: $showAddConnection) {
+            NavigationStack {
+                List {
+                    ForEach(allLists.filter { $0.id != list.id }) { candidate in
+                        Button(candidate.name) {
+                            Task {
+                                if let conn = try? await APIClient.shared.createListConnection(
+                                    sourceListId: list.id,
+                                    targetListId: candidate.id
+                                ) {
+                                    connections.append(conn)
+                                }
+                                showAddConnection = false
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("Connect to List")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showAddConnection = false }
+                    }
+                }
+            }
         }
     }
 
@@ -317,10 +406,16 @@ struct ListDetailView: View {
         do {
             async let schemaTask = APIClient.shared.listSchema(listId: list.id)
             async let itemsTask = APIClient.shared.listItems(listId: list.id)
+            async let connectionsTask = APIClient.shared.listConnections()
+            async let allListsTask = APIClient.shared.listsAndFolders()
             let (fetchedSchema, fetchedItems) = try await (schemaTask, itemsTask)
             schema = fetchedSchema
             items = fetchedItems
             pendingUpdates = [:]
+            let listId = list.id
+            connections = (try? await connectionsTask)?
+                .filter { $0.sourceListId == listId || $0.targetListId == listId } ?? []
+            allLists = (try? await allListsTask)?.lists ?? []
         } catch APIError.status(401) {
             authState.handleUnauthorized()
             errorMessage = "Session expired or not authorized."
