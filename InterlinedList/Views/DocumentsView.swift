@@ -13,6 +13,9 @@ struct DocumentsView: View {
     @State private var errorMessage: String?
     @State private var showCreate = false
     @State private var showCreateFolder = false
+    @State private var searchText = ""
+    @State private var searchResults: [Document] = []
+    @State private var isSearching = false
 
     private var rootFolders: [DocumentFolder] {
         allFolders.filter { ($0.parentId ?? "").isEmpty }
@@ -25,7 +28,9 @@ struct DocumentsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if isLoading && allFolders.isEmpty && allDocuments.isEmpty {
+                if !searchText.isEmpty {
+                    searchResultsList
+                } else if isLoading && allFolders.isEmpty && allDocuments.isEmpty {
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let error = errorMessage {
@@ -45,6 +50,13 @@ struct DocumentsView: View {
                 }
             }
             .navigationTitle("Documents")
+            .searchable(text: $searchText, prompt: "Search documents")
+            .onSubmit(of: .search) {
+                Task { await runSearch() }
+            }
+            .onChange(of: searchText) { _, newValue in
+                if newValue.isEmpty { searchResults = [] }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -76,6 +88,45 @@ struct DocumentsView: View {
                     allFolders.append(newFolder)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var searchResultsList: some View {
+        if isSearching {
+            ProgressView("Searching…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if searchResults.isEmpty {
+            ContentUnavailableView.search(text: searchText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List(searchResults) { doc in
+                NavigationLink(destination: DocumentDetailView(document: doc, onUpdate: { updated in
+                    if let idx = allDocuments.firstIndex(where: { $0.id == updated.id }) {
+                        allDocuments[idx] = updated
+                    }
+                }, onDelete: { id in
+                    allDocuments.removeAll { $0.id == id }
+                    searchResults.removeAll { $0.id == id }
+                })) {
+                    DocumentRow(document: doc)
+                }
+            }
+        }
+    }
+
+    private func runSearch() async {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        isSearching = true
+        defer { isSearching = false }
+        do {
+            let (results, _) = try await APIClient.shared.searchDocuments(q: q)
+            searchResults = results
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            searchResults = []
         }
     }
 
@@ -414,6 +465,8 @@ private struct EditDocumentView: View {
     @State private var title: String
     @State private var content: String
     @State private var isPublic: Bool
+    @State private var selectedFolderId: String?
+    @State private var availableFolders: [DocumentFolder] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
 
@@ -423,6 +476,8 @@ private struct EditDocumentView: View {
         _title = State(initialValue: document.title)
         _content = State(initialValue: document.content ?? "")
         _isPublic = State(initialValue: document.isPublic ?? false)
+        let fid = document.folderId ?? ""
+        _selectedFolderId = State(initialValue: fid.isEmpty ? nil : fid)
     }
 
     var body: some View {
@@ -438,6 +493,14 @@ private struct EditDocumentView: View {
                 }
                 Section {
                     Toggle("Public", isOn: $isPublic)
+                }
+                Section("Location") {
+                    Picker("Folder", selection: $selectedFolderId) {
+                        Text("No Folder").tag(String?.none)
+                        ForEach(availableFolders) { folder in
+                            Text(folder.name).tag(Optional(folder.id))
+                        }
+                    }
                 }
                 if let error = errorMessage {
                     Section {
@@ -456,6 +519,11 @@ private struct EditDocumentView: View {
                         .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                 }
             }
+            .task {
+                if let folders = try? await APIClient.shared.documentFolders() {
+                    availableFolders = folders
+                }
+            }
         }
     }
 
@@ -464,11 +532,13 @@ private struct EditDocumentView: View {
         defer { isLoading = false }
         errorMessage = nil
         do {
+            let folderIdToSend: String? = selectedFolderId.flatMap { $0.isEmpty ? nil : $0 }
             let updated = try await APIClient.shared.updateDocument(
                 id: document.id,
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 content: content.isEmpty ? nil : content,
-                isPublic: isPublic
+                isPublic: isPublic,
+                folderId: folderIdToSend
             )
             onSave(updated)
             dismiss()

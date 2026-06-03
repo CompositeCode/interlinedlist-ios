@@ -81,3 +81,32 @@ final class JSONValueTests: XCTestCase {
         XCTAssertEqual(JSONValue.null.displayString, "")
     }
 }
+
+final class ListFolderCodableTests: XCTestCase {
+    private let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        return d
+    }()
+
+    func test_decode_allFields() throws {
+        let json = #"{"id":"f1","name":"Work","parent_id":"f0","created_at":"2024-03-15T12:00:00Z"}"#
+        let folder = try decoder.decode(ListFolder.self, from: Data(json.utf8))
+        XCTAssertEqual(folder.id, "f1")
+        XCTAssertEqual(folder.name, "Work")
+        XCTAssertEqual(folder.parentId, "f0")
+        XCTAssertEqual(folder.createdAt, "2024-03-15T12:00:00Z")
+    }
+
+    func test_decode_nilParentId() throws {
+        let json = #"{"id":"f2","name":"Personal","created_at":"2024-03-15T12:00:00Z"}"#
+        let folder = try decoder.decode(ListFolder.self, from: Data(json.utf8))
+        XCTAssertNil(folder.parentId)
+    }
+
+    func test_decode_nilCreatedAt() throws {
+        let json = #"{"id":"f3","name":"Archive","parent_id":"f0"}"#
+        let folder = try decoder.decode(ListFolder.self, from: Data(json.utf8))
+        XCTAssertNil(folder.createdAt)
+    }
+}

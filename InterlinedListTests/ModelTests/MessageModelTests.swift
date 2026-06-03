@@ -86,4 +86,13 @@ final class PaginationCodableTests: XCTestCase {
         XCTAssertEqual(p.offset, 0)
         XCTAssertTrue(p.hasMore)
     }
+
+    func test_decode_hasMore_false() throws {
+        let json = #"{"total":5,"limit":20,"offset":20,"has_more":false}"#
+        let p = try decoder.decode(Pagination.self, from: Data(json.utf8))
+        XCTAssertEqual(p.total, 5)
+        XCTAssertEqual(p.limit, 20)
+        XCTAssertEqual(p.offset, 20)
+        XCTAssertFalse(p.hasMore)
+    }
 }

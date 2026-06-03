@@ -49,7 +49,15 @@
       "Bash(curl -s https://interlinedlist.com/api/user -H \"Accept: application/json\")",
       "Bash(ls ~/Codez/ 2>/dev/null | grep -i \"interlined\\\\|server\\\\|api\\\\|backend\")",
       "Read(//Users/adron/Codez/**)",
-      "Bash(curl -sv -X POST https://interlinedlist.com/api/auth/sync-token -H 'Content-Type: application/json' -d '{\"email\":\"x\",\"password\":\"y\"}')"
+      "Bash(curl -sv -X POST https://interlinedlist.com/api/auth/sync-token -H 'Content-Type: application/json' -d '{\"email\":\"x\",\"password\":\"y\"}')",
+      "Bash(python3 -m py_compile /Users/adron/Codez/interlinedlist-ios/scripts/test_api.py)",
+      "Bash(cp /Users/adron/Codez/interlinedlist-ios/scripts/test_api.py /tmp/test_api_snapshot.py)",
+      "Read(//tmp/**)",
+      "Bash(md5 /Users/adron/Codez/interlinedlist-ios/scripts/test_api.py)",
+      "Bash(md5 /tmp/test_api_snapshot.py)",
+      "Bash(cp /Users/adron/Codez/interlinedlist-ios/scripts/test_api.py /tmp/test_api_current.py)",
+      "Bash(md5 /tmp/test_api_current.py)",
+      "Bash(python3 *)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

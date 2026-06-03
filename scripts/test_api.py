@@ -127,6 +127,216 @@ def run(email: str, password: str):
         status, _, raw = s.request("GET", path)
         check(f"GET {path} (Bearer)", status, raw)
 
+    print("\n── GET /api/folders (structure) ──────────────────────────────")
+    status, _, raw = s.request("GET", "/api/folders")
+    body = check("GET /api/folders (Bearer)", status, raw)
+    if body is not None:
+        if not isinstance(body, dict) or "folders" not in body:
+            print(f"  {FAIL} FAIL: response is missing top-level \"folders\" key")
+        else:
+            folders = body["folders"]
+            if not isinstance(folders, list):
+                print(f"  {FAIL} FAIL: \"folders\" value is not a list (got {type(folders).__name__})")
+            else:
+                print(f"  folders count: {len(folders)}")
+                for folder in folders[:3]:
+                    fid = folder.get("id", "<missing>")
+                    fname = folder.get("name", "<missing>")
+                    print(f"    id={fid!r}  name={fname!r}")
+                for i, folder in enumerate(folders):
+                    if not isinstance(folder.get("id"), str):
+                        print(f"  {FAIL} FAIL: folder[{i}] \"id\" is not a string (got {type(folder.get('id')).__name__})")
+                    if not isinstance(folder.get("name"), str):
+                        print(f"  {FAIL} FAIL: folder[{i}] \"name\" is not a string (got {type(folder.get('name')).__name__})")
+
+    print("\n── POST /api/folders (create) ───────────────────────────────")
+    folder_name = "E2E-Test-Folder"
+    status, _, raw = s.request("POST", "/api/folders", body={"name": folder_name})
+    body = check("POST /api/folders", status, raw, expect=201)
+    folder_id = None
+    if body is not None:
+        folder = body.get("folder", {})
+        folder_id = folder.get("id")
+        returned_name = folder.get("name")
+        if returned_name == folder_name:
+            print(f"  {PASS} name matches: {returned_name!r}")
+        else:
+            print(f"  {FAIL} name mismatch: sent {folder_name!r}, got {returned_name!r}")
+        print(f"  created folder id: {folder_id}")
+        if folder_id:
+            s.request("DELETE", f"/api/folders/{folder_id}")
+
+    print("\n── GET /api/lists/search ────────────────────────────────────")
+    status, _, raw = s.request("GET", "/api/lists/search?q=a&limit=5&offset=0")
+    body = check("GET /api/lists/search?q=a&limit=5&offset=0 (Bearer)", status, raw)
+    if body is not None:
+        if not isinstance(body.get("lists"), list):
+            print(f"  {FAIL} FAIL: response is missing top-level \"lists\" list")
+        else:
+            pagination = body.get("pagination")
+            if not isinstance(pagination, dict):
+                print(f"  {FAIL} FAIL: response is missing top-level \"pagination\" dict")
+            else:
+                for key in ("total", "hasMore"):
+                    if key not in pagination:
+                        print(f"  {FAIL} FAIL: \"pagination\" is missing \"{key}\" key")
+                if "total" in pagination and "hasMore" in pagination:
+                    print(f"  result count : {len(body['lists'])}")
+                    print(f"  hasMore      : {pagination['hasMore']}")
+
+    status, _, raw = s.request("GET", "/api/lists/search?q=")
+    check("GET /api/lists/search?q= (empty query, any status)", status, raw,
+          expect=status)
+
+    print("\n── PATCH /api/documents/[id] (folderId) ────────────────────")
+    status, _, raw = s.request("GET", "/api/documents")
+    docs_body = check("GET /api/documents (Bearer)", status, raw)
+    if docs_body is None or not docs_body.get("documents"):
+        print("  (no documents found — skipping PATCH /api/documents/[id] tests)")
+    else:
+        doc = docs_body["documents"][0]
+        doc_id = doc.get("id")
+        doc_title = doc.get("title", "")
+        orig_folder_id = doc.get("folderId") or None
+
+        status, _, raw = s.request("GET", "/api/documents/folders")
+        folders_body = check("GET /api/documents/folders (Bearer)", status, raw)
+        doc_folders = (folders_body or {}).get("folders", [])
+        target_folder_id = doc_folders[0]["id"] if doc_folders else None
+
+        status, _, raw = s.request(
+            "PATCH", f"/api/documents/{doc_id}",
+            body={"title": doc_title, "folderId": target_folder_id},
+        )
+        patch_body = check(f"PATCH /api/documents/{doc_id} (folderId)", status, raw)
+        if patch_body is not None:
+            returned_folder_id = patch_body.get("document", {}).get("folderId") or None
+            if returned_folder_id == target_folder_id:
+                print(f"  {PASS} folderId matches: {returned_folder_id!r}")
+            else:
+                print(f"  {FAIL} folderId mismatch: sent {target_folder_id!r}, got {returned_folder_id!r}")
+
+        s.request(
+            "PATCH", f"/api/documents/{doc_id}",
+            body={"title": doc_title, "folderId": orig_folder_id},
+        )
+        print(f"  (restored folderId to {orig_folder_id!r})")
+
+    print("\n── PUT /api/lists/[id] (isPublic) ───────────────────────────")
+    status, _, raw = s.request("GET", "/api/lists")
+    lists_body = check("GET /api/lists (fetch for PUT test)", status, raw)
+    if lists_body is None:
+        print("  Skipping PUT test — could not fetch lists.")
+    else:
+        lists = lists_body.get("lists", [])
+        if not lists:
+            print("  Skipping PUT test — no lists found.")
+        else:
+            first = lists[0]
+            list_id = first.get("id")
+            orig_public = first.get("isPublic", False)
+            print(f"  list id={list_id!r}  current isPublic={orig_public!r}")
+
+            toggled = not orig_public
+            status, _, raw = s.request(
+                "PUT", f"/api/lists/{list_id}",
+                body={"isPublic": toggled},
+            )
+            put_body = check(f"PUT /api/lists/{list_id} (isPublic={toggled})", status, raw)
+            if put_body is not None:
+                returned = put_body.get("list", {}).get("isPublic")
+                if returned == toggled:
+                    print(f"  {PASS} isPublic toggled correctly to {toggled!r}")
+                else:
+                    print(f"  {FAIL} FAIL: expected isPublic={toggled!r}, got {returned!r}")
+
+            # Restore original value (best effort)
+            s.request("PUT", f"/api/lists/{list_id}", body={"isPublic": orig_public})
+            print(f"  (restored isPublic to {orig_public!r})")
+
+    print("\n── GET /api/documents/search ───────────────────────────────")
+    status, _, raw = s.request("GET", "/api/documents/search?q=a&limit=5&offset=0")
+    body = check("GET /api/documents/search?q=a&limit=5&offset=0 (Bearer)", status, raw)
+    if body is not None:
+        if not isinstance(body.get("documents"), list):
+            print(f"  {FAIL} FAIL: response is missing top-level \"documents\" list")
+        else:
+            pagination = body.get("pagination")
+            if not isinstance(pagination, dict):
+                print(f"  {FAIL} FAIL: response is missing top-level \"pagination\" dict")
+            elif "total" not in pagination or "hasMore" not in pagination:
+                print(f"  {FAIL} FAIL: \"pagination\" is missing \"total\" or \"hasMore\"")
+            else:
+                print(f"  result count : {len(body['documents'])}")
+                print(f"  hasMore      : {pagination['hasMore']}")
+
+    status, _, raw = s.request("GET", "/api/documents/search?q=zzzz_unlikely_match")
+    body = check("GET /api/documents/search?q=zzzz_unlikely_match (Bearer)", status, raw)
+    if body is not None:
+        docs = body.get("documents")
+        if not isinstance(docs, list):
+            print(f"  {FAIL} FAIL: \"documents\" key missing or not a list")
+        elif docs:
+            print(f"  {FAIL} FAIL: expected empty list for unlikely query, got {len(docs)} item(s)")
+        else:
+            print(f"  {PASS} empty \"documents\" list as expected")
+
+    print("\n── PUT /api/folders/[id] (rename) ───────────────────────────")
+    status, _, raw = s.request("POST", "/api/folders", body={"name": "E2E-Rename-Source"})
+    rename_body = check("POST /api/folders (setup)", status, raw, expect=201)
+    if rename_body is None:
+        print("  Skipping rename tests — folder creation failed.")
+    else:
+        rename_folder_id = (rename_body.get("folder") or {}).get("id", "")
+        if not rename_folder_id:
+            print(f"  {FAIL} Could not extract folder id from creation response — skipping.")
+        else:
+            status, _, raw = s.request(
+                "PUT", f"/api/folders/{rename_folder_id}",
+                body={"name": "E2E-Renamed"},
+            )
+            put_body = check(f"PUT /api/folders/{rename_folder_id}", status, raw)
+            if put_body is not None:
+                returned_name = (put_body.get("folder") or {}).get("name", "")
+                name_ok = returned_name == "E2E-Renamed"
+                symbol = PASS if name_ok else FAIL
+                print(f"  {symbol} rename reflected in response: {returned_name!r}")
+
+            # Cleanup — best effort, result ignored
+            s.request("DELETE", f"/api/folders/{rename_folder_id}")
+
+    print("\n── DELETE /api/folders/[id] ─────────────────────────────────")
+    status, _, raw = s.request("POST", "/api/folders", body={"name": "E2E-To-Delete"})
+    created = check("POST /api/folders (create temp folder)", status, raw, expect=201)
+    if created is None:
+        print(f"  {FAIL} SKIP: could not create temp folder — skipping DELETE tests")
+    else:
+        del_folder = created.get("folder") or {}
+        del_folder_id = del_folder.get("id") or created.get("id")
+        if not del_folder_id:
+            print(f"  {FAIL} SKIP: could not extract folder id from creation response")
+        else:
+            print(f"  created folder id: {del_folder_id!r}")
+
+            status, _, raw = s.request("DELETE", f"/api/folders/{del_folder_id}")
+            del_body = check(f"DELETE /api/folders/{del_folder_id}", status, raw)
+            if del_body is not None:
+                if "message" in del_body:
+                    msg_val = del_body["message"]
+                    print(f"  {PASS} PASS: response contains \"message\" key: {msg_val!r}")
+                else:
+                    print(f"  {FAIL} FAIL: response missing \"message\" key (got keys: {list(del_body.keys())})")
+
+                status, _, raw = s.request("GET", "/api/folders")
+                verify = check("GET /api/folders (verify deletion)", status, raw)
+                if verify is not None:
+                    remaining_ids = [f.get("id") for f in verify.get("folders", [])]
+                    if del_folder_id not in remaining_ids:
+                        print(f"  {PASS} PASS: folder id {del_folder_id!r} is no longer in GET /api/folders")
+                    else:
+                        print(f"  {FAIL} FAIL: folder id {del_folder_id!r} still present after DELETE")
+
+
     print()
 
 

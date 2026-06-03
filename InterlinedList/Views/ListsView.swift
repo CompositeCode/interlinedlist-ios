@@ -11,12 +11,18 @@ struct ListsView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showCreateList = false
+    @State private var showCreateFolder = false
     @State private var createError: String?
+    @State private var searchText = ""
+    @State private var searchResults: [UserList] = []
+    @State private var isSearching = false
 
     var body: some View {
         NavigationStack {
             Group {
-                if isLoading {
+                if !searchText.isEmpty {
+                    searchResultsList
+                } else if isLoading {
                     ProgressView("Loading lists…")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let error = errorMessage, treeNodes.isEmpty {
@@ -40,9 +46,12 @@ struct ListsView: View {
                 } else {
                     List {
                         ForEach(treeNodes) { node in
-                            ListTreeNodeRow(node: node, onDeleteList: { list in
-                                Task { await deleteList(list) }
-                            })
+                            ListTreeNodeRow(
+                                node: node,
+                                onDeleteList: { list in Task { await deleteList(list) } },
+                                onDeleteFolder: { folder in Task { await deleteFolder(folder) } },
+                                onUpdateList: { list in Task { await loadLists() } }
+                            )
                         }
                     }
                     .listStyle(.sidebar)
@@ -54,17 +63,41 @@ struct ListsView: View {
                 ListDetailView(list: list)
                     .environmentObject(authState)
             }
+            .searchable(text: $searchText, prompt: "Search lists")
+            .onSubmit(of: .search) {
+                Task { await runSearch() }
+            }
+            .onChange(of: searchText) { _, newValue in
+                if newValue.isEmpty {
+                    searchResults = []
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showCreateList = true
+                    Menu {
+                        Button {
+                            showCreateList = true
+                        } label: {
+                            Label("New List", systemImage: "plus.rectangle")
+                        }
+                        Button {
+                            showCreateFolder = true
+                        } label: {
+                            Label("New Folder", systemImage: "folder.badge.plus")
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel("New item")
                 }
             }
             .sheet(isPresented: $showCreateList) {
                 CreateListView { _ in
+                    Task { await loadLists() }
+                }
+            }
+            .sheet(isPresented: $showCreateFolder) {
+                CreateListFolderView(parentId: nil) {
                     Task { await loadLists() }
                 }
             }
@@ -77,9 +110,52 @@ struct ListsView: View {
         }
     }
 
+    @ViewBuilder
+    private var searchResultsList: some View {
+        if isSearching {
+            ProgressView("Searching…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if searchResults.isEmpty {
+            ContentUnavailableView.search(text: searchText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List(searchResults) { list in
+                NavigationLink(value: list) {
+                    ListNameWithVisibility(name: list.name, isPublic: list.isPublic)
+                }
+            }
+        }
+    }
+
+    private func runSearch() async {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        isSearching = true
+        defer { isSearching = false }
+        do {
+            let (results, _) = try await APIClient.shared.searchLists(q: q)
+            searchResults = results
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            searchResults = []
+        }
+    }
+
     private func deleteList(_ list: UserList) async {
         do {
             try await APIClient.shared.deleteList(id: list.id)
+            await loadLists()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            await loadLists()
+        }
+    }
+
+    private func deleteFolder(_ folder: ListFolder) async {
+        do {
+            try await APIClient.shared.deleteListFolder(id: folder.id)
             await loadLists()
         } catch APIError.status(401) {
             authState.handleUnauthorized()
@@ -106,23 +182,156 @@ struct ListsView: View {
     }
 }
 
+// MARK: - Create list folder sheet
+
+private struct CreateListFolderView: View {
+    let parentId: String?
+    let onSave: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Folder Name") {
+                    TextField("Name", text: $name)
+                }
+                if let error = errorMessage {
+                    Section {
+                        Text(error).foregroundStyle(.red).font(.caption)
+                    }
+                }
+            }
+            .navigationTitle("New Folder")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Create") { Task { await save() } }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        isLoading = true
+        defer { isLoading = false }
+        errorMessage = nil
+        do {
+            _ = try await APIClient.shared.createListFolder(
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                parentId: parentId
+            )
+            onSave()
+            dismiss()
+        } catch APIError.server(let msg) {
+            errorMessage = msg
+        } catch {
+            errorMessage = "Failed to create folder."
+        }
+    }
+}
+
+// MARK: - Rename list sheet
+
+private struct RenameListView: View {
+    let list: UserList
+    let onSave: (UserList) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var isPublic: Bool
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    init(list: UserList, onSave: @escaping (UserList) -> Void) {
+        self.list = list
+        self.onSave = onSave
+        _title = State(initialValue: list.name)
+        _isPublic = State(initialValue: list.isPublic ?? false)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Name") {
+                    TextField("List name", text: $title)
+                }
+                Section {
+                    Toggle("Public", isOn: $isPublic)
+                }
+                if let error = errorMessage {
+                    Section {
+                        Text(error).foregroundStyle(.red).font(.caption)
+                    }
+                }
+            }
+            .navigationTitle("Edit List")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") { Task { await save() } }
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        isLoading = true
+        defer { isLoading = false }
+        errorMessage = nil
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        do {
+            let updated = try await APIClient.shared.updateList(
+                id: list.id,
+                title: trimmed,
+                description: list.description,
+                isPublic: isPublic
+            )
+            onSave(updated)
+            dismiss()
+        } catch APIError.server(let msg) {
+            errorMessage = msg
+        } catch {
+            errorMessage = "Failed to update list."
+        }
+    }
+}
+
 // MARK: - Tree row
 
 struct ListTreeNodeRow: View {
     let node: ListTreeNode
     let onDeleteList: (UserList) -> Void
+    let onDeleteFolder: (ListFolder) -> Void
+    let onUpdateList: (UserList) -> Void
     @State private var isExpanded = true
+    @State private var showRename = false
 
     var body: some View {
         if let children = node.children, let list = node.list {
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
-                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList)
+                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList)
                 }
             } label: {
                 NavigationLink(value: list) {
                     ListNameWithVisibility(name: node.name, isPublic: list.isPublic)
                 }
+                .contextMenu {
+                    Button("Rename / Edit") { showRename = true }
+                    Button("Delete", role: .destructive) { onDeleteList(list) }
+                }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
@@ -131,18 +340,34 @@ struct ListTreeNodeRow: View {
                     Label("Delete", systemImage: "trash")
                 }
             }
+            .sheet(isPresented: $showRename) {
+                RenameListView(list: list) { _ in onUpdateList(list) }
+            }
         } else if let children = node.children {
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
-                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList)
+                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList)
                 }
             } label: {
                 Label(node.name, systemImage: "folder.fill")
                     .foregroundStyle(.primary)
             }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button(role: .destructive) {
+                    if let folder = folderFromNode(node) {
+                        onDeleteFolder(folder)
+                    }
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
         } else if let list = node.list {
             NavigationLink(value: list) {
                 ListNameWithVisibility(name: node.name, isPublic: list.isPublic)
+            }
+            .contextMenu {
+                Button("Rename / Edit") { showRename = true }
+                Button("Delete", role: .destructive) { onDeleteList(list) }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
@@ -151,7 +376,15 @@ struct ListTreeNodeRow: View {
                     Label("Delete", systemImage: "trash")
                 }
             }
+            .sheet(isPresented: $showRename) {
+                RenameListView(list: list) { _ in onUpdateList(list) }
+            }
         }
+    }
+
+    private func folderFromNode(_ node: ListTreeNode) -> ListFolder? {
+        guard node.list == nil, node.children != nil else { return nil }
+        return ListFolder(id: node.id, name: node.name, parentId: nil, createdAt: nil)
     }
 }
 
@@ -466,7 +699,6 @@ struct DynamicItemRow: View {
                         } : nil
                     )
                 } else {
-                    // Schema not yet loaded — show first rowData value as fallback
                     Text(item.rowData.sorted(by: { $0.key < $1.key }).first?.value.displayString ?? "—")
                         .foregroundStyle(.primary)
                 }

@@ -279,11 +279,11 @@ final class APIClient {
         return doc
     }
 
-    func updateDocument(id: String, title: String, content: String?, isPublic: Bool) async throws -> Document {
-        struct Body: Encodable { let title: String; let content: String?; let isPublic: Bool }
+    func updateDocument(id: String, title: String, content: String?, isPublic: Bool, folderId: String? = nil) async throws -> Document {
+        struct Body: Encodable { let title: String; let content: String?; let isPublic: Bool; let folderId: String? }
         struct Response: Decodable { let document: Document? }
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: Response = try await patch("/api/documents/\(encoded)", body: Body(title: title, content: content, isPublic: isPublic))
+        let response: Response = try await patch("/api/documents/\(encoded)", body: Body(title: title, content: content, isPublic: isPublic, folderId: folderId))
         guard let doc = response.document else { throw APIError.noData }
         return doc
     }
@@ -310,6 +310,57 @@ final class APIClient {
         let response: Response = try await post("/api/documents/folders", body: Body(name: name, parentId: parentId))
         guard let folder = response.folder else { throw APIError.noData }
         return folder
+    }
+
+    func searchDocuments(q: String, limit: Int = 20, offset: Int = 0) async throws -> ([Document], Pagination?) {
+        let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
+        struct Response: Decodable { let documents: [Document]; let pagination: Pagination? }
+        let response: Response = try await get("/api/documents/search?q=\(qEncoded)&limit=\(limit)&offset=\(offset)")
+        return (response.documents, response.pagination)
+    }
+
+    func updateList(id: String, title: String?, description: String?, isPublic: Bool?) async throws -> UserList {
+        struct Body: Encodable { let title: String?; let description: String?; let isPublic: Bool? }
+        struct Response: Decodable { let list: UserList? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: Response = try await put("/api/lists/\(encoded)", body: Body(title: title, description: description, isPublic: isPublic))
+        guard let list = response.list else { throw APIError.noData }
+        return list
+    }
+
+    func createListFolder(name: String, parentId: String?) async throws -> ListFolder {
+        struct Body: Encodable { let name: String; let parentId: String? }
+        struct Response: Decodable { let folder: ListFolder? }
+        let response: Response = try await post("/api/folders", body: Body(name: name, parentId: parentId))
+        guard let folder = response.folder else { throw APIError.noData }
+        return folder
+    }
+
+    func updateListFolder(id: String, name: String?, parentId: String?) async throws -> ListFolder {
+        struct Body: Encodable { let name: String?; let parentId: String? }
+        struct Response: Decodable { let folder: ListFolder? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: Response = try await put("/api/folders/\(encoded)", body: Body(name: name, parentId: parentId))
+        guard let folder = response.folder else { throw APIError.noData }
+        return folder
+    }
+
+    func deleteListFolder(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/folders/\(encoded)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func searchLists(q: String, limit: Int = 20, offset: Int = 0) async throws -> ([UserList], Pagination?) {
+        let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
+        struct Response: Decodable { let lists: [UserList]; let pagination: Pagination? }
+        let response: Response = try await get("/api/lists/search?q=\(qEncoded)&limit=\(limit)&offset=\(offset)")
+        return (response.lists, response.pagination)
     }
 
     // MARK: - Image upload
