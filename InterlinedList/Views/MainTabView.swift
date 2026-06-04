@@ -15,7 +15,9 @@ private enum MainSection: Int, CaseIterable {
 
 struct MainTabView: View {
     @EnvironmentObject var authState: AuthState
+    @EnvironmentObject var store: AppDataStore
     @State private var selectedSection: MainSection = .home
+    @State private var showNotifications = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +25,12 @@ struct MainTabView: View {
             sectionContent
         }
         .background(Color(.systemGroupedBackground))
+        .task {
+            await store.prefetchAll(userId: authState.user?.id)
+        }
+        .onChange(of: authState.user?.id) { _, id in
+            if let id { store.onUserIdAvailable(id) }
+        }
     }
 
     private var topBar: some View {
@@ -30,6 +38,7 @@ struct MainTabView: View {
             ForEach([MainSection.home, .lists, .documents, .profile], id: \.rawValue) { section in
                 topBarButton(section: section)
             }
+            bellButton
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 10)
@@ -60,32 +69,66 @@ struct MainTabView: View {
         .buttonStyle(.plain)
     }
 
-    @ViewBuilder
-    private var profileAvatar: some View {
-        if let avatarURLString = authState.user?.avatar, let url = URL(string: avatarURLString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure, .empty:
-                    Image(systemName: "person.circle.fill")
-                        .resizable()
-                        .scaledToFit()
-                @unknown default:
-                    Image(systemName: "person.circle.fill")
-                        .resizable()
-                        .scaledToFit()
+    private var bellButton: some View {
+        Button {
+            showNotifications = true
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "bell")
+                    .font(.title3)
+                    .foregroundStyle(Color.secondary)
+                    .frame(maxWidth: .infinity)
+                let total = store.unreadCount + store.pendingRequestCount
+                if total > 0 {
+                    Text(total > 99 ? "99+" : "\(total)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.red)
+                        .clipShape(Capsule())
+                        .offset(x: 6, y: -4)
                 }
             }
-            .frame(width: 28, height: 28)
-            .clipShape(Circle())
-        } else {
-            Image(systemName: "person.circle.fill")
-                .resizable()
-                .scaledToFit()
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showNotifications, onDismiss: {
+            Task { await store.refreshCounts() }
+        }) {
+            NotificationsView()
+                .environmentObject(authState)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var profileAvatar: some View {
+        ZStack(alignment: .topTrailing) {
+            if let avatarURLString = authState.user?.avatar, let url = URL(string: avatarURLString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .failure, .empty:
+                        Image(systemName: "person.circle.fill").resizable().scaledToFit()
+                    @unknown default:
+                        Image(systemName: "person.circle.fill").resizable().scaledToFit()
+                    }
+                }
                 .frame(width: 28, height: 28)
+                .clipShape(Circle())
+            } else {
+                Image(systemName: "person.circle.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28, height: 28)
+            }
+            if store.pendingRequestCount > 0 {
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: 8, height: 8)
+                    .offset(x: 2, y: -2)
+            }
         }
     }
 
@@ -97,31 +140,19 @@ struct MainTabView: View {
         case .lists:
             ListsView()
         case .documents:
-            DocumentsPlaceholderView()
+            DocumentsView()
         case .profile:
             ProfileView()
         }
     }
+
 }
 
-// MARK: - Placeholder & profile
-
-private struct DocumentsPlaceholderView: View {
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label("Documents", systemImage: "doc.text")
-            } description: {
-                Text("Documents are not yet available in this app.")
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("Documents")
-        }
-    }
-}
+// MARK: - Profile
 
 private struct ProfileView: View {
     @EnvironmentObject var authState: AuthState
+    @State private var showEditProfile = false
 
     var body: some View {
         NavigationStack {
@@ -130,6 +161,11 @@ private struct ProfileView: View {
                     identitySection(user: user)
                     accountSection(user: user)
                     preferencesSection(user: user)
+                }
+                Section("Social") {
+                    NavigationLink(destination: FollowRequestsView().environmentObject(authState)) {
+                        Label("Follow Requests", systemImage: "person.crop.circle.badge.plus")
+                    }
                 }
                 Section {
                     Button(role: .destructive) {
@@ -140,6 +176,19 @@ private struct ProfileView: View {
                 }
             }
             .navigationTitle("Profile")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit") {
+                        showEditProfile = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showEditProfile) {
+                if let user = authState.user {
+                    EditProfileView(user: user)
+                        .environmentObject(authState)
+                }
+            }
         }
     }
 

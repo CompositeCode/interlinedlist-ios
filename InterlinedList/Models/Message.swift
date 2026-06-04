@@ -44,6 +44,10 @@ struct Message: Codable, Identifiable {
     let videoUrls: [String]?
     let linkMetadata: LinkMetadata?
     let parentId: String?
+    let scheduledAt: String?
+    let tags: [String]?
+    let digCount: Int?
+    let dugByMe: Bool?
 
     var authorDisplay: String {
         guard let user = user else { return "Unknown" }
@@ -75,6 +79,10 @@ struct CreateMessageBody: Encodable {
     let content: String
     let publiclyVisible: Bool?
     let parentId: String?
+    let tags: [String]?
+    let scheduledAt: String?
+    let imageUrls: [String]?
+    let videoUrls: [String]?
 }
 
 struct CreateMessageResponse: Codable {

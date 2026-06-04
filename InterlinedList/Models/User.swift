@@ -21,6 +21,7 @@ struct User: Codable, Identifiable {
     let showAdvancedPostSettings: Bool?
     /// Default visibility for new messages (true = public).
     let defaultPubliclyVisible: Bool?
+    let isSubscriber: Bool?
 
     var displayNameOrUsername: String {
         displayName?.isEmpty == false ? (displayName ?? username) : username
