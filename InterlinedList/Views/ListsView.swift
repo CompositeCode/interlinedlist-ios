@@ -7,9 +7,7 @@ import SwiftUI
 
 struct ListsView: View {
     @EnvironmentObject var authState: AuthState
-    @State private var treeNodes: [ListTreeNode] = []
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @EnvironmentObject var store: AppDataStore
     @State private var showCreateList = false
     @State private var showCreateFolder = false
     @State private var createError: String?
@@ -17,22 +15,25 @@ struct ListsView: View {
     @State private var searchResults: [UserList] = []
     @State private var isSearching = false
 
+    private var treeNodes: [ListTreeNode] {
+        ListTreeNode.buildTree(folders: store.listFolders, lists: store.userLists)
+    }
+
     var body: some View {
         NavigationStack {
             Group {
                 if !searchText.isEmpty {
                     searchResultsList
-                } else if isLoading {
-                    ProgressView("Loading lists…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let error = errorMessage, treeNodes.isEmpty {
+                } else if store.listsLoading && treeNodes.isEmpty {
+                    ListSkeletonView()
+                } else if let error = store.listsError, treeNodes.isEmpty {
                     ContentUnavailableView {
                         Label("Unable to load", systemImage: "exclamationmark.triangle")
                     } description: {
                         Text(error)
                     } actions: {
                         Button("Retry") {
-                            Task { await loadLists() }
+                            Task { await store.refreshLists() }
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -50,7 +51,7 @@ struct ListsView: View {
                                 node: node,
                                 onDeleteList: { list in Task { await deleteList(list) } },
                                 onDeleteFolder: { folder in Task { await deleteFolder(folder) } },
-                                onUpdateList: { list in Task { await loadLists() } }
+                                onUpdateList: { list in Task { await store.refreshLists() } }
                             )
                         }
                     }
@@ -93,19 +94,16 @@ struct ListsView: View {
             }
             .sheet(isPresented: $showCreateList) {
                 CreateListView { _ in
-                    Task { await loadLists() }
+                    Task { await store.refreshLists() }
                 }
             }
             .sheet(isPresented: $showCreateFolder) {
                 CreateListFolderView(parentId: nil) {
-                    Task { await loadLists() }
+                    Task { await store.refreshLists() }
                 }
             }
-            .task {
-                await loadLists()
-            }
             .refreshable {
-                await loadLists()
+                await store.refreshLists()
             }
         }
     }
@@ -145,39 +143,22 @@ struct ListsView: View {
     private func deleteList(_ list: UserList) async {
         do {
             try await APIClient.shared.deleteList(id: list.id)
-            await loadLists()
+            store.removeList(id: list.id)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch {
-            await loadLists()
+            await store.refreshLists()
         }
     }
 
     private func deleteFolder(_ folder: ListFolder) async {
         do {
             try await APIClient.shared.deleteListFolder(id: folder.id)
-            await loadLists()
+            store.removeListFolder(id: folder.id)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch {
-            await loadLists()
-        }
-    }
-
-    private func loadLists() async {
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-        do {
-            let (folders, lists) = try await APIClient.shared.listsAndFolders()
-            treeNodes = ListTreeNode.buildTree(folders: folders, lists: lists)
-        } catch APIError.status(401) {
-            authState.handleUnauthorized()
-            errorMessage = "Session expired or not authorized. Try logging out and back in."
-        } catch APIError.server(let msg) {
-            errorMessage = msg
-        } catch {
-            errorMessage = error.localizedDescription
+            await store.refreshLists()
         }
     }
 }
@@ -420,18 +401,13 @@ struct ListDetailView: View {
     @State private var pendingUpdates: [String: [String: JSONValue]] = [:]
     @State private var isLoading = true
     @State private var errorMessage: String?
-    @State private var newItemText = ""
-    @State private var addItemError: String?
-    @State private var isAdding = false
     @State private var connections: [ListConnection] = []
     @State private var allLists: [UserList] = []
     @State private var showAddConnection = false
-
-    private var addableProperty: ListPropertyDef? {
-        schema
-            .filter { $0.isVisible && ["text", "textarea", "email", "url"].contains($0.propertyType) }
-            .min(by: { $0.displayOrder < $1.displayOrder })
-    }
+    @State private var showAddItem = false
+    @State private var editingItem: ListItem? = nil
+    @State private var deletingItem: ListItem? = nil
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         Group {
@@ -465,18 +441,25 @@ struct ListDetailView: View {
                                 pendingUpdates: pendingUpdates[item.id] ?? [:],
                                 onUpdateField: { key, value in
                                     Task { await updateField(item: item, key: key, value: value) }
+                                },
+                                onEdit: {
+                                    editingItem = item
+                                },
+                                onDelete: {
+                                    deletingItem = item
+                                    showDeleteConfirm = true
                                 }
                             )
                         }
-                        .onDelete { indexSet in
-                            for index in indexSet {
-                                let item = items[index]
-                                Task { await deleteItem(item) }
-                            }
-                        }
                     }
                     Section {
-                        addItemFooter
+                        Button {
+                            showAddItem = true
+                        } label: {
+                            Label("Add Item", systemImage: "plus")
+                        }
+                        .disabled(schema.isEmpty)
+                        .accessibilityLabel("Add item to list")
                     }
                     Section {
                         if connections.isEmpty {
@@ -553,55 +536,44 @@ struct ListDetailView: View {
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private var addItemFooter: some View {
-        if let prop = addableProperty {
-            HStack {
-                TextField(prop.placeholder ?? prop.propertyName, text: $newItemText)
-                Button {
-                    Task { await addItem() }
-                } label: {
-                    if isAdding {
-                        ProgressView()
-                            .frame(width: 20, height: 20)
-                    } else {
-                        Text("Add")
-                    }
-                }
-                .buttonStyle(.borderless)
-                .disabled(isAdding || newItemText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .sheet(isPresented: $showAddItem) {
+            ListItemFormView(schema: schema, existingItem: nil) { rowData in
+                Task { await addItem(rowData: rowData) }
             }
-            if let error = addItemError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+        }
+        .sheet(item: $editingItem) { item in
+            ListItemFormView(schema: schema, existingItem: item) { rowData in
+                Task { await saveEdit(item: item, rowData: rowData) }
             }
-        } else if !schema.isEmpty {
-            Text("Add item not supported for this list type")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        }
+        .confirmationDialog("Delete this item?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) {
+                if let item = deletingItem { Task { await deleteItem(item) } }
+            }
+            Button("Cancel", role: .cancel) { deletingItem = nil }
         }
     }
 
-    private func addItem() async {
-        addItemError = nil
-        isAdding = true
-        defer { isAdding = false }
-        let text = newItemText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        let key = addableProperty?.propertyKey ?? "content"
+    private func addItem(rowData: [String: JSONValue]) async {
         do {
-            let item = try await APIClient.shared.addListItem(listId: list.id, firstPropertyKey: key, value: text)
+            let item = try await APIClient.shared.addListItem(listId: list.id, rowData: rowData)
             items.append(item)
-            newItemText = ""
         } catch APIError.status(401) {
             authState.handleUnauthorized()
-        } catch APIError.server(let msg) {
-            addItemError = msg
         } catch {
-            addItemError = "Failed to add item."
+        }
+    }
+
+    private func saveEdit(item: ListItem, rowData: [String: JSONValue]) async {
+        do {
+            let updated = try await APIClient.shared.updateItem(listId: list.id, itemId: item.id, rowData: rowData)
+            if let idx = items.firstIndex(where: { $0.id == item.id }) {
+                items[idx] = updated
+            }
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            await loadData()
         }
     }
 
@@ -667,6 +639,8 @@ struct DynamicItemRow: View {
     let schema: [ListPropertyDef]
     let pendingUpdates: [String: JSONValue]
     let onUpdateField: (String, JSONValue) -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
     @State private var isExpanded = false
 
     private var visibleProps: [ListPropertyDef] {
@@ -734,6 +708,23 @@ struct DynamicItemRow: View {
                 .padding(.leading, 4)
                 .padding(.bottom, 6)
             }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            Button {
+                onEdit()
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .tint(.blue)
+        }
+        .contextMenu {
+            Button("Edit") { onEdit() }
+            Button("Delete", role: .destructive) { onDelete() }
         }
     }
 }
@@ -833,7 +824,7 @@ struct FieldValueView: View {
     ]
     let item = ListItem(id: "r1", rowData: ["title": .string("Dune"), "read": .bool(true), "price": .number(14.99)], rowNumber: 1, createdAt: nil)
     return List {
-        DynamicItemRow(item: item, schema: schema, pendingUpdates: [:], onUpdateField: { _, _ in })
+        DynamicItemRow(item: item, schema: schema, pendingUpdates: [:], onUpdateField: { _, _ in }, onEdit: {}, onDelete: {})
     }
 }
 

@@ -238,11 +238,21 @@ final class APIClient {
         return item
     }
 
-    func addListItem(listId: String, firstPropertyKey: String, value: String) async throws -> ListItem {
+    func addListItem(listId: String, rowData: [String: JSONValue]) async throws -> ListItem {
         struct Body: Encodable { let data: [String: JSONValue] }
         struct Response: Decodable { let row: ListItem? }
         let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
-        let response: Response = try await post("/api/lists/\(encoded)/data", body: Body(data: [firstPropertyKey: .string(value)]))
+        let response: Response = try await post("/api/lists/\(encoded)/data", body: Body(data: rowData))
+        guard let item = response.row else { throw APIError.noData }
+        return item
+    }
+
+    func updateItem(listId: String, itemId: String, rowData: [String: JSONValue]) async throws -> ListItem {
+        struct Body: Encodable { let data: [String: JSONValue] }
+        struct Response: Decodable { let row: ListItem? }
+        let encodedList = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let encodedItem = itemId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? itemId
+        let response: Response = try await put("/api/lists/\(encodedList)/data/\(encodedItem)", body: Body(data: rowData))
         guard let item = response.row else { throw APIError.noData }
         return item
     }

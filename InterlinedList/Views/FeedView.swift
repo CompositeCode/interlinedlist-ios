@@ -7,8 +7,10 @@ import SwiftUI
 
 struct FeedView: View {
     @EnvironmentObject var authState: AuthState
+    @EnvironmentObject var store: AppDataStore
     @State private var messages: [Message] = []
     @State private var isLoading = true
+    @State private var syncedFromStore = false
     @State private var errorMessage: String?
     @State private var pagination: Pagination?
     @State private var showPreviews = true
@@ -28,143 +30,94 @@ struct FeedView: View {
         return messages.compactMap { $0.tags }.flatMap { $0 }.filter { seen.insert($0).inserted }
     }
 
-    var body: some View {
-        NavigationStack {
-            Group {
-                if isLoading && messages.isEmpty {
-                    ProgressView("Loading messages…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .frame(minWidth: 44, minHeight: 44)
-                } else if let error = errorMessage, messages.isEmpty {
-                    ContentUnavailableView {
-                        Label("Unable to load", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Retry") {
-                            Task { await loadMessages() }
-                        }
-                    }
-                } else {
-                    List {
-                        Section {
-                            Toggle("Show previews", isOn: $showPreviews)
-                            Toggle("My Posts", isOn: $showOnlyMine)
-                        }
-                        if !distinctTags.isEmpty {
-                            Section {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ForEach(distinctTags, id: \.self) { tag in
-                                            let isActive = tagFilter == tag
-                                            Button {
-                                                tagFilter = isActive ? nil : tag
-                                            } label: {
-                                                Text(tag)
-                                                    .font(.caption)
-                                                    .padding(.horizontal, 10)
-                                                    .padding(.vertical, 5)
-                                                    .background(isActive ? Color.accentColor : Color(.secondarySystemFill))
-                                                    .foregroundStyle(isActive ? Color.white : Color.secondary)
-                                                    .clipShape(Capsule())
-                                            }
-                                            .buttonStyle(.borderless)
-                                        }
-                                    }
-                                    .padding(.vertical, 2)
+    @ViewBuilder
+    private var feedContent: some View {
+        if isLoading && messages.isEmpty {
+            FeedSkeletonView()
+        } else if let error = errorMessage, messages.isEmpty {
+            ContentUnavailableView {
+                Label("Unable to load", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Retry") { Task { await loadMessages() } }
+            }
+        } else {
+            messageList
+        }
+    }
+
+    private var messageList: some View {
+        List {
+            Section {
+                Toggle("Show previews", isOn: $showPreviews)
+                Toggle("My Posts", isOn: $showOnlyMine)
+            }
+            if !distinctTags.isEmpty {
+                Section {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(distinctTags, id: \.self) { tag in
+                                let isActive = tagFilter == tag
+                                Button {
+                                    tagFilter = isActive ? nil : tag
+                                } label: {
+                                    Text(tag)
+                                        .font(.caption)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(isActive ? Color.accentColor : Color(.secondarySystemFill))
+                                        .foregroundStyle(isActive ? Color.white : Color.secondary)
+                                        .clipShape(Capsule())
                                 }
+                                .buttonStyle(.borderless)
                             }
                         }
-                        ForEach(messages) { message in
-                            MessageRow(
-                                message: message,
-                                currentUserId: authState.user?.id,
-                                showPreviews: showPreviews,
-                                digState: digStates[message.id],
-                                onReply: {
-                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                    threadMessage = message
-                                },
-                                onDelete: {
-                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                    messageToDelete = message
-                                },
-                                onEdit: {
-                                    messageToEdit = message
-                                },
-                                onDig: {
-                                    Task { await toggleDig(for: message) }
-                                },
-                                onTapAuthor: { username in
-                                    profileUsername = username
-                                }
-                            )
-                        }
-                        if let pagination = pagination, pagination.hasMore, !isLoading {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                    .frame(width: 24, height: 24)
-                                Spacer()
-                            }
-                            .onAppear {
-                                Task { await loadMore() }
-                            }
-                        }
-                    }
-                    .refreshable {
-                        await loadMessages()
+                        .padding(.vertical, 2)
                     }
                 }
             }
-            .navigationTitle("InterlinedList")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 8) {
-                        Image("Logo")
-                            .resizable()
-                            .frame(width: 28, height: 28)
-                            .clipped()
-                        Text("InterlinedList")
-                            .font(.headline)
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 4) {
-                        Button {
-                            showScheduled = true
-                        } label: {
-                            Image(systemName: "calendar")
-                        }
-                        .accessibilityLabel("Scheduled posts")
-                        Button {
-                            showCompose = true
-                        } label: {
-                            Image(systemName: "square.and.pencil")
-                        }
-                        .accessibilityLabel("Compose")
-                    }
-                }
+            ForEach(messages) { message in
+                MessageRow(
+                    message: message,
+                    currentUserId: authState.user?.id,
+                    showPreviews: showPreviews,
+                    digState: digStates[message.id],
+                    onReply: {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        threadMessage = message
+                    },
+                    onDelete: {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        messageToDelete = message
+                    },
+                    onEdit: { messageToEdit = message },
+                    onDig: { Task { await toggleDig(for: message) } },
+                    onTapAuthor: { username in profileUsername = username }
+                )
             }
-            .sheet(isPresented: $showCompose) {
-                ComposeView()
-                    .environmentObject(authState)
+            if let pagination = pagination, pagination.hasMore, !isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView().frame(width: 24, height: 24)
+                    Spacer()
+                }
+                .onAppear { Task { await loadMore() } }
             }
-            .task {
+        }
+        .refreshable {
+            if showOnlyMine || tagFilter != nil {
                 await loadMessages()
+            } else {
+                syncedFromStore = false
+                pagination = nil
+                await store.refreshFeed()
             }
-            .onChange(of: authState.user?.id) { _, _ in
-                if authState.isLoggedIn {
-                    Task { await loadMessages() }
-                }
-            }
-            .onChange(of: showOnlyMine) { _, _ in
-                Task { await loadMessages() }
-            }
-            .onChange(of: tagFilter) { _, _ in
-                Task { await loadMessages() }
-            }
+        }
+    }
+
+    var body: some View {
+        navigationContent
             .sheet(item: $threadMessage) { message in
                 MessageThreadView(rootMessage: message, currentUserId: authState.user?.id)
                     .environmentObject(authState)
@@ -173,13 +126,9 @@ struct FeedView: View {
                 get: { profileUsername != nil },
                 set: { if !$0 { profileUsername = nil } }
             )) {
-                if let username = profileUsername {
-                    UserProfileView(username: username)
-                }
+                if let username = profileUsername { UserProfileView(username: username) }
             }
-            .sheet(isPresented: $showScheduled) {
-                ScheduledMessagesView()
-            }
+            .sheet(isPresented: $showScheduled) { ScheduledMessagesView() }
             .sheet(item: $messageToEdit) { message in
                 EditMessageView(message: message) { updated in
                     if let index = messages.firstIndex(where: { $0.id == updated.id }) {
@@ -191,10 +140,7 @@ struct FeedView: View {
                 get: { messageToDelete != nil },
                 set: { if !$0 { messageToDelete = nil; deleteError = nil } }
             )) {
-                Button("Cancel", role: .cancel) {
-                    messageToDelete = nil
-                    deleteError = nil
-                }
+                Button("Cancel", role: .cancel) { messageToDelete = nil; deleteError = nil }
                 Button("Delete", role: .destructive) {
                     guard let msg = messageToDelete else { return }
                     deleteError = nil
@@ -203,6 +149,70 @@ struct FeedView: View {
             } message: {
                 Text(deleteError ?? "This cannot be undone.")
             }
+    }
+
+    private var navigationContent: some View {
+        let nav = NavigationStack {
+            feedContent
+                .navigationTitle("InterlinedList")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { feedToolbar }
+        }
+        .sheet(isPresented: $showCompose) {
+            ComposeView().environmentObject(authState)
+        }
+        .task { await applyInitialState() }
+        .onChange(of: authState.user?.id) { _, _ in
+            if authState.isLoggedIn { Task { await loadMessages() } }
+        }
+        return nav
+            .onChange(of: store.feedMessages.count) { _, _ in
+                guard !syncedFromStore && !showOnlyMine && tagFilter == nil else { return }
+                let msgs = store.feedMessages
+                messages = msgs
+                initDigStates(from: msgs)
+                isLoading = false
+                syncedFromStore = !msgs.isEmpty
+            }
+            .onChange(of: store.feedLoading) { _, loading in
+                guard !showOnlyMine && tagFilter == nil else { return }
+                if !loading && messages.isEmpty {
+                    messages = store.feedMessages
+                    initDigStates(from: messages)
+                    isLoading = false
+                    syncedFromStore = !messages.isEmpty
+                }
+            }
+            .onChange(of: showOnlyMine) { _, _ in Task { await loadMessages() } }
+            .onChange(of: tagFilter) { _, _ in Task { await loadMessages() } }
+    }
+
+    @ToolbarContentBuilder
+    private var feedToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            HStack(spacing: 8) {
+                Image("Logo").resizable().frame(width: 28, height: 28).clipped()
+                Text("InterlinedList").font(.headline)
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: 4) {
+                Button { showScheduled = true } label: { Image(systemName: "calendar") }
+                    .accessibilityLabel("Scheduled posts")
+                Button { showCompose = true } label: { Image(systemName: "square.and.pencil") }
+                    .accessibilityLabel("Compose")
+            }
+        }
+    }
+
+    private func applyInitialState() async {
+        if !store.feedMessages.isEmpty && messages.isEmpty {
+            messages = store.feedMessages
+            initDigStates(from: messages)
+            isLoading = false
+            syncedFromStore = true
+        } else {
+            isLoading = store.feedLoading
         }
     }
 
@@ -258,6 +268,7 @@ struct FeedView: View {
     }
 
     private func loadMore() async {
+        syncedFromStore = true
         guard let pag = pagination, pag.hasMore else { return }
         isLoading = true
         defer { isLoading = false }

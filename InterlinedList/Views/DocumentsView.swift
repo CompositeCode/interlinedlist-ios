@@ -7,15 +7,15 @@ import SwiftUI
 
 struct DocumentsView: View {
     @EnvironmentObject var authState: AuthState
-    @State private var allFolders: [DocumentFolder] = []
-    @State private var allDocuments: [Document] = []
-    @State private var isLoading = false
-    @State private var errorMessage: String?
+    @EnvironmentObject var store: AppDataStore
     @State private var showCreate = false
     @State private var showCreateFolder = false
     @State private var searchText = ""
     @State private var searchResults: [Document] = []
     @State private var isSearching = false
+
+    private var allFolders: [DocumentFolder] { store.documentFolders }
+    private var allDocuments: [Document] { store.documents }
 
     private var rootFolders: [DocumentFolder] {
         allFolders.filter { ($0.parentId ?? "").isEmpty }
@@ -30,10 +30,9 @@ struct DocumentsView: View {
             Group {
                 if !searchText.isEmpty {
                     searchResultsList
-                } else if isLoading && allFolders.isEmpty && allDocuments.isEmpty {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if let error = errorMessage {
+                } else if store.documentsLoading && allFolders.isEmpty && allDocuments.isEmpty {
+                    DocumentSkeletonView()
+                } else if let error = store.documentsError {
                     ContentUnavailableView {
                         Label("Unavailable", systemImage: "exclamationmark.triangle")
                     } description: {
@@ -76,16 +75,15 @@ struct DocumentsView: View {
                     .accessibilityLabel("New item")
                 }
             }
-            .refreshable { await load() }
-            .task { await load() }
+            .refreshable { await store.refreshDocuments() }
             .sheet(isPresented: $showCreate) {
                 CreateDocumentView(folderId: nil) { newDoc in
-                    allDocuments.insert(newDoc, at: 0)
+                    store.insertDocument(newDoc)
                 }
             }
             .sheet(isPresented: $showCreateFolder) {
                 CreateDocumentFolderView(parentId: nil) { newFolder in
-                    allFolders.append(newFolder)
+                    store.insertDocumentFolder(newFolder)
                 }
             }
         }
@@ -102,11 +100,9 @@ struct DocumentsView: View {
         } else {
             List(searchResults) { doc in
                 NavigationLink(destination: DocumentDetailView(document: doc, onUpdate: { updated in
-                    if let idx = allDocuments.firstIndex(where: { $0.id == updated.id }) {
-                        allDocuments[idx] = updated
-                    }
+                    store.updateDocument(updated)
                 }, onDelete: { id in
-                    allDocuments.removeAll { $0.id == id }
+                    store.removeDocument(id: id)
                     searchResults.removeAll { $0.id == id }
                 })) {
                     DocumentRow(document: doc)
@@ -145,11 +141,9 @@ struct DocumentsView: View {
                 Section("Documents") {
                     ForEach(rootDocuments) { doc in
                         NavigationLink(destination: DocumentDetailView(document: doc, onUpdate: { updated in
-                            if let idx = allDocuments.firstIndex(where: { $0.id == updated.id }) {
-                                allDocuments[idx] = updated
-                            }
+                            store.updateDocument(updated)
                         }, onDelete: { id in
-                            allDocuments.removeAll { $0.id == id }
+                            store.removeDocument(id: id)
                         })) {
                             DocumentRow(document: doc)
                         }
@@ -162,28 +156,9 @@ struct DocumentsView: View {
         }
     }
 
-    private func load() async {
-        isLoading = true
-        defer { isLoading = false }
-        errorMessage = nil
-        do {
-            async let fTask = APIClient.shared.documentFolders()
-            async let dTask = APIClient.shared.documents()
-            let (f, d) = try await (fTask, dTask)
-            allFolders = f
-            allDocuments = d
-        } catch APIError.status(401) {
-            authState.handleUnauthorized()
-        } catch APIError.status(403) {
-            errorMessage = "Requires active subscription."
-        } catch {
-            errorMessage = "Failed to load documents."
-        }
-    }
-
     private func deleteDocuments(at offsets: IndexSet, from list: [Document]) async {
         let toDelete = offsets.map { list[$0] }
-        allDocuments.removeAll { doc in toDelete.contains { $0.id == doc.id } }
+        toDelete.forEach { store.removeDocument(id: $0.id) }
         for doc in toDelete {
             try? await APIClient.shared.deleteDocument(id: doc.id)
         }

@@ -15,9 +15,8 @@ private enum MainSection: Int, CaseIterable {
 
 struct MainTabView: View {
     @EnvironmentObject var authState: AuthState
+    @EnvironmentObject var store: AppDataStore
     @State private var selectedSection: MainSection = .home
-    @State private var unreadCount = 0
-    @State private var pendingRequestCount = 0
     @State private var showNotifications = false
 
     var body: some View {
@@ -27,7 +26,10 @@ struct MainTabView: View {
         }
         .background(Color(.systemGroupedBackground))
         .task {
-            await refreshCounts()
+            await store.prefetchAll(userId: authState.user?.id)
+        }
+        .onChange(of: authState.user?.id) { _, id in
+            if let id { store.onUserIdAvailable(id) }
         }
     }
 
@@ -76,7 +78,7 @@ struct MainTabView: View {
                     .font(.title3)
                     .foregroundStyle(Color.secondary)
                     .frame(maxWidth: .infinity)
-                let total = unreadCount + pendingRequestCount
+                let total = store.unreadCount + store.pendingRequestCount
                 if total > 0 {
                     Text(total > 99 ? "99+" : "\(total)")
                         .font(.system(size: 9, weight: .bold))
@@ -91,7 +93,7 @@ struct MainTabView: View {
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $showNotifications, onDismiss: {
-            Task { await refreshCounts() }
+            Task { await store.refreshCounts() }
         }) {
             NotificationsView()
                 .environmentObject(authState)
@@ -121,7 +123,7 @@ struct MainTabView: View {
                     .scaledToFit()
                     .frame(width: 28, height: 28)
             }
-            if pendingRequestCount > 0 {
+            if store.pendingRequestCount > 0 {
                 Circle()
                     .fill(Color.orange)
                     .frame(width: 8, height: 8)
@@ -144,30 +146,6 @@ struct MainTabView: View {
         }
     }
 
-    private func refreshCounts() async {
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.fetchNotificationCount() }
-            group.addTask { await self.fetchFollowRequestCount() }
-        }
-    }
-
-    private func fetchNotificationCount() async {
-        do {
-            let response = try await APIClient.shared.notifications()
-            unreadCount = response.unreadCount
-        } catch {
-            // Silently ignore — badge just shows 0
-        }
-    }
-
-    private func fetchFollowRequestCount() async {
-        do {
-            let requests = try await APIClient.shared.followRequests()
-            pendingRequestCount = requests.count
-        } catch {
-            // Silently ignore
-        }
-    }
 }
 
 // MARK: - Profile

@@ -57,7 +57,9 @@
       "Bash(md5 /tmp/test_api_snapshot.py)",
       "Bash(cp /Users/adron/Codez/interlinedlist-ios/scripts/test_api.py /tmp/test_api_current.py)",
       "Bash(md5 /tmp/test_api_current.py)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(git -C /Users/adron/Codez/interlinedlist-ios diff main...HEAD --name-only)",
+      "Bash(grep '\\\\.swift$')"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

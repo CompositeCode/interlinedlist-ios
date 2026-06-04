@@ -35,6 +35,13 @@
 		A3C3D3E3F3A30051 /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C3D3E3F3A30052 /* Document.swift */; };
 		A3C3D3E3F3A30053 /* DocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C3D3E3F3A30054 /* DocumentsView.swift */; };
 		A3C3D3E3F3A30055 /* URLSessionProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C3D3E3F3A30056 /* URLSessionProtocol.swift */; };
+		B1C1D1E1F1A10001 /* DataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10002 /* DataCache.swift */; };
+		B1C1D1E1F1A10003 /* AppDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10004 /* AppDataStore.swift */; };
+		B1C1D1E1F1A10005 /* SkeletonBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10006 /* SkeletonBlock.swift */; };
+		B1C1D1E1F1A10007 /* FeedSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10008 /* FeedSkeletonView.swift */; };
+		B1C1D1E1F1A10009 /* ListSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000A /* ListSkeletonView.swift */; };
+		B1C1D1E1F1A1000B /* DocumentSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */; };
+		B1C1D1E1F1A1000D /* ListItemFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000E /* ListItemFormView.swift */; };
 		T1E5T1E5T1E50001 /* InterlinedListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50002 /* InterlinedListTests.swift */; };
 		T1E5T1E5T1E50003 /* MockURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50004 /* MockURLSession.swift */; };
 		T1E5T1E5T1E50005 /* APIClientAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50006 /* APIClientAuthTests.swift */; };
@@ -101,6 +108,13 @@
 		A3C3D3E3F3A30052 /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		A3C3D3E3F3A30054 /* DocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsView.swift; sourceTree = "<group>"; };
 		A3C3D3E3F3A30056 /* URLSessionProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLSessionProtocol.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A10002 /* DataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataCache.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A10004 /* AppDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataStore.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A10006 /* SkeletonBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonBlock.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A10008 /* FeedSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedSkeletonView.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A1000A /* ListSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSkeletonView.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSkeletonView.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A1000E /* ListItemFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemFormView.swift; sourceTree = "<group>"; };
 		F379C02B2FCEB9440069B81C /* InterlinedList.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = InterlinedList.xctestplan; sourceTree = "<group>"; };
 		T1E5T1E5T1E50000 /* InterlinedListTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = InterlinedListTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		T1E5T1E5T1E50002 /* InterlinedListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterlinedListTests.swift; sourceTree = "<group>"; };
@@ -198,6 +212,8 @@
 				A1B1C1D1E1F1000C /* APIClient.swift */,
 				A1B1C1D1E1F1000E /* AuthState.swift */,
 				A3C3D3E3F3A30056 /* URLSessionProtocol.swift */,
+				B1C1D1E1F1A10002 /* DataCache.swift */,
+				B1C1D1E1F1A10004 /* AppDataStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -221,6 +237,11 @@
 				A2B2C2D2E2F20048 /* FollowRequestsView.swift */,
 				A2B2C2D2E2F2004A /* EditProfileView.swift */,
 				A3C3D3E3F3A30054 /* DocumentsView.swift */,
+				B1C1D1E1F1A10006 /* SkeletonBlock.swift */,
+				B1C1D1E1F1A10008 /* FeedSkeletonView.swift */,
+				B1C1D1E1F1A1000A /* ListSkeletonView.swift */,
+				B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */,
+				B1C1D1E1F1A1000E /* ListItemFormView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -386,6 +407,13 @@
 				A3C3D3E3F3A30051 /* Document.swift in Sources */,
 				A3C3D3E3F3A30053 /* DocumentsView.swift in Sources */,
 				A3C3D3E3F3A30055 /* URLSessionProtocol.swift in Sources */,
+				B1C1D1E1F1A10001 /* DataCache.swift in Sources */,
+				B1C1D1E1F1A10003 /* AppDataStore.swift in Sources */,
+				B1C1D1E1F1A10005 /* SkeletonBlock.swift in Sources */,
+				B1C1D1E1F1A10007 /* FeedSkeletonView.swift in Sources */,
+				B1C1D1E1F1A10009 /* ListSkeletonView.swift in Sources */,
+				B1C1D1E1F1A1000B /* DocumentSkeletonView.swift in Sources */,
+				B1C1D1E1F1A1000D /* ListItemFormView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

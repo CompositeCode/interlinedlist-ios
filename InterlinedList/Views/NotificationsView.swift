@@ -13,6 +13,7 @@ struct NotificationsView: View {
     @State private var followRequests: [FollowRequest] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var selectedNotification: AppNotification?
 
     var body: some View {
         NavigationStack {
@@ -51,6 +52,7 @@ struct NotificationsView: View {
                             Section("Notifications") {
                                 ForEach(notifications) { notification in
                                     NotificationRow(notification: notification) {
+                                        selectedNotification = notification
                                         Task { await markRead(notification) }
                                     }
                                 }
@@ -76,6 +78,9 @@ struct NotificationsView: View {
                 }
             }
             .task { await load() }
+            .sheet(item: $selectedNotification) { notification in
+                NotificationDetailView(notification: notification)
+            }
         }
     }
 
@@ -218,6 +223,70 @@ private struct FollowRequestRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+private struct NotificationDetailView: View {
+    let notification: AppNotification
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if let type = notification.type {
+                        Text(typeLabel(type))
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(.secondarySystemFill))
+                            .clipShape(Capsule())
+                    }
+                    if let actor = notification.actorUsername {
+                        Label("@\(actor)", systemImage: "person")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(notification.message ?? "No message")
+                        .font(.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let createdAt = notification.createdAt {
+                        Text(formatFullDate(createdAt))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Notification")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func typeLabel(_ type: String) -> String {
+        switch type {
+        case "follow":  return "New Follower"
+        case "mention": return "Mention"
+        case "dig":     return "Dig"
+        case "reply":   return "Reply"
+        case "comment": return "Comment"
+        default:        return type.capitalized
+        }
+    }
+
+    private func formatFullDate(_ iso: String) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
+            return DateFormatter.localizedString(from: date, dateStyle: .long, timeStyle: .short)
+        }
+        return iso
     }
 }
 

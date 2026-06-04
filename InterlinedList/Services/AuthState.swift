@@ -9,12 +9,14 @@ import Foundation
 final class AuthState: ObservableObject {
     @Published private(set) var user: User?
     @Published private(set) var isRestoring = true
+    @Published private(set) var hasToken: Bool = false
 
     private let api = APIClient.shared
 
     init() {
         if let token = KeychainService.loadToken() {
             api.setBearerToken(token)
+            hasToken = true
             Task { await validateSession() }
         } else {
             isRestoring = false
@@ -51,6 +53,7 @@ final class AuthState: ObservableObject {
                 throw APIError.server("Failed to save session")
             }
             api.setBearerToken(token)
+            hasToken = true
             do {
                 let currentUser = try await api.currentUser()
                 user = currentUser
@@ -71,6 +74,7 @@ final class AuthState: ObservableObject {
         KeychainService.deleteToken()
         api.setBearerToken(nil)
         user = nil
+        hasToken = false
     }
 
     func updateUser(_ updated: User) {
