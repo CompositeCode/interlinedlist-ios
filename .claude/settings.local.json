@@ -59,7 +59,13 @@
       "Bash(md5 /tmp/test_api_current.py)",
       "Bash(python3 *)",
       "Bash(git -C /Users/adron/Codez/interlinedlist-ios diff main...HEAD --name-only)",
-      "Bash(grep '\\\\.swift$')"
+      "Bash(grep '\\\\.swift$')",
+      "Bash(git check-ignore *)",
+      "Bash(git add *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(xcrun xcresulttool *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

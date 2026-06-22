@@ -13,9 +13,18 @@ struct DocumentsView: View {
     @State private var searchText = ""
     @State private var searchResults: [Document] = []
     @State private var isSearching = false
+    @State private var searchPagination: Pagination?
+    @State private var searchOffset = 0
+    @State private var searchError: String?
+    @State private var searchEndpointUnavailable = false
+    @State private var isLoadingMoreSearch = false
 
     private var allFolders: [DocumentFolder] { store.documentFolders }
     private var allDocuments: [Document] { store.documents }
+
+    private var folderNameLookup: [String: String] {
+        Dictionary(uniqueKeysWithValues: allFolders.map { ($0.id, $0.name) })
+    }
 
     private var rootFolders: [DocumentFolder] {
         allFolders.filter { ($0.parentId ?? "").isEmpty }
@@ -51,10 +60,23 @@ struct DocumentsView: View {
             .navigationTitle("Documents")
             .searchable(text: $searchText, prompt: "Search documents")
             .onSubmit(of: .search) {
-                Task { await runSearch() }
+                Task { await runSearch(reset: true) }
             }
             .onChange(of: searchText) { _, newValue in
-                if newValue.isEmpty { searchResults = [] }
+                if newValue.isEmpty {
+                    searchResults = []
+                    searchPagination = nil
+                    searchOffset = 0
+                    searchError = nil
+                }
+            }
+            .task(id: searchText) {
+                let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !q.isEmpty else { return }
+                // Debounce: cancel-on-change semantics from .task(id:) drop stale work.
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                await runSearch(reset: true)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -91,39 +113,105 @@ struct DocumentsView: View {
 
     @ViewBuilder
     private var searchResultsList: some View {
-        if isSearching {
+        if searchEndpointUnavailable {
+            ContentUnavailableView {
+                Label("Search isn't available yet", systemImage: "magnifyingglass")
+            } description: {
+                Text("Document search is coming soon.")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error = searchError, searchResults.isEmpty {
+            ContentUnavailableView {
+                Label("Search failed", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Retry") {
+                    Task { await runSearch(reset: true) }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if isSearching && searchResults.isEmpty {
             ProgressView("Searching…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if searchResults.isEmpty {
             ContentUnavailableView.search(text: searchText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            List(searchResults) { doc in
-                NavigationLink(destination: DocumentDetailView(document: doc, onUpdate: { updated in
-                    store.updateDocument(updated)
-                }, onDelete: { id in
-                    store.removeDocument(id: id)
-                    searchResults.removeAll { $0.id == id }
-                })) {
-                    DocumentRow(document: doc)
+            List {
+                ForEach(searchResults) { doc in
+                    NavigationLink(destination: DocumentDetailView(document: doc, onUpdate: { updated in
+                        store.updateDocument(updated)
+                        if let idx = searchResults.firstIndex(where: { $0.id == updated.id }) {
+                            searchResults[idx] = updated
+                        }
+                    }, onDelete: { id in
+                        store.removeDocument(id: id)
+                        searchResults.removeAll { $0.id == id }
+                    })) {
+                        DocumentSearchResultRow(
+                            document: doc,
+                            folderName: doc.folderId.flatMap { folderNameLookup[$0] }
+                        )
+                    }
+                }
+                if let pagination = searchPagination, pagination.hasMore {
+                    HStack {
+                        Spacer()
+                        ProgressView().frame(width: 24, height: 24)
+                        Spacer()
+                    }
+                    .onAppear {
+                        guard !isLoadingMoreSearch else { return }
+                        Task { await loadMoreSearch() }
+                    }
                 }
             }
         }
     }
 
-    private func runSearch() async {
+    private func runSearch(reset: Bool) async {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         isSearching = true
         defer { isSearching = false }
+        if reset {
+            searchOffset = 0
+            searchError = nil
+            searchEndpointUnavailable = false
+        }
         do {
-            let (results, _) = try await APIClient.shared.searchDocuments(q: q)
-            searchResults = results
+            let (results, pagination) = try await APIClient.shared.searchDocuments(
+                q: q,
+                limit: 20,
+                offset: reset ? 0 : searchOffset
+            )
+            if reset {
+                searchResults = results
+            } else {
+                searchResults.append(contentsOf: results)
+            }
+            searchPagination = pagination
+            searchError = nil
         } catch APIError.status(401) {
             authState.handleUnauthorized()
-        } catch {
+        } catch APIError.status(404) {
+            searchEndpointUnavailable = true
             searchResults = []
+            searchPagination = nil
+        } catch APIError.server(let msg) {
+            searchError = msg
+        } catch {
+            searchError = "Search failed. Please try again."
         }
+    }
+
+    private func loadMoreSearch() async {
+        guard let pagination = searchPagination, pagination.hasMore else { return }
+        isLoadingMoreSearch = true
+        defer { isLoadingMoreSearch = false }
+        searchOffset = pagination.offset + pagination.limit
+        await runSearch(reset: false)
     }
 
     private var documentList: some View {
@@ -287,6 +375,33 @@ private struct DocumentRow: View {
                 Text(date, style: .relative)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private struct DocumentSearchResultRow: View {
+    let document: Document
+    let folderName: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(document.title)
+                .font(.body)
+            HStack(spacing: 6) {
+                if let folderName, !folderName.isEmpty {
+                    Label(folderName, systemImage: "folder")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .labelStyle(.titleAndIcon)
+                }
+                if let updatedAt = document.updatedAt, let date = parseISODate(updatedAt) {
+                    if folderName != nil { Text("·").font(.caption).foregroundStyle(.secondary) }
+                    Text(date, style: .relative)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, 2)

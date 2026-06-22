@@ -23,6 +23,7 @@
 		A1B1C1D1E1F1002D /* List.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1002E /* List.swift */; };
 		A1B1C1D1E1F1002F /* ListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10030 /* ListsView.swift */; };
 		A1B1C1D1E1F10031 /* EditMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10032 /* EditMessageView.swift */; };
+		A1B1C1D1E1F100A1 /* ListSchemaEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */; };
 		A1B1C1D1E1F10033 /* MessageThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10034 /* MessageThreadView.swift */; };
 		A1B1C1D1E1F10035 /* CreateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10036 /* CreateListView.swift */; };
 		A1B1C1D1E1F10037 /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10038 /* UserProfileView.swift */; };
@@ -96,6 +97,7 @@
 		A1B1C1D1E1F1002E /* List.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = List.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10030 /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListsView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10032 /* EditMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMessageView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaEditorView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10034 /* MessageThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageThreadView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10036 /* CreateListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateListView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10038 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileView.swift; sourceTree = "<group>"; };
@@ -229,6 +231,7 @@
 				A1B1C1D1E1F10018 /* ComposeView.swift */,
 				A1B1C1D1E1F10030 /* ListsView.swift */,
 				A1B1C1D1E1F10032 /* EditMessageView.swift */,
+				A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */,
 				A1B1C1D1E1F10034 /* MessageThreadView.swift */,
 				A1B1C1D1E1F10036 /* CreateListView.swift */,
 				A1B1C1D1E1F10038 /* UserProfileView.swift */,
@@ -395,6 +398,7 @@
 				A1B1C1D1E1F1002D /* List.swift in Sources */,
 				A1B1C1D1E1F1002F /* ListsView.swift in Sources */,
 				A1B1C1D1E1F10031 /* EditMessageView.swift in Sources */,
+				A1B1C1D1E1F100A1 /* ListSchemaEditorView.swift in Sources */,
 				A1B1C1D1E1F10033 /* MessageThreadView.swift in Sources */,
 				A1B1C1D1E1F10035 /* CreateListView.swift in Sources */,
 				A1B1C1D1E1F10037 /* UserProfileView.swift in Sources */,

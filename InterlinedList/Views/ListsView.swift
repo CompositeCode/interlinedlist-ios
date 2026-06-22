@@ -298,6 +298,9 @@ struct ListTreeNodeRow: View {
     let onUpdateList: (UserList) -> Void
     @State private var isExpanded = true
     @State private var showRename = false
+    @State private var schemaEditorList: UserList?
+    @State private var schemaEditorSchema: [ListPropertyDef] = []
+    @State private var isLoadingSchema = false
 
     var body: some View {
         if let children = node.children, let list = node.list {
@@ -311,6 +314,7 @@ struct ListTreeNodeRow: View {
                 }
                 .contextMenu {
                     Button("Rename / Edit") { showRename = true }
+                    Button("Edit Schema") { Task { await openSchemaEditor(for: list) } }
                     Button("Delete", role: .destructive) { onDeleteList(list) }
                 }
             }
@@ -323,6 +327,9 @@ struct ListTreeNodeRow: View {
             }
             .sheet(isPresented: $showRename) {
                 RenameListView(list: list) { _ in onUpdateList(list) }
+            }
+            .sheet(item: $schemaEditorList) { editing in
+                ListSchemaEditorView(list: editing, schema: schemaEditorSchema) { _ in onUpdateList(editing) }
             }
         } else if let children = node.children {
             DisclosureGroup(isExpanded: $isExpanded) {
@@ -348,6 +355,7 @@ struct ListTreeNodeRow: View {
             }
             .contextMenu {
                 Button("Rename / Edit") { showRename = true }
+                Button("Edit Schema") { Task { await openSchemaEditor(for: list) } }
                 Button("Delete", role: .destructive) { onDeleteList(list) }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -356,11 +364,29 @@ struct ListTreeNodeRow: View {
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+                Button {
+                    Task { await openSchemaEditor(for: list) }
+                } label: {
+                    Label("Schema", systemImage: "rectangle.3.group")
+                }
+                .tint(.indigo)
             }
             .sheet(isPresented: $showRename) {
                 RenameListView(list: list) { _ in onUpdateList(list) }
             }
+            .sheet(item: $schemaEditorList) { editing in
+                ListSchemaEditorView(list: editing, schema: schemaEditorSchema) { _ in onUpdateList(editing) }
+            }
         }
+    }
+
+    private func openSchemaEditor(for list: UserList) async {
+        guard !isLoadingSchema else { return }
+        isLoadingSchema = true
+        defer { isLoadingSchema = false }
+        let schema = (try? await APIClient.shared.listSchema(listId: list.id)) ?? []
+        schemaEditorSchema = schema
+        schemaEditorList = list
     }
 
     private func folderFromNode(_ node: ListTreeNode) -> ListFolder? {

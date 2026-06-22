@@ -1,2 +1,14 @@
 .DS_Store
 .claude/worktrees/
+
+# Xcode per-user state
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager local state
+.swiftpm/
+
+# Xcode build output
+DerivedData/
