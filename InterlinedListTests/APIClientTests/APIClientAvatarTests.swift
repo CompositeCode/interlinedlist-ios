@@ -39,8 +39,11 @@ final class APIClientAvatarTests: XCTestCase {
         session.enqueue(json: #"{"url":"https://cdn/x.png"}"#)
         session.enqueue(json: userJSON)
         _ = try await sut.uploadAvatar(data: Data([0x89]), mimeType: "image/png")
-        let body = String(data: session.requestHistory.first?.httpBody ?? Data(), encoding: .utf8) ?? ""
-        XCTAssertTrue(body.contains("avatar.png"))
+        // The multipart body carries raw (non-UTF8) image bytes, so search the raw
+        // Data for the filename rather than decoding the whole body as a String.
+        let body = session.requestHistory.first?.httpBody ?? Data()
+        XCTAssertNotNil(body.range(of: Data(#"filename="avatar.png""#.utf8)),
+                        "Multipart body should declare a .png filename")
     }
 
     func test_uploadAvatar_returnsUser() async throws {

@@ -45,6 +45,13 @@
 		B1C1D1E1F1A1000B /* DocumentSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */; };
 		B1C1D1E1F1A1000D /* ListItemFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000E /* ListItemFormView.swift */; };
 		C1D1E1F1A1B10001 /* Organization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D1E1F1A1B10002 /* Organization.swift */; };
+		D0A1D0A1D0A10001 /* OAuthCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10002 /* OAuthCoordinator.swift */; };
+		D0A1D0A1D0A10003 /* ChangeEmailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10004 /* ChangeEmailView.swift */; };
+		D0A1D0A1D0A10005 /* ForgotPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10006 /* ForgotPasswordView.swift */; };
+		D0A1D0A1D0A10007 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10008 /* ResetPasswordView.swift */; };
+		D0A1D0A1D0A10009 /* EmailVerificationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A1000A /* EmailVerificationBanner.swift */; };
+		D0A1D0A1D0A1000B /* LinkedIdentitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A1000C /* LinkedIdentitiesView.swift */; };
+		D0A1D0A1D0A1000D /* OAuthSignInButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A1000E /* OAuthSignInButton.swift */; };
 		T1E5T1E5T1E50001 /* InterlinedListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50002 /* InterlinedListTests.swift */; };
 		T1E5T1E5T1E50003 /* MockURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50004 /* MockURLSession.swift */; };
 		T1E5T1E5T1E50005 /* APIClientAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50006 /* APIClientAuthTests.swift */; };
@@ -136,6 +143,13 @@
 		B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSkeletonView.swift; sourceTree = "<group>"; };
 		B1C1D1E1F1A1000E /* ListItemFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemFormView.swift; sourceTree = "<group>"; };
 		C1D1E1F1A1B10002 /* Organization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Organization.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A10002 /* OAuthCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCoordinator.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A10004 /* ChangeEmailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeEmailView.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A10006 /* ForgotPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgotPasswordView.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A10008 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A1000A /* EmailVerificationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationBanner.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A1000C /* LinkedIdentitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedIdentitiesView.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A1000E /* OAuthSignInButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthSignInButton.swift; sourceTree = "<group>"; };
 		F379C02B2FCEB9440069B81C /* InterlinedList.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = InterlinedList.xctestplan; sourceTree = "<group>"; };
 		T1E5T1E5T1E50000 /* InterlinedListTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = InterlinedListTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		T1E5T1E5T1E50002 /* InterlinedListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterlinedListTests.swift; sourceTree = "<group>"; };
@@ -252,6 +266,7 @@
 				A3C3D3E3F3A30056 /* URLSessionProtocol.swift */,
 				B1C1D1E1F1A10002 /* DataCache.swift */,
 				B1C1D1E1F1A10004 /* AppDataStore.swift */,
+				D0A1D0A1D0A10002 /* OAuthCoordinator.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -281,6 +296,12 @@
 				B1C1D1E1F1A1000A /* ListSkeletonView.swift */,
 				B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */,
 				B1C1D1E1F1A1000E /* ListItemFormView.swift */,
+				D0A1D0A1D0A10004 /* ChangeEmailView.swift */,
+				D0A1D0A1D0A10006 /* ForgotPasswordView.swift */,
+				D0A1D0A1D0A10008 /* ResetPasswordView.swift */,
+				D0A1D0A1D0A1000A /* EmailVerificationBanner.swift */,
+				D0A1D0A1D0A1000C /* LinkedIdentitiesView.swift */,
+				D0A1D0A1D0A1000E /* OAuthSignInButton.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -486,6 +507,13 @@
 				B1C1D1E1F1A10009 /* ListSkeletonView.swift in Sources */,
 				B1C1D1E1F1A1000B /* DocumentSkeletonView.swift in Sources */,
 				B1C1D1E1F1A1000D /* ListItemFormView.swift in Sources */,
+				D0A1D0A1D0A10001 /* OAuthCoordinator.swift in Sources */,
+				D0A1D0A1D0A10003 /* ChangeEmailView.swift in Sources */,
+				D0A1D0A1D0A10005 /* ForgotPasswordView.swift in Sources */,
+				D0A1D0A1D0A10007 /* ResetPasswordView.swift in Sources */,
+				D0A1D0A1D0A10009 /* EmailVerificationBanner.swift in Sources */,
+				D0A1D0A1D0A1000B /* LinkedIdentitiesView.swift in Sources */,
+				D0A1D0A1D0A1000D /* OAuthSignInButton.swift in Sources */,
 				C1D1E1F1A1B10001 /* Organization.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

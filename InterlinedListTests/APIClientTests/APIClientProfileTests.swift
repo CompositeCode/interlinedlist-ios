@@ -28,7 +28,9 @@ final class APIClientProfileTests: XCTestCase {
         _ = try await sut.updateProfile(displayName: "Alice", bio: nil, defaultVisibility: nil)
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["displayName"] as? String, "Alice")
+        // /api/user/update uses the default snake_case encoder (same as register), so the
+        // wire key is display_name, not displayName.
+        XCTAssertEqual(json["display_name"] as? String, "Alice")
     }
 
     func test_updateProfile_returnsUser() async throws {
