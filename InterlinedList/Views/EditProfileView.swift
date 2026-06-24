@@ -24,6 +24,7 @@ struct EditProfileView: View {
     @State private var isAvatarUploading = false
     @State private var avatarError: String?
 
+    @State private var changeEmailPresented = false
     @State private var deleteFirstAlertPresented = false
     @State private var deleteConfirmAlertPresented = false
     @State private var deleteConfirmationText = ""
@@ -57,11 +58,26 @@ struct EditProfileView: View {
                         .lineLimit(3...6)
                 }
                 Section("Account") {
-                    // TODO(phase-3-merge): wire up "Change Email" row presenting ChangeEmailView sheet
-                    // once sister agent's Views/ChangeEmailView.swift lands.
-                    Text("Email: \(authState.user?.email ?? "")")
-                        .foregroundStyle(.secondary)
-                        .font(.subheadline)
+                    Button {
+                        changeEmailPresented = true
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Email")
+                                    .foregroundStyle(.primary)
+                                Text(authState.user?.email ?? "")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("Change")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.accentColor)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Change email address")
                 }
                 Section("Defaults") {
                     Toggle("Default post visibility: Public", isOn: $defaultPublic)
@@ -123,6 +139,10 @@ struct EditProfileView: View {
                 AvatarURLEntryView { urlString in
                     Task { await setAvatarFromURL(urlString) }
                 }
+            }
+            .sheet(isPresented: $changeEmailPresented) {
+                ChangeEmailView()
+                    .environmentObject(authState)
             }
             .onChange(of: selectedPhoto) { _, newItem in
                 guard let newItem else { return }

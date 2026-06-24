@@ -23,7 +23,7 @@ bundle. Subscription management is entirely on the web at
 | # | Phase | Shipped | Notes |
 |---|---|---|---|
 | 1 | Gap-closure + schema editor + subscriber awareness | 2026-06-23 | — |
-| 2 | Auth surface parity | 2026-06-24 | One loose end: the "Change email" entry row in `EditProfileView` is still a TODO — see Phase 2 stub below. Everything else (reset, verify, OAuth ×5, identity linking, email-change deep link + API + view) is in. |
+| 2 | Auth surface parity | 2026-06-24 | Fully closed: reset, verify, OAuth ×5, identity linking, and email change (entry row + deep link + API + view) all in. |
 | 3 | Profile / account management | 2026-06-24 | Avatar upload + from-URL, organizations strip, delete-account all in. |
 
 Per-phase detail for 1–3 has been collapsed to short stubs below; the
@@ -84,12 +84,10 @@ verify-email-change / oauth callback) all landed.
 `linkedIdentities`, `unlinkIdentity`, `requestEmailChange`,
 `linkedinStatus`, `twitterStatus`.
 
-**Remaining (one item):** the "Change email" entry row in
-`EditProfileView` is still a `TODO` (see `EditProfileView.swift` →
-`Section("Account")`). `ChangeEmailView`, the `requestEmailChange` API
-call, and the `verify-email-change` deep link all exist — only the row
-that presents `ChangeEmailView` as a sheet is unwired. Until then the
-Account section shows the email read-only.
+Email change is fully wired: `EditProfileView`'s Account section has a
+tappable "Change" row that presents `ChangeEmailView` as a sheet, which
+posts to `/api/user/change-email/request`; the `verify-email-change`
+deep link then completes the change. No remaining items.
 
 ---
 
@@ -410,7 +408,7 @@ When the endpoints ship:
 
 | # | Phase | Effort | Status |
 |---|---|---|---|
-| 2 | Auth (reset / verify / OAuth ×5 / linking / email change) | Medium | ✅ shipped 2026-06-24 (change-email entry row pending) |
+| 2 | Auth (reset / verify / OAuth ×5 / linking / email change) | Medium | ✅ shipped 2026-06-24 |
 | 3 | Profile / avatar / orgs / delete account | Small | ✅ shipped 2026-06-24 |
 | 4 | Compose: schedule + cross-post + gating + edit / repost | Medium | scaffold present, needs wiring |
 | 5 | Followers / following / mutuals / remove-follower | Small | not started |

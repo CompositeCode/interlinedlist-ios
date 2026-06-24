@@ -525,7 +525,7 @@ for the gaps below:
 | User core | ✅ | `customerStatus` now decoded |
 | Avatar upload | ✅ | Phase 3 — upload + from-URL (re-fetches user; see §B7) |
 | Identities / orgs (user-level) | ✅ | Phase 2 (identities) + Phase 3 (orgs strip) |
-| Email change | ✅ | Phase 2 — API + `verify-email-change` deep link + `ChangeEmailView`; `EditProfileView` entry row still a TODO |
+| Email change | ✅ | Phase 2 — `ChangeEmailView` (presented from `EditProfileView`) + API + `verify-email-change` deep link |
 | Delete account | ✅ | Phase 3 — double-confirm → forced logout |
 | Messages CRUD | ✅ | cross-post fields + repost pending (Phase 4) |
 | Scheduled messages PATCH | ❌ | Phase 4 |
