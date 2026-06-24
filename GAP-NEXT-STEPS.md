@@ -9,6 +9,15 @@ to ship before some of these can be done, see `GAP-ENDPOINTS.md`.
 Last updated: 2026-06-23 — after Phase 1 (gap-closure + schema editor +
 subscriber awareness) shipped.
 
+## Subscription / billing direction
+
+The iOS app is a **free** app with **no subscription, billing, or
+paywall UI**. Subscriber-only features are **hidden** for non-
+subscribers; there is no "subscribe" call-to-action anywhere in the
+bundle. Subscription management is entirely on the web at
+`interlinedlist.com`. Full rationale and implementation details in
+`subscription-permissions-update.md`.
+
 ## Status snapshot — what works today
 
 The current app supports:
@@ -20,7 +29,7 @@ The current app supports:
 - **Compose:** text + image (1) + video (1) attachments; advanced toolbar
   has placeholder `M`/`BS`/`in` icons (Mastodon/Bluesky/LinkedIn) that
   are disabled stubs.
-- **Lists:** CRUD, folder CRUD (subscriber-gated paywall on create),
+- **Lists:** CRUD, folder CRUD (folder UI hidden entirely for free users — see `subscription-permissions-update.md`),
   schema editor with non-destructive DSL save, list connections, list
   items add/edit/delete with typed fields.
 - **Documents:** CRUD, folder CRUD, search.
@@ -102,11 +111,8 @@ new `Views/LinkedIdentitiesView.swift`, new `Views/OAuthCoordinator.swift`,
 - [ ] Org memberships strip on profile: `GET /api/user/organizations`.
 - [ ] "Delete account" in `EditProfileView`, double-confirmation,
       `POST /api/user/delete` → forced logout.
-- [ ] Subscriber CTA on profile when `!user.isSubscriber`: opens
-      `SFSafariViewController` to a checkout URL.
-      **(blocked on backend: needs `/api/subscriptions/plans`-style
-      endpoint OR a documented URL the iOS app can hand to Safari —
-      see `GAP-ENDPOINTS.md` §B1.)**
+<!-- "Subscriber CTA on profile" REMOVED 2026-06-24. The iOS app shows no
+     subscription UI at all. See subscription-permissions-update.md. -->
 
 **Files:** `Views/EditProfileView.swift`, `Views/UserProfileView.swift`,
 new `Views/AvatarUploadView.swift` (or sheet from EditProfile).
@@ -135,8 +141,10 @@ already plumbed through `postMessage`.
       `provider == "mastodon"`; sends `mastodonProviderIds[]`.
 - [ ] Pass `crossPostToBluesky`, `crossPostToLinkedIn`,
       `crossPostToTwitter` to `APIClient.postMessage(...)`.
-- [ ] Disable every cross-post control when `!authState.user.isSubscriber`;
-      tap shows the existing paywall message style.
+- [ ] **Hide** every cross-post control when
+      `authState.user?.isSubscriber != true`. No disable-with-paywall;
+      free users never see the controls. See
+      `subscription-permissions-update.md`.
 - [ ] Surface `crossPostResults` from the response in a toast after
       posting ("Posted to Bluesky ✓ · Mastodon ✗ rate-limited").
 - [ ] Confirm the scheduling UI (calendar icon + date picker) is
@@ -379,7 +387,9 @@ default visibility are partial.
   - [ ] Max message length — read-only display from `user.maxMessageLength`.
   - [ ] Show advanced post settings — boolean.
   - [ ] Connected accounts → Phase 2 `LinkedIdentitiesView`.
-  - [ ] Subscription status + manage subscription → Phase 3 CTA.
+<!-- "Subscription status + manage subscription" REMOVED 2026-06-24. The
+       iOS app shows no subscription UI; subscription management is
+       entirely on the web. -->
   - [ ] Notification preferences → Phase 9 (currently blocked).
   - [ ] About → `SFSafariViewController` for `/blog`, `/pricing`,
         `/terms`, `/privacy`, `/help/branding`.
@@ -420,7 +430,7 @@ When the endpoints ship:
 | # | Phase | Effort | Status |
 |---|---|---|---|
 | 2 | Auth (reset / verify / OAuth ×5 / linking / email change) | Medium | not started |
-| 3 | Profile / avatar / orgs / delete / subscriber CTA | Small | not started |
+| 3 | Profile / avatar / orgs / delete account | Small | not started |
 | 4 | Compose: schedule + cross-post + gating + edit / repost | Medium | scaffold present, needs wiring |
 | 5 | Followers / following / mutuals / remove-follower | Small | not started |
 | 6 | List watchers / roles / permission model | Large | not started |

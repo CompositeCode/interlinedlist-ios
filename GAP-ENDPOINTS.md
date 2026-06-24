@@ -126,7 +126,17 @@ toggles.
 
 ---
 
-### B1. Subscription plans catalog endpoint
+### B1. ~~Subscription plans catalog endpoint~~ — WITHDRAWN 2026-06-24
+
+**No longer requested.** The iOS app will not display any subscription
+or billing UI per the direction in `subscription-permissions-update.md`.
+A plans catalog endpoint is unnecessary because the iOS bundle has no
+paywall, no checkout, no plan info, and no "subscribe" CTA. Subscription
+management happens entirely on the web. The original gap text is
+preserved below for context but should be considered closed.
+
+<details>
+<summary>Original gap (preserved for context)</summary>
 
 **Gap:** No endpoint returns the available subscription tiers, their
 prices, feature comparisons, or marketing copy.
@@ -135,6 +145,8 @@ there is no dedicated subscriptions docs page at all. The iOS app has
 no documented API surface for plans, pricing, checkout, or billing
 portal. Earlier mentions of `POST /api/stripe/create-*` endpoints came
 from a now-removed page; treat them as unverified until re-published.
+
+</details>
 
 **Why it matters:** Blocks Phase 3 of `GAP-NEXT-STEPS.md`. The iOS
 paywall / upgrade screen has to hardcode plan info or punt to a
@@ -518,7 +530,7 @@ for the gaps below:
 | Notification preferences | ❌ | blocked on §B3 |
 | Organizations | ❌ | Phase 8 |
 | Exports | ✅ | |
-| Subscriptions (Stripe) | ❌ | Phase 3 (blocked on §B1) |
+| Subscriptions (Stripe) | ❌ | **Intentionally not used by iOS** — subscription UI lives only on the web |
 | GitHub integration | ❌ | Phase 11 (blocked on §B4) |
 | LinkedIn integration | ❌ | deferred |
 | Utility endpoints (location, weather, image proxy) | ❌ | out of scope for v1 iOS |
@@ -529,7 +541,7 @@ for the gaps below:
 |---|---|---|---|---|
 | B0 | Document/structure schema PUT body | Phase 1 (fidelity) | High | Still standing |
 | B5 | Document watcher role values + POST body | Phase 6 | High | Still standing |
-| B1 | Subscription plans catalog (+ docs page itself 404s) | Phase 3 (paywall fidelity) | **Raised: High** | Worse than prior |
+| B1 | ~~Subscription plans catalog~~ | n/a — withdrawn | **Withdrawn 2026-06-24** | iOS has no billing UI; see `subscription-permissions-update.md` |
 | B2 | Message search | Phase 13 | Medium | Still standing |
 | B3 | Notification preferences enumeration | Phase 9 / 12 | Medium | Still standing |
 | B4 | Bearer auth on `/api/github/*` | Phase 11 | Low (deferred) | Still standing |
@@ -546,8 +558,9 @@ Pulled from the table above, sorted by what they enable:
    round-trip until §B0 is resolved (DSL doc or structured endpoint).
 2. **List collaboration UI** — Phase 6 can't ship a role picker until
    §B5 documents the role wire values.
-3. **In-app subscription paywall** — Phase 3 can hand-off to Safari
-   today, but a native paywall needs §B1's plans catalog.
+3. ~~**In-app subscription paywall**~~ — withdrawn 2026-06-24. iOS
+   will not have a subscription paywall. Subscriber-only features are
+   hidden for free users; subscription happens on the web.
 4. **Feed search** — Phase 13's search bar needs §B2's
    `/api/messages/search`.
 5. **Notification preferences screen** — Phase 9 / 12 needs §B3's
