@@ -40,6 +40,13 @@ struct ComposeView: View {
         authState.user?.isSubscriber == true
     }
 
+    /// Free users with unverified email cannot post (matches site behavior).
+    /// User is missing while view is initializing; treat that as verified so the
+    /// button isn't disabled in the brief window before authState lands.
+    private var isEmailVerified: Bool {
+        authState.user.map { $0.emailVerified != false } ?? true
+    }
+
     /// Apply user's default settings for public visibility and advanced bar. Call when view appears (new post) or after successful post.
     private func applyUserDefaults() {
         guard !isReply else { return }
@@ -96,7 +103,13 @@ struct ComposeView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(isLoading || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isLoading || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !isEmailVerified)
+                } footer: {
+                    if !isEmailVerified {
+                        Text("Verify your email to enable posting.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
             .scrollDismissesKeyboard(.interactively)

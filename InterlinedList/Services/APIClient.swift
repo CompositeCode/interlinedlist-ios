@@ -93,6 +93,143 @@ final class APIClient {
         let _: Response = try await post("/api/auth/register", body: Body(email: email, username: username, password: password, displayName: displayName), authenticated: false)
     }
 
+    // MARK: - Password reset
+
+    func forgotPassword(email: String) async throws {
+        struct Body: Encodable { let email: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/forgot-password", body: Body(email: email), authenticated: false)
+    }
+
+    func resetPassword(token: String, password: String) async throws {
+        struct Body: Encodable { let token: String; let password: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/reset-password", body: Body(token: token, password: password), authenticated: false)
+    }
+
+    // MARK: - Email verification
+
+    func sendVerificationEmail() async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/send-verification-email", body: Empty())
+    }
+
+    func verifyEmail(token: String) async throws {
+        struct Body: Encodable { let token: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/verify-email", body: Body(token: token), authenticated: false)
+    }
+
+    func verifyEmailChange(token: String) async throws {
+        struct Body: Encodable { let token: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/verify-email-change", body: Body(token: token), authenticated: false)
+    }
+
+    // MARK: - Email change
+
+    func requestEmailChange(newEmail: String, password: String) async throws {
+        struct Body: Encodable { let newEmail: String; let password: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await postCamel("/api/user/change-email/request", body: Body(newEmail: newEmail, password: password))
+    }
+
+    // MARK: - Linked identities
+
+    struct LinkedIdentity: Identifiable, Codable {
+        let id: String
+        let provider: String
+        let providerUsername: String?
+        let createdAt: String?
+    }
+
+    func linkedIdentities() async throws -> [LinkedIdentity] {
+        struct Response: Decodable { let identities: [LinkedIdentity]? }
+        let response: Response = try await get("/api/user/identities")
+        return response.identities ?? []
+    }
+
+    func unlinkIdentity(provider: String, providerId: String) async throws {
+        struct Body: Encodable { let provider: String; let providerId: String }
+        guard let url = URL(string: baseURL + "/api/user/identities") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(Body(provider: provider, providerId: providerId))
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func verifyIdentity(provider: String, providerId: String) async throws {
+        struct Body: Encodable { let provider: String; let providerId: String }
+        struct Response: Decodable { let ok: Bool? }
+        let _: Response = try await postCamel("/api/user/identities/verify", body: Body(provider: provider, providerId: providerId))
+    }
+
+    // MARK: - OAuth configuration status
+
+    struct OAuthConfigStatus: Decodable {
+        let configured: Bool
+        let redirectUri: String?
+    }
+
+    func linkedinStatus() async throws -> OAuthConfigStatus {
+        return try await get("/api/auth/linkedin/status")
+    }
+
+    func twitterStatus() async throws -> OAuthConfigStatus {
+        return try await get("/api/auth/twitter/status")
+    }
+
+    // MARK: - Avatar upload (Phase 3 — sister agent dependency)
+
+    func uploadAvatar(data: Data, mimeType: String) async throws -> User {
+        guard let url = URL(string: baseURL + "/api/user/avatar/upload") else { throw APIError.invalidURL }
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let ext = mimeType == "image/png" ? "png" : "jpg"
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"avatar.\(ext)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+        let (responseData, response) = try await session.data(for: request)
+        try checkResponse(data: responseData, response: response)
+        // Endpoint returns { url } only; refresh the user object to satisfy the signature.
+        return try await currentUser()
+    }
+
+    func setAvatarFromURL(_ url: String) async throws -> User {
+        struct Body: Encodable { let url: String }
+        struct Response: Decodable { let url: String? }
+        let _: Response = try await post("/api/user/avatar/from-url", body: Body(url: url))
+        return try await currentUser()
+    }
+
+    // MARK: - Organizations (Phase 3 — sister agent dependency)
+
+    func userOrganizations() async throws -> [Organization] {
+        struct Response: Decodable { let organizations: [Organization]? }
+        let response: Response = try await get("/api/user/organizations")
+        return response.organizations ?? []
+    }
+
+    // MARK: - Delete account (Phase 3 — sister agent dependency)
+
+    func deleteAccount() async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/user/delete", body: Empty())
+    }
+
     // MARK: - Messages
 
     func messages(limit: Int = 50, offset: Int = 0, onlyMine: Bool = false, tag: String? = nil) async throws -> (messages: [Message], pagination: Pagination?) {

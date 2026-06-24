@@ -50,5 +50,18 @@
 	<!-- Optional: set to your backend URL (e.g. http://localhost:3000) to test Bearer auth against a different host -->
 	<key>ILAPIBaseURL</key>
 	<string></string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.interlinedlist.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>interlinedlist</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

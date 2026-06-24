@@ -44,6 +44,7 @@
 		B1C1D1E1F1A10009 /* ListSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000A /* ListSkeletonView.swift */; };
 		B1C1D1E1F1A1000B /* DocumentSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */; };
 		B1C1D1E1F1A1000D /* ListItemFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000E /* ListItemFormView.swift */; };
+		C1D1E1F1A1B10001 /* Organization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D1E1F1A1B10002 /* Organization.swift */; };
 		T1E5T1E5T1E50001 /* InterlinedListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50002 /* InterlinedListTests.swift */; };
 		T1E5T1E5T1E50003 /* MockURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50004 /* MockURLSession.swift */; };
 		T1E5T1E5T1E50005 /* APIClientAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50006 /* APIClientAuthTests.swift */; };
@@ -73,6 +74,15 @@
 		T1E5T1E5T1E5P011 /* EnvLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P012 /* EnvLoader.swift */; };
 		T1E5T1E5T1E5P013 /* E2EReadOnlyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */; };
 		T1E5T1E5T1E5P015 /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */; };
+		T1E5T1E5T1E5P017 /* APIClientPasswordResetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P018 /* APIClientPasswordResetTests.swift */; };
+		T1E5T1E5T1E5P019 /* APIClientEmailVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P01A /* APIClientEmailVerificationTests.swift */; };
+		T1E5T1E5T1E5P01B /* APIClientIdentitiesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P01C /* APIClientIdentitiesTests.swift */; };
+		T1E5T1E5T1E5P01D /* APIClientOAuthStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P01E /* APIClientOAuthStatusTests.swift */; };
+		T1E5T1E5T1E5P01F /* APIClientAvatarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P020 /* APIClientAvatarTests.swift */; };
+		T1E5T1E5T1E5P021 /* APIClientOrganizationsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P022 /* APIClientOrganizationsTests.swift */; };
+		T1E5T1E5T1E5P023 /* APIClientDeleteAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P024 /* APIClientDeleteAccountTests.swift */; };
+		T1E5T1E5T1E5P025 /* OrganizationModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P026 /* OrganizationModelTests.swift */; };
+		T1E5T1E5T1E5P027 /* LinkedIdentityModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P028 /* LinkedIdentityModelTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -125,6 +135,7 @@
 		B1C1D1E1F1A1000A /* ListSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSkeletonView.swift; sourceTree = "<group>"; };
 		B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSkeletonView.swift; sourceTree = "<group>"; };
 		B1C1D1E1F1A1000E /* ListItemFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemFormView.swift; sourceTree = "<group>"; };
+		C1D1E1F1A1B10002 /* Organization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Organization.swift; sourceTree = "<group>"; };
 		F379C02B2FCEB9440069B81C /* InterlinedList.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = InterlinedList.xctestplan; sourceTree = "<group>"; };
 		T1E5T1E5T1E50000 /* InterlinedListTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = InterlinedListTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		T1E5T1E5T1E50002 /* InterlinedListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterlinedListTests.swift; sourceTree = "<group>"; };
@@ -156,6 +167,15 @@
 		T1E5T1E5T1E5P012 /* EnvLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvLoader.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2EReadOnlyTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P018 /* APIClientPasswordResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientPasswordResetTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P01A /* APIClientEmailVerificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientEmailVerificationTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P01C /* APIClientIdentitiesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientIdentitiesTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P01E /* APIClientOAuthStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientOAuthStatusTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P020 /* APIClientAvatarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientAvatarTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P022 /* APIClientOrganizationsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientOrganizationsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P024 /* APIClientDeleteAccountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientDeleteAccountTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P026 /* OrganizationModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationModelTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P028 /* LinkedIdentityModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedIdentityModelTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -218,6 +238,7 @@
 				A2B2C2D2E2F20042 /* AppNotification.swift */,
 				A2B2C2D2E2F20044 /* FollowState.swift */,
 				A3C3D3E3F3A30052 /* Document.swift */,
+				C1D1E1F1A1B10002 /* Organization.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -313,6 +334,13 @@
 				T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */,
 				T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */,
 				T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */,
+				T1E5T1E5T1E5P018 /* APIClientPasswordResetTests.swift */,
+				T1E5T1E5T1E5P01A /* APIClientEmailVerificationTests.swift */,
+				T1E5T1E5T1E5P01C /* APIClientIdentitiesTests.swift */,
+				T1E5T1E5T1E5P01E /* APIClientOAuthStatusTests.swift */,
+				T1E5T1E5T1E5P020 /* APIClientAvatarTests.swift */,
+				T1E5T1E5T1E5P022 /* APIClientOrganizationsTests.swift */,
+				T1E5T1E5T1E5P024 /* APIClientDeleteAccountTests.swift */,
 			);
 			path = APIClientTests;
 			sourceTree = "<group>";
@@ -328,6 +356,8 @@
 				T1E5T1E5T1E5M006 /* FollowStateModelTests.swift */,
 				T1E5T1E5T1E5M008 /* DocumentModelTests.swift */,
 				T1E5T1E5T1E5P008 /* ListSchemaDraftTests.swift */,
+				T1E5T1E5T1E5P026 /* OrganizationModelTests.swift */,
+				T1E5T1E5T1E5P028 /* LinkedIdentityModelTests.swift */,
 			);
 			path = ModelTests;
 			sourceTree = "<group>";
@@ -456,6 +486,7 @@
 				B1C1D1E1F1A10009 /* ListSkeletonView.swift in Sources */,
 				B1C1D1E1F1A1000B /* DocumentSkeletonView.swift in Sources */,
 				B1C1D1E1F1A1000D /* ListItemFormView.swift in Sources */,
+				C1D1E1F1A1B10001 /* Organization.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -492,6 +523,15 @@
 				T1E5T1E5T1E5P011 /* EnvLoader.swift in Sources */,
 				T1E5T1E5T1E5P013 /* E2EReadOnlyTests.swift in Sources */,
 				T1E5T1E5T1E5P015 /* KeychainServiceTests.swift in Sources */,
+				T1E5T1E5T1E5P017 /* APIClientPasswordResetTests.swift in Sources */,
+				T1E5T1E5T1E5P019 /* APIClientEmailVerificationTests.swift in Sources */,
+				T1E5T1E5T1E5P01B /* APIClientIdentitiesTests.swift in Sources */,
+				T1E5T1E5T1E5P01D /* APIClientOAuthStatusTests.swift in Sources */,
+				T1E5T1E5T1E5P01F /* APIClientAvatarTests.swift in Sources */,
+				T1E5T1E5T1E5P021 /* APIClientOrganizationsTests.swift in Sources */,
+				T1E5T1E5T1E5P023 /* APIClientDeleteAccountTests.swift in Sources */,
+				T1E5T1E5T1E5P025 /* OrganizationModelTests.swift in Sources */,
+				T1E5T1E5T1E5P027 /* LinkedIdentityModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
