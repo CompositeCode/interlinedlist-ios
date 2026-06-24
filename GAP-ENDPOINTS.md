@@ -11,6 +11,12 @@ can drop into their own Claude Code session.
 Last updated: 2026-06-23 — re-verified against the full `/help/api`
 tree. **All eight actionable Part B gaps are still standing.**
 
+> **2026-06-24:** iOS Phases 2 (auth surface) and 3 (profile / account
+> management) shipped. The backend gaps below are unchanged — all still
+> standing — but the "What backend has now" usage table at the bottom is
+> updated to reflect the endpoints iOS now consumes (OAuth, reset/verify,
+> identities, orgs, avatar, email change, delete account).
+
 ### Re-verification notes (2026-06-23)
 
 - The `/help/api` tree contains 17 sub-pages: authentication,
@@ -438,6 +444,12 @@ no response shape for either avatar endpoint. Likely unchanged.
 **Why it matters:** Minor — costs one extra round-trip on Phase 3
 avatar upload. Worth noting but not blocking.
 
+**iOS status (2026-06-24):** Phase 3 shipped with the workaround in
+place — `APIClient.uploadAvatar` / `setAvatarFromURL` issue a follow-up
+`GET /api/user` and return the refreshed `User`. Resolving this gap
+would let us drop that extra round-trip; until then it's handled
+client-side.
+
 **Proposed contract:** Return the full updated user object from both
 `POST /api/user/avatar/upload` and `POST /api/user/avatar/from-url`,
 e.g. `{ "user": { ... }, "url": "..." }`.
@@ -509,11 +521,12 @@ for the gaps below:
 
 | Endpoint family | iOS uses? | Notes |
 |---|---|---|
-| Auth (email/password, sync-token) | ✅ | OAuth ×5 + reset/verify pending (Phase 2) |
+| Auth (email/password, sync-token) | ✅ | + OAuth ×5, reset, verify shipped (Phase 2) |
 | User core | ✅ | `customerStatus` now decoded |
-| Avatar upload | ❌ | Phase 3 |
-| Identities / orgs (user-level) | ❌ | Phase 2 / 3 |
-| Email change | ❌ | Phase 2 |
+| Avatar upload | ✅ | Phase 3 — upload + from-URL (re-fetches user; see §B7) |
+| Identities / orgs (user-level) | ✅ | Phase 2 (identities) + Phase 3 (orgs strip) |
+| Email change | ✅ | Phase 2 — API + `verify-email-change` deep link + `ChangeEmailView`; `EditProfileView` entry row still a TODO |
+| Delete account | ✅ | Phase 3 — double-confirm → forced logout |
 | Messages CRUD | ✅ | cross-post fields + repost pending (Phase 4) |
 | Scheduled messages PATCH | ❌ | Phase 4 |
 | Image / video upload | ✅ | |
@@ -546,7 +559,7 @@ for the gaps below:
 | B3 | Notification preferences enumeration | Phase 9 / 12 | Medium | Still standing |
 | B4 | Bearer auth on `/api/github/*` | Phase 11 | Low (deferred) | Still standing |
 | B6 | Tag discovery / autocomplete | Phase 13 | Low | Still standing |
-| B7 | Avatar response includes user | Phase 3 (UX nicety) | Low | Still standing |
+| B7 | Avatar response includes user | Phase 3 (UX nicety) | Low | Still standing — iOS ships a re-fetch workaround (2026-06-24) |
 | B9 | `follow/:userId/status` shape inconsistent for self | n/a (edge case) | Low | New 2026-06-23 (via E2E test) |
 | B8 | Real-time feed updates | n/a (long-term) | Acknowledged | n/a |
 

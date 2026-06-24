@@ -6,8 +6,8 @@ functionality parity with `interlinedlist.com`.
 This is the **iOS-side** punchlist. For backend endpoints that still need
 to ship before some of these can be done, see `GAP-ENDPOINTS.md`.
 
-Last updated: 2026-06-23 — after Phase 1 (gap-closure + schema editor +
-subscriber awareness) shipped.
+Last updated: 2026-06-24 — after Phase 2 (auth surface) and Phase 3
+(profile / account management) shipped.
 
 ## Subscription / billing direction
 
@@ -18,12 +18,30 @@ bundle. Subscription management is entirely on the web at
 `interlinedlist.com`. Full rationale and implementation details in
 `subscription-permissions-update.md`.
 
+## ✅ Shipped phases
+
+| # | Phase | Shipped | Notes |
+|---|---|---|---|
+| 1 | Gap-closure + schema editor + subscriber awareness | 2026-06-23 | — |
+| 2 | Auth surface parity | 2026-06-24 | One loose end: the "Change email" entry row in `EditProfileView` is still a TODO — see Phase 2 stub below. Everything else (reset, verify, OAuth ×5, identity linking, email-change deep link + API + view) is in. |
+| 3 | Profile / account management | 2026-06-24 | Avatar upload + from-URL, organizations strip, delete-account all in. |
+
+Per-phase detail for 1–3 has been collapsed to short stubs below; the
+full acceptance-criteria history lives in git. Remaining work starts at
+Phase 4.
+
 ## Status snapshot — what works today
 
 The current app supports:
 
-- **Auth (basic):** email/password login + register via
-  `/api/auth/sync-token`, Keychain token storage, 401 → auto-logout.
+- **Auth:** email/password login + register via `/api/auth/sync-token`,
+  Keychain token storage, 401 → auto-logout. Plus (Phase 2) password
+  reset, email-verification banner, OAuth sign-in for GitHub / Mastodon /
+  Bluesky / LinkedIn / X via `ASWebAuthenticationSession` (LinkedIn/X
+  hidden when their `/status` says unconfigured), identity linking /
+  disconnect, and email-change deep links. Custom URL scheme
+  `interlinedlist://` handles reset-password / verify-email /
+  verify-email-change / oauth callbacks.
 - **Feed:** infinite-scroll messages, pull-to-refresh, dig/undig,
   reply/delete, scheduled-at writes are wired in `postMessage`.
 - **Compose:** text + image (1) + video (1) attachments; advanced toolbar
@@ -36,7 +54,10 @@ The current app supports:
 - **Notifications:** tray fetch, read/mark-all-read, follow-request
   approve/reject inline.
 - **Profile:** view + edit (display name, bio, default visibility),
-  public profile view of other users with public lists & messages.
+  public profile view of other users with public lists & messages. Plus
+  (Phase 3) avatar upload from photo library + set-from-URL,
+  organizations strip on profile, and delete-account with
+  double-confirmation → forced logout.
 - **Follow:** follow/unfollow, status, counts, requests.
 - **Exports:** CSV for messages/lists/follows.
 - **`customerStatus`** is now decoded on `User` with an `isSubscriber`
@@ -46,81 +67,41 @@ What's still missing — broken out into phases below.
 
 ---
 
-## Phase 2 — Auth surface parity   **Medium**
+## Phase 2 — Auth surface parity   ✅ Shipped 2026-06-24
 
-Today: email/password only. Site has password reset, email verification,
-five OAuth providers, identity linking, multi-account.
+Password reset, email-verification banner + post gating, OAuth ×5
+(`ASWebAuthenticationSession`, LinkedIn/X hidden when unconfigured,
+Mastodon instance prompt), identity linking/disconnect, and the
+`interlinedlist://` deep-link handler (reset-password / verify-email /
+verify-email-change / oauth callback) all landed.
 
-**Acceptance criteria:**
-
-- [ ] Password reset flow:
-  - [ ] "Forgot password?" link on `LoginView`.
-  - [ ] `ForgotPasswordView` posts to `/api/auth/forgot-password`.
-  - [ ] Deep-link handler in `InterlinedListApp` for
-        `interlinedlist://reset-password?token=...`; opens
-        `ResetPasswordView` which posts to `/api/auth/reset-password`.
-- [ ] Email verification:
-  - [ ] On login, if `user.emailVerified == false`, show a
-        verification banner that calls
-        `POST /api/auth/send-verification-email` on tap.
-  - [ ] Deep-link handler for `interlinedlist://verify-email?token=...`.
-  - [ ] Gate `ComposeView` post button when unverified (match site).
-- [ ] OAuth sign-in via `ASWebAuthenticationSession`:
-  - [ ] GitHub, Mastodon, Bluesky, LinkedIn, X — buttons on `LoginView`
-        and `RegisterView`.
-  - [ ] All append `?redirect_uri=interlinedlist://oauth/callback` to
-        the authorize URL so the Bearer token comes back via deep link.
-  - [ ] Mastodon prompts for the instance hostname before launching.
-  - [ ] Hide LinkedIn/X buttons when their `/status` endpoint says
-        `configured: false` for this deployment.
-- [ ] Identity linking (signed-in user):
-  - [ ] `LinkedIdentitiesView` reads `GET /api/user/identities`, lists
-        providers with disconnect buttons (`DELETE
-        /api/user/identities`).
-  - [ ] "Link another provider" CTA reuses the OAuth flow with
-        `?link=true&redirect_uri=...`.
-- [ ] Email change:
-  - [ ] `EditProfileView` → "Change email" → form posts to
-        `POST /api/user/change-email/request`.
-  - [ ] Deep-link handler for `interlinedlist://verify-email-change?token=...`
-        posts to `POST /api/auth/verify-email-change`.
-
-**Files:** `Views/LoginView.swift`, `Views/RegisterView.swift`, new
-`Views/ForgotPasswordView.swift`, new `Views/ResetPasswordView.swift`,
-new `Views/LinkedIdentitiesView.swift`, new `Views/OAuthCoordinator.swift`,
-`Services/AuthState.swift`, `InterlinedListApp.swift` (URL scheme),
-`Info.plist` (`CFBundleURLSchemes`).
-
-**APIClient additions:** `forgotPassword`, `resetPassword`,
+**Shipped files:** `LoginView`, `RegisterView`, `ForgotPasswordView`,
+`ResetPasswordView`, `LinkedIdentitiesView`, `EmailVerificationBanner`,
+`OAuthSignInButton`, `Services/OAuthCoordinator`, `ChangeEmailView`,
+`AuthState`, `InterlinedListApp` (URL scheme), `Info.plist`
+(`CFBundleURLSchemes`). **APIClient:** `forgotPassword`, `resetPassword`,
 `sendVerificationEmail`, `verifyEmail`, `verifyEmailChange`,
 `linkedIdentities`, `unlinkIdentity`, `requestEmailChange`,
 `linkedinStatus`, `twitterStatus`.
 
-**Dependencies:** none.
+**Remaining (one item):** the "Change email" entry row in
+`EditProfileView` is still a `TODO` (see `EditProfileView.swift` →
+`Section("Account")`). `ChangeEmailView`, the `requestEmailChange` API
+call, and the `verify-email-change` deep link all exist — only the row
+that presents `ChangeEmailView` as a sheet is unwired. Until then the
+Account section shows the email read-only.
 
 ---
 
-## Phase 3 — Profile / account management   **Small**
+## Phase 3 — Profile / account management   ✅ Shipped 2026-06-24
 
-**Acceptance criteria:**
-
-- [ ] Avatar upload from photo library: `POST /api/user/avatar/upload`
-      (multipart). Show new avatar immediately on `EditProfileView` and
-      `UserProfileView`.
-- [ ] Avatar from URL: `POST /api/user/avatar/from-url` (paste/select).
-- [ ] Org memberships strip on profile: `GET /api/user/organizations`.
-- [ ] "Delete account" in `EditProfileView`, double-confirmation,
-      `POST /api/user/delete` → forced logout.
-<!-- "Subscriber CTA on profile" REMOVED 2026-06-24. The iOS app shows no
-     subscription UI at all. See subscription-permissions-update.md. -->
-
-**Files:** `Views/EditProfileView.swift`, `Views/UserProfileView.swift`,
-new `Views/AvatarUploadView.swift` (or sheet from EditProfile).
-
-**APIClient additions:** `uploadAvatar`, `setAvatarFromURL`,
-`userOrganizations`, `deleteAccount`.
-
-**Dependencies:** none.
+Avatar upload from photo library (`PhotosPicker` → `uploadAvatar`) and
+set-from-URL (`setAvatarFromURL`), the organizations strip on
+`UserProfileView` (`userOrganizations`), and delete-account with
+double-confirmation → forced logout (`deleteAccount`) all landed in
+`EditProfileView` / `UserProfileView`. The "Subscriber CTA on profile"
+item was dropped 2026-06-24 (no subscription UI on iOS — see
+`subscription-permissions-update.md`).
 
 ---
 
@@ -429,8 +410,8 @@ When the endpoints ship:
 
 | # | Phase | Effort | Status |
 |---|---|---|---|
-| 2 | Auth (reset / verify / OAuth ×5 / linking / email change) | Medium | not started |
-| 3 | Profile / avatar / orgs / delete account | Small | not started |
+| 2 | Auth (reset / verify / OAuth ×5 / linking / email change) | Medium | ✅ shipped 2026-06-24 (change-email entry row pending) |
+| 3 | Profile / avatar / orgs / delete account | Small | ✅ shipped 2026-06-24 |
 | 4 | Compose: schedule + cross-post + gating + edit / repost | Medium | scaffold present, needs wiring |
 | 5 | Followers / following / mutuals / remove-follower | Small | not started |
 | 6 | List watchers / roles / permission model | Large | not started |
@@ -442,9 +423,8 @@ When the endpoints ship:
 | 12 | Settings panel + webview content | Small | not started |
 | 13 | Feed search + tag discovery | Small | **blocked on backend** |
 
-Roughly 4–6 weeks of focused dev work for the unblocked phases (2–10
-and 12). Phase 13 lights up automatically once the backend endpoints
-ship.
+With Phases 1–3 shipped, the remaining unblocked work is Phases 4–10 and
+12. Phase 13 lights up automatically once the backend endpoints ship.
 
 ---
 
