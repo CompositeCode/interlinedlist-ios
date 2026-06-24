@@ -32,6 +32,14 @@ struct ComposeView: View {
 
     private var isReply: Bool { replyTo != nil }
 
+    /// Subscriber-only compose features (image / video upload, cross-posting,
+    /// scheduling) are hidden entirely for non-subscribers per the iOS-free-app
+    /// direction. No paywall, no disabled-but-tappable controls — the UI
+    /// simply does not surface them.
+    private var canUseSubscriberFeatures: Bool {
+        authState.user?.isSubscriber == true
+    }
+
     /// Apply user's default settings for public visibility and advanced bar. Call when view appears (new post) or after successful post.
     private func applyUserDefaults() {
         guard !isReply else { return }
@@ -56,7 +64,7 @@ struct ComposeView: View {
                         advancedToolbar
                         Toggle("Public", isOn: $publiclyVisible)
                     }
-                    if showSchedulePicker && !isReply {
+                    if showSchedulePicker && !isReply && canUseSubscriberFeatures {
                         schedulePicker
                     }
                     if let url = uploadedImageURL {
@@ -124,18 +132,20 @@ struct ComposeView: View {
             Text("\(remainingCharacters) characters remaining")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    showAdvancedBar.toggle()
+            if canUseSubscriberFeatures {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showAdvancedBar.toggle()
+                    }
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(showAdvancedBar ? 90 : 0))
                 }
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(showAdvancedBar ? 90 : 0))
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
-            if showAdvancedBar {
+            if showAdvancedBar && canUseSubscriberFeatures {
                 HStack(spacing: 12) {
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         if isUploadingImage {

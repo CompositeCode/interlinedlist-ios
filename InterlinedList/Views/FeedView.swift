@@ -197,8 +197,12 @@ struct FeedView: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             HStack(spacing: 4) {
-                Button { showScheduled = true } label: { Image(systemName: "calendar") }
-                    .accessibilityLabel("Scheduled posts")
+                // Scheduled posts are a subscriber-only feature; entry point hidden
+                // entirely for free users per the iOS-free-app direction.
+                if authState.user?.isSubscriber == true {
+                    Button { showScheduled = true } label: { Image(systemName: "calendar") }
+                        .accessibilityLabel("Scheduled posts")
+                }
                 Button { showCompose = true } label: { Image(systemName: "square.and.pencil") }
                     .accessibilityLabel("Compose")
             }
