@@ -22,6 +22,8 @@ struct MainTabView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
+            EmailVerificationBanner()
+                .environmentObject(authState)
             sectionContent
         }
         .background(Color(.systemGroupedBackground))
@@ -165,6 +167,11 @@ private struct ProfileView: View {
                 Section("Social") {
                     NavigationLink(destination: FollowRequestsView().environmentObject(authState)) {
                         Label("Follow Requests", systemImage: "person.crop.circle.badge.plus")
+                    }
+                    if authState.user?.isSubscriber == true {
+                        NavigationLink(destination: LinkedIdentitiesView().environmentObject(authState)) {
+                            Label("Linked accounts", systemImage: "link")
+                        }
                     }
                 }
                 Section {

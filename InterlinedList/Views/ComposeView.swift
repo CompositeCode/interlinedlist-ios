@@ -32,6 +32,21 @@ struct ComposeView: View {
 
     private var isReply: Bool { replyTo != nil }
 
+    /// Subscriber-only compose features (image / video upload, cross-posting,
+    /// scheduling) are hidden entirely for non-subscribers per the iOS-free-app
+    /// direction. No paywall, no disabled-but-tappable controls — the UI
+    /// simply does not surface them.
+    private var canUseSubscriberFeatures: Bool {
+        authState.user?.isSubscriber == true
+    }
+
+    /// Free users with unverified email cannot post (matches site behavior).
+    /// User is missing while view is initializing; treat that as verified so the
+    /// button isn't disabled in the brief window before authState lands.
+    private var isEmailVerified: Bool {
+        authState.user.map { $0.emailVerified != false } ?? true
+    }
+
     /// Apply user's default settings for public visibility and advanced bar. Call when view appears (new post) or after successful post.
     private func applyUserDefaults() {
         guard !isReply else { return }
@@ -56,7 +71,7 @@ struct ComposeView: View {
                         advancedToolbar
                         Toggle("Public", isOn: $publiclyVisible)
                     }
-                    if showSchedulePicker && !isReply {
+                    if showSchedulePicker && !isReply && canUseSubscriberFeatures {
                         schedulePicker
                     }
                     if let url = uploadedImageURL {
@@ -88,7 +103,13 @@ struct ComposeView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(isLoading || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isLoading || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !isEmailVerified)
+                } footer: {
+                    if !isEmailVerified {
+                        Text("Verify your email to enable posting.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
             .scrollDismissesKeyboard(.interactively)
@@ -124,18 +145,20 @@ struct ComposeView: View {
             Text("\(remainingCharacters) characters remaining")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    showAdvancedBar.toggle()
+            if canUseSubscriberFeatures {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showAdvancedBar.toggle()
+                    }
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(showAdvancedBar ? 90 : 0))
                 }
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(showAdvancedBar ? 90 : 0))
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
-            if showAdvancedBar {
+            if showAdvancedBar && canUseSubscriberFeatures {
                 HStack(spacing: 12) {
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         if isUploadingImage {
@@ -293,10 +316,11 @@ struct ComposeView: View {
             guard let data = try await item.loadTransferable(type: Data.self) else { return }
             let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "video/mp4"
             uploadedVideoURL = try await APIClient.shared.uploadVideo(data: data, mimeType: mimeType)
-        } catch APIError.status(403) {
-            errorMessage = "Video upload requires an active subscription."
-            selectedVideo = nil
         } catch {
+            // 403 falls through here. The video picker is hidden for free
+            // users so a subscriber-only response shouldn't normally reach
+            // this branch; no subscription copy surfaces either way per the
+            // iOS-free-app direction.
             errorMessage = "Failed to upload video. Please try again."
             selectedVideo = nil
         }
@@ -310,10 +334,8 @@ struct ComposeView: View {
             guard let data = try await item.loadTransferable(type: Data.self) else { return }
             let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
             uploadedImageURL = try await APIClient.shared.uploadImage(data: data, mimeType: mimeType)
-        } catch APIError.status(403) {
-            errorMessage = "Image upload requires an active subscription."
-            selectedPhoto = nil
         } catch {
+            // Picker is hidden for non-subscribers; 403 falls through here.
             errorMessage = "Failed to upload image. Please try again."
             selectedPhoto = nil
         }

@@ -29,6 +29,8 @@ struct UserProfileView: View {
     @State private var exportFilename: String = "export.csv"
     @State private var showShareSheet = false
     @State private var exportError: String? = nil
+    @State private var organizations: [Organization] = []
+    @State private var organizationsLoaded = false
 
     var body: some View {
         NavigationStack {
@@ -51,6 +53,7 @@ struct UserProfileView: View {
                 }
 
                 if authState.user?.username == username {
+                    organizationsSection
                     exportSection
                 }
             }
@@ -63,6 +66,9 @@ struct UserProfileView: View {
             }
             .task {
                 await loadMessages()
+                if authState.user?.username == username && !organizationsLoaded {
+                    await loadOrganizations()
+                }
             }
             .onChange(of: selectedTab) { _, tab in
                 if tab == 1 && lists.isEmpty && listsError == nil {
@@ -263,6 +269,53 @@ struct UserProfileView: View {
             followCounts = counts
         } catch {
             // Follow info is supplementary — silently ignore errors
+        }
+    }
+
+    @ViewBuilder
+    private var organizationsSection: some View {
+        if !organizations.isEmpty {
+            Divider()
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Organizations")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+                    .padding(.top, 16)
+                    .padding(.bottom, 8)
+                ForEach(organizations) { org in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(org.name)
+                            .font(.body)
+                        if let desc = org.description, !desc.isEmpty {
+                            Text(desc)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(accessibilityLabel(for: org))
+                }
+            }
+        }
+    }
+
+    private func accessibilityLabel(for org: Organization) -> String {
+        if let desc = org.description, !desc.isEmpty {
+            return "\(org.name). \(desc)"
+        }
+        return org.name
+    }
+
+    private func loadOrganizations() async {
+        organizationsLoaded = true
+        do {
+            organizations = try await APIClient.shared.userOrganizations()
+        } catch {
+            organizations = []
         }
     }
 

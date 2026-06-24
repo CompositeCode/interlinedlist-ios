@@ -37,9 +37,11 @@ final class APIClientImageUploadTests: XCTestCase {
     func test_uploadImage_pngUsesPngExtension() async throws {
         session.stub(json: #"{"url":"https://cdn.example.com/img.png"}"#)
         _ = try await sut.uploadImage(data: Data([0x89, 0x50]), mimeType: "image/png")
+        // The multipart body carries raw (non-UTF8) image bytes, so search the raw
+        // Data for the filename rather than decoding the whole body as a String.
         let body = session.lastRequest?.httpBody ?? Data()
-        let bodyString = String(data: body, encoding: .utf8) ?? ""
-        XCTAssertTrue(bodyString.contains("upload.png"))
+        XCTAssertNotNil(body.range(of: Data(#"filename="upload.png""#.utf8)),
+                        "Multipart body should declare a .png filename")
     }
 
     func test_uploadImage_403_throws() async throws {
