@@ -16,7 +16,6 @@ struct DocumentsView: View {
     @State private var searchPagination: Pagination?
     @State private var searchOffset = 0
     @State private var searchError: String?
-    @State private var searchEndpointUnavailable = false
     @State private var isLoadingMoreSearch = false
 
     private var allFolders: [DocumentFolder] { store.documentFolders }
@@ -113,14 +112,7 @@ struct DocumentsView: View {
 
     @ViewBuilder
     private var searchResultsList: some View {
-        if searchEndpointUnavailable {
-            ContentUnavailableView {
-                Label("Search isn't available yet", systemImage: "magnifyingglass")
-            } description: {
-                Text("Document search is coming soon.")
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let error = searchError, searchResults.isEmpty {
+        if let error = searchError, searchResults.isEmpty {
             ContentUnavailableView {
                 Label("Search failed", systemImage: "exclamationmark.triangle")
             } description: {
@@ -178,7 +170,6 @@ struct DocumentsView: View {
         if reset {
             searchOffset = 0
             searchError = nil
-            searchEndpointUnavailable = false
         }
         do {
             let (results, pagination) = try await APIClient.shared.searchDocuments(
@@ -195,10 +186,6 @@ struct DocumentsView: View {
             searchError = nil
         } catch APIError.status(401) {
             authState.handleUnauthorized()
-        } catch APIError.status(404) {
-            searchEndpointUnavailable = true
-            searchResults = []
-            searchPagination = nil
         } catch APIError.server(let msg) {
             searchError = msg
         } catch {

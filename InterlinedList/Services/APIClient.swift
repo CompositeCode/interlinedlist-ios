@@ -177,20 +177,9 @@ final class APIClient {
     // MARK: - Lists
 
     func listsAndFolders() async throws -> (folders: [ListFolder], lists: [UserList]) {
-        // Folders are supplementary — silently ignore non-auth failures (endpoint may not exist).
-        let folders: [ListFolder]
-        do {
-            let response: FoldersResponse = try await get("/api/folders")
-            folders = response.folders
-        } catch {
-            // Folders are supplementary; treat all errors (including 401 from Bearer-only servers)
-            // as "no folders." Auth is validated independently by the /api/lists call below.
-            folders = []
-        }
-
-        // Lists are required — propagate errors so the UI can surface them.
+        let foldersResponse: FoldersResponse = try await get("/api/folders")
         let listsResponse: ListsResponse = try await get("/api/lists")
-        return (folders, listsResponse.lists)
+        return (foldersResponse.folders, listsResponse.lists)
     }
 
     func listItems(listId: String) async throws -> [ListItem] {
@@ -336,6 +325,16 @@ final class APIClient {
         let response: Response = try await put("/api/lists/\(encoded)", body: Body(title: title, description: description, isPublic: isPublic))
         guard let list = response.list else { throw APIError.noData }
         return list
+    }
+
+    func updateListSchema(listId: String, schemaDSL: String) async throws -> [ListPropertyDef] {
+        struct Body: Encodable { let schema: String }
+        // Response shape isn't documented; tolerate missing `properties` (e.g. {"ok":true}).
+        struct Response: Decodable { let properties: [ListPropertyDef]? }
+        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let response: Response = try await putCamel("/api/lists/\(encoded)/schema",
+                                                    body: Body(schema: schemaDSL))
+        return response.properties ?? []
     }
 
     func createListFolder(name: String, parentId: String?) async throws -> ListFolder {
@@ -647,6 +646,17 @@ final class APIClient {
         guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(body)
+        return try await perform(request)
+    }
+
+    private func putCamel<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
+        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }

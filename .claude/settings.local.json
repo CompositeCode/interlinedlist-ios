@@ -65,7 +65,9 @@
       "Bash(echo \"EXIT=$?\")",
       "Bash(xcrun xcresulttool *)",
       "Bash(git checkout *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash(plutil *)",
+      "Bash(git stash *)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

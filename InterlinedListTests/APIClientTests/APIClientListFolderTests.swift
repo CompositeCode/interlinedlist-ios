@@ -73,6 +73,19 @@ final class APIClientListFolderTests: XCTestCase {
         }
     }
 
+    func test_createListFolder_subscriberOnly403_surfacesServerMessageVerbatim() async throws {
+        let message = "Subscriber only feature"
+        session.stub(json: #"{"error":"\#(message)"}"#, statusCode: 403)
+        do {
+            _ = try await sut.createListFolder(name: "X", parentId: nil)
+            XCTFail("Expected throw")
+        } catch APIError.server(let msg) {
+            XCTAssertEqual(msg, message)
+        } catch {
+            XCTFail("Expected APIError.server, got \(error)")
+        }
+    }
+
     // MARK: updateListFolder()
 
     func test_updateListFolder_sendsPutToCorrectPath() async throws {

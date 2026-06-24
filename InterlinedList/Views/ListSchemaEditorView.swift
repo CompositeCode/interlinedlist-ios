@@ -7,7 +7,6 @@ import SwiftUI
 
 struct ListSchemaEditorView: View {
     let list: UserList
-    let initialSchema: [ListPropertyDef]
     let onSave: (UserList) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -29,7 +28,6 @@ struct ListSchemaEditorView: View {
 
     init(list: UserList, schema: [ListPropertyDef], onSave: @escaping (UserList) -> Void) {
         self.list = list
-        self.initialSchema = schema
         self.onSave = onSave
 
         let initialTitle = list.name
@@ -59,18 +57,26 @@ struct ListSchemaEditorView: View {
     }
 
     private var isTitleValid: Bool {
-        let count = trimmedTitle.count
-        return count >= 1 && count <= 120
+        ListSchemaDraft.isTitleValid(title)
     }
 
     private var schemaChanged: Bool {
-        properties != originalProperties
+        ListSchemaDraft.schemaChanged(original: originalProperties, current: properties)
     }
 
     private var metadataChanged: Bool {
-        trimmedTitle != originalTitle
-            || trimmedDescription != originalDescription
-            || isPublic != originalIsPublic
+        ListSchemaDraft.metadataChanged(
+            originalTitle: originalTitle,
+            originalDescription: originalDescription,
+            originalIsPublic: originalIsPublic,
+            title: title,
+            description: description,
+            isPublic: isPublic
+        )
+    }
+
+    private var isSchemaValid: Bool {
+        ListSchemaDraft.isSchemaValid(properties)
     }
 
     private var hasUnsavedChanges: Bool {
@@ -131,10 +137,6 @@ struct ListSchemaEditorView: View {
                                 .font(.caption)
                         }
                     }
-                } footer: {
-                    Text("Schema editing is not yet supported by the backend; property changes will not be saved.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
                 if let error = errorMessage {
@@ -166,7 +168,7 @@ struct ListSchemaEditorView: View {
                         Button("Save") {
                             Task { await save() }
                         }
-                        .disabled(!isTitleValid || !metadataChanged)
+                        .disabled(!isTitleValid || (!metadataChanged && !schemaChanged) || !isSchemaValid)
                         .accessibilityLabel("Save list changes")
                     }
                 }
@@ -199,9 +201,14 @@ struct ListSchemaEditorView: View {
                 description: trimmedDescription.isEmpty ? nil : trimmedDescription,
                 isPublic: isPublic
             )
-            // TODO: backend schema update endpoint — once PUT /api/lists/[id]/schema
-            // (or a non-destructive equivalent) is exposed in APIClient, persist
-            // `properties` here in the same save action.
+            if schemaChanged {
+                // PUT /api/lists/[id]/schema body format is inferred from the POST /api/lists
+                // example ("schema": "Name:type, ..."); response shape isn't documented, so
+                // updateListSchema tolerates missing/varying fields. Reload of schema is the
+                // caller's responsibility on next view appearance.
+                let dsl = ListSchemaDraft.serializeSchemaDSL(properties)
+                _ = try await APIClient.shared.updateListSchema(listId: list.id, schemaDSL: dsl)
+            }
             onSave(updated)
             dismiss()
         } catch APIError.status(401) {
@@ -212,48 +219,6 @@ struct ListSchemaEditorView: View {
         } catch {
             errorMessage = "Failed to update list."
         }
-    }
-}
-
-// MARK: - Draft property model
-
-private struct DraftProperty: Identifiable, Equatable {
-    let id: String
-    var propertyKey: String
-    var propertyName: String
-    var propertyType: String
-    var isVisible: Bool
-    var isRequired: Bool
-
-    static let supportedTypes: [String] = ["text", "number", "boolean", "date", "url", "email"]
-
-    init(from def: ListPropertyDef) {
-        self.id = def.id
-        self.propertyKey = def.propertyKey
-        self.propertyName = def.propertyName
-        self.propertyType = def.propertyType
-        self.isVisible = def.isVisible
-        self.isRequired = def.isRequired
-    }
-
-    private init(id: String, propertyKey: String, propertyName: String, propertyType: String, isVisible: Bool, isRequired: Bool) {
-        self.id = id
-        self.propertyKey = propertyKey
-        self.propertyName = propertyName
-        self.propertyType = propertyType
-        self.isVisible = isVisible
-        self.isRequired = isRequired
-    }
-
-    static func newBlank() -> DraftProperty {
-        DraftProperty(
-            id: "new-" + UUID().uuidString,
-            propertyKey: "",
-            propertyName: "",
-            propertyType: "text",
-            isVisible: true,
-            isRequired: false
-        )
     }
 }
 

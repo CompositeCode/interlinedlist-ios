@@ -16,31 +16,45 @@ final class APIClientListsTests: XCTestCase {
 
     // MARK: listsAndFolders()
 
-    func test_listsAndFolders_returnsLists() async throws {
-        // First call is /api/folders (stub 200 with empty folders), second is /api/lists
-        session.stub(json: #"{"lists":[\#(listJSON)]}"#)
-        let (_, lists) = try await sut.listsAndFolders()
+    func test_listsAndFolders_returnsBoth() async throws {
+        session.enqueue(json: #"{"folders":[{"id":"f1","name":"Work","parentId":null}]}"#)
+        session.enqueue(json: #"{"lists":[\#(listJSON)]}"#)
+        let (folders, lists) = try await sut.listsAndFolders()
+        XCTAssertEqual(folders.count, 1)
+        XCTAssertEqual(folders.first?.id, "f1")
         XCTAssertEqual(lists.count, 1)
         XCTAssertEqual(lists.first?.name, "My List")
     }
 
-    func test_listsAndFolders_silentlySwallowsFolderErrors() async throws {
-        // Folders endpoint returns 500 — should not propagate
-        session.stub(data: Data(), statusCode: 500)
-        // Because the mock only has one stub, the second call also returns 500.
-        // We expect an error only from the lists call, not folders.
-        // To properly test this we need two stubs; for simplicity verify the pattern
-        // by confirming listsAndFolders doesn't itself block on folder errors.
-        // The implementation catches all folder errors — test that lists-only path works.
-        // Re-stub to succeed on the lists call (mock returns same stub for all calls).
-        session.stub(json: #"{"lists":[]}"#)
-        let (folders, lists) = try await sut.listsAndFolders()
-        XCTAssertTrue(folders.isEmpty || !folders.isEmpty) // either is fine — folder call is swallowed
-        XCTAssertNotNil(lists)
+    func test_listsAndFolders_folderError_propagates() async throws {
+        // Old behavior swallowed folder errors; new behavior propagates them so the
+        // UI can surface real failures from /api/folders (now a documented endpoint).
+        session.enqueue(data: Data(), statusCode: 500)
+        session.enqueue(json: #"{"lists":[]}"#)
+        do {
+            _ = try await sut.listsAndFolders()
+            XCTFail("Expected folder error to propagate")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 500)
+        } catch APIError.server {
+            // Acceptable: server returned a parseable error body.
+        }
+    }
+
+    func test_listsAndFolders_401OnFolders_throws() async throws {
+        session.enqueue(data: Data(), statusCode: 401)
+        session.enqueue(json: #"{"lists":[]}"#)
+        do {
+            _ = try await sut.listsAndFolders()
+            XCTFail("Expected throw from folders call")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
     }
 
     func test_listsAndFolders_401OnLists_throws() async throws {
-        session.stub(data: Data(), statusCode: 401)
+        session.enqueue(json: #"{"folders":[]}"#)
+        session.enqueue(data: Data(), statusCode: 401)
         do {
             _ = try await sut.listsAndFolders()
             XCTFail("Expected throw from lists call")
@@ -90,5 +104,39 @@ final class APIClientListsTests: XCTestCase {
         session.stub(data: Data(), statusCode: 204)
         try await sut.deleteList(id: "l1")
         XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+    }
+
+    // MARK: updateList() — isPublic round-trip
+
+    func test_updateList_isPublicTrue_sentAsSnakeCaseBoolAndDecodes() async throws {
+        let body = #"{"list":{"id":"l1","title":"My List","isPublic":true,"createdAt":"2024-01-01T00:00:00Z"}}"#
+        session.stub(json: body)
+        let updated = try await sut.updateList(id: "l1", title: "My List", description: nil, isPublic: true)
+
+        XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/lists/l1")
+
+        let sentBody = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: sentBody) as? [String: Any])
+        XCTAssertEqual(json["is_public"] as? Bool, true)
+
+        XCTAssertEqual(updated.id, "l1")
+        XCTAssertEqual(updated.isPublic, true)
+    }
+
+    func test_updateList_isPublicFalse_sentAsSnakeCaseBoolAndDecodes() async throws {
+        let body = #"{"list":{"id":"l1","title":"My List","isPublic":false,"createdAt":"2024-01-01T00:00:00Z"}}"#
+        session.stub(json: body)
+        let updated = try await sut.updateList(id: "l1", title: "My List", description: nil, isPublic: false)
+
+        XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/lists/l1")
+
+        let sentBody = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: sentBody) as? [String: Any])
+        XCTAssertEqual(json["is_public"] as? Bool, false)
+
+        XCTAssertEqual(updated.id, "l1")
+        XCTAssertEqual(updated.isPublic, false)
     }
 }

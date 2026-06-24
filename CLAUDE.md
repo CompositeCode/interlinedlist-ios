@@ -71,5 +71,5 @@ xcrun simctl list devices --json | jq '.devices | to_entries[] | select(.value |
 
 - The `/api/messages` POST endpoint expects **camelCase** keys (`publiclyVisible`, `parentId`), not snake_case — use `camelCaseEncoder`, not the default `encoder`.
 - `ListFolder.parentId` and `UserList.folderId` may arrive as `""` instead of `null` — treat both as "no parent."
-- The `/api/folders` endpoint may be absent on some server deployments; `APIClient.listsAndFolders()` silently returns `[]` for non-401 folder errors.
+- `APIClient.listsAndFolders()` issues two requests in sequence: `GET /api/folders`, then `GET /api/lists`. Errors from either call propagate to the caller. The endpoint is documented as live; if a stale deployment doesn't expose it, the UI will see a real error (not an empty folder list).
 - Token is stored in Keychain via `KeychainService`; never store it in `UserDefaults`.

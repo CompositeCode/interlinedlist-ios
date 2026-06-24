@@ -24,6 +24,7 @@
 		A1B1C1D1E1F1002F /* ListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10030 /* ListsView.swift */; };
 		A1B1C1D1E1F10031 /* EditMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10032 /* EditMessageView.swift */; };
 		A1B1C1D1E1F100A1 /* ListSchemaEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */; };
+		A1B1C1D1E1F100A3 /* ListSchemaDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F100A4 /* ListSchemaDraft.swift */; };
 		A1B1C1D1E1F10033 /* MessageThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10034 /* MessageThreadView.swift */; };
 		A1B1C1D1E1F10035 /* CreateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10036 /* CreateListView.swift */; };
 		A1B1C1D1E1F10037 /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10038 /* UserProfileView.swift */; };
@@ -66,6 +67,12 @@
 		T1E5T1E5T1E5N015 /* APIClientPeopleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5N016 /* APIClientPeopleTests.swift */; };
 		T1E5T1E5T1E5P001 /* APIClientListFolderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P002 /* APIClientListFolderTests.swift */; };
 		T1E5T1E5T1E5P003 /* APIClientSearchDocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */; };
+		T1E5T1E5T1E5P005 /* APIClientSearchListsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */; };
+		T1E5T1E5T1E5P007 /* ListSchemaDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P008 /* ListSchemaDraftTests.swift */; };
+		T1E5T1E5T1E5P009 /* APIClientUpdateListSchemaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */; };
+		T1E5T1E5T1E5P011 /* EnvLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P012 /* EnvLoader.swift */; };
+		T1E5T1E5T1E5P013 /* E2EReadOnlyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */; };
+		T1E5T1E5T1E5P015 /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -98,6 +105,7 @@
 		A1B1C1D1E1F10030 /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListsView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10032 /* EditMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMessageView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaEditorView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F100A4 /* ListSchemaDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaDraft.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10034 /* MessageThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageThreadView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10036 /* CreateListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateListView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10038 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileView.swift; sourceTree = "<group>"; };
@@ -142,6 +150,12 @@
 		T1E5T1E5T1E5N016 /* APIClientPeopleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientPeopleTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5P002 /* APIClientListFolderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientListFolderTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientSearchDocumentsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientSearchListsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P008 /* ListSchemaDraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaDraftTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientUpdateListSchemaTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P012 /* EnvLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvLoader.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2EReadOnlyTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -200,6 +214,7 @@
 				A1B1C1D1E1F10006 /* User.swift */,
 				A1B1C1D1E1F10008 /* Message.swift */,
 				A1B1C1D1E1F1002E /* List.swift */,
+				A1B1C1D1E1F100A4 /* ListSchemaDraft.swift */,
 				A2B2C2D2E2F20042 /* AppNotification.swift */,
 				A2B2C2D2E2F20044 /* FollowState.swift */,
 				A3C3D3E3F3A30052 /* Document.swift */,
@@ -256,8 +271,27 @@
 				T1E5T1E5T1E50004 /* MockURLSession.swift */,
 				T1E5T1E5T1E50011 /* APIClientTests */,
 				T1E5T1E5T1E50012 /* ModelTests */,
+				T1E5T1E5T1E5Q001 /* ServiceTests */,
+				T1E5T1E5T1E5Q002 /* E2E */,
 			);
 			path = InterlinedListTests;
+			sourceTree = "<group>";
+		};
+		T1E5T1E5T1E5Q001 /* ServiceTests */ = {
+			isa = PBXGroup;
+			children = (
+				T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */,
+			);
+			path = ServiceTests;
+			sourceTree = "<group>";
+		};
+		T1E5T1E5T1E5Q002 /* E2E */ = {
+			isa = PBXGroup;
+			children = (
+				T1E5T1E5T1E5P012 /* EnvLoader.swift */,
+				T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */,
+			);
+			path = E2E;
 			sourceTree = "<group>";
 		};
 		T1E5T1E5T1E50011 /* APIClientTests */ = {
@@ -277,6 +311,8 @@
 				T1E5T1E5T1E5N016 /* APIClientPeopleTests.swift */,
 				T1E5T1E5T1E5P002 /* APIClientListFolderTests.swift */,
 				T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */,
+				T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */,
+				T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */,
 			);
 			path = APIClientTests;
 			sourceTree = "<group>";
@@ -291,6 +327,7 @@
 				T1E5T1E5T1E5M004 /* AppNotificationModelTests.swift */,
 				T1E5T1E5T1E5M006 /* FollowStateModelTests.swift */,
 				T1E5T1E5T1E5M008 /* DocumentModelTests.swift */,
+				T1E5T1E5T1E5P008 /* ListSchemaDraftTests.swift */,
 			);
 			path = ModelTests;
 			sourceTree = "<group>";
@@ -399,6 +436,7 @@
 				A1B1C1D1E1F1002F /* ListsView.swift in Sources */,
 				A1B1C1D1E1F10031 /* EditMessageView.swift in Sources */,
 				A1B1C1D1E1F100A1 /* ListSchemaEditorView.swift in Sources */,
+				A1B1C1D1E1F100A3 /* ListSchemaDraft.swift in Sources */,
 				A1B1C1D1E1F10033 /* MessageThreadView.swift in Sources */,
 				A1B1C1D1E1F10035 /* CreateListView.swift in Sources */,
 				A1B1C1D1E1F10037 /* UserProfileView.swift in Sources */,
@@ -448,6 +486,12 @@
 				T1E5T1E5T1E5N015 /* APIClientPeopleTests.swift in Sources */,
 				T1E5T1E5T1E5P001 /* APIClientListFolderTests.swift in Sources */,
 				T1E5T1E5T1E5P003 /* APIClientSearchDocumentsTests.swift in Sources */,
+				T1E5T1E5T1E5P005 /* APIClientSearchListsTests.swift in Sources */,
+				T1E5T1E5T1E5P007 /* ListSchemaDraftTests.swift in Sources */,
+				T1E5T1E5T1E5P009 /* APIClientUpdateListSchemaTests.swift in Sources */,
+				T1E5T1E5T1E5P011 /* EnvLoader.swift in Sources */,
+				T1E5T1E5T1E5P013 /* E2EReadOnlyTests.swift in Sources */,
+				T1E5T1E5T1E5P015 /* KeychainServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

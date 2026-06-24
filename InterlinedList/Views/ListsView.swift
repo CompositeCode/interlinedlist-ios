@@ -211,12 +211,17 @@ private struct CreateListFolderView: View {
             )
             onSave()
             dismiss()
+        } catch APIError.status(403) {
+            errorMessage = Self.paywallMessage
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {
             errorMessage = "Failed to create folder."
         }
     }
+
+    private static let paywallMessage =
+        "Creating folders requires a subscription. You can subscribe at interlinedlist.com."
 }
 
 // MARK: - Rename list sheet

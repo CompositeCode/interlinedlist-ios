@@ -1,287 +1,558 @@
-# GAP-ENDPOINTS — Backend API Gaps
+# GAP-ENDPOINTS — Backend gaps blocking iOS parity
 
-This document tracks backend API gaps required by the InterlinedList iOS app. The iOS `APIClient` (in `InterlinedList/Services/APIClient.swift`) **already issues these calls** with the exact request shape described below — when the backend ships an endpoint matching the contract, the iOS side lights up with no further client changes.
+Tracks endpoints / API behaviors the **backend** still needs to expose
+before the iOS app can ship corresponding features. For the iOS-side
+implementation roadmap, see `GAP-NEXT-STEPS.md`.
 
-Each section is a **self-contained prompt** you can paste into the backend project's Claude Code session. The prompts assume the backend already has the documents/folders pattern at `/api/documents/folders` to mirror.
+This file is intentionally **paste-into-backend-Claude friendly**: each
+section under "Backend gaps" is a self-contained prompt the backend team
+can drop into their own Claude Code session.
 
----
+Last updated: 2026-06-23 — re-verified against the full `/help/api`
+tree. **All eight actionable Part B gaps are still standing.**
 
-## How to use this document
+### Re-verification notes (2026-06-23)
 
-1. Open a Claude Code session inside the `interlinedlist.com` backend repository.
-2. Copy the entire fenced block under "Prompt" for the gap you want to close.
-3. Paste it as your first message in that session.
-4. The prompt is fully self-contained — it includes the route, request body, response shape, validation rules, and the rationale.
-
-When a gap closes, delete the section from this doc and update `InterlinedListTests/APIClientTests/` if the live contract differs from the iOS expectation documented here.
-
----
-
-## 1. List Folder CRUD — `GET/POST/PUT/DELETE /api/folders`
-
-**Status:** High priority. Blocks PLAN-21 (List Schema Editor + folder tree UI). iOS `APIClient.listsAndFolders()` already calls `GET /api/folders` and silently swallows the 404; `createListFolder`, `updateListFolder`, and `deleteListFolder` are all wired up and waiting.
-
-### Prompt
-
-```
-Implement List Folder CRUD at `/api/folders`. List folders organise the user's
-lists in a tree (folders can nest), the same way document folders already work
-at `/api/documents/folders` — copy that implementation as your starting point
-and keep the patterns identical (auth, ownership checks, cascade rules, error
-shape).
-
-The InterlinedList iOS client already issues these requests with the exact
-shapes below. Match them precisely so the iOS app picks up the feature with no
-client changes.
-
-### Endpoints
-
-`GET /api/folders` — list every folder the authenticated user owns.
-  Response 200:
-    { "folders": [ { "id": "...", "name": "...", "parentId": "..."|null } ] }
-
-`POST /api/folders` — create a folder.
-  Request body (camelCase): { "name": "My Folder", "parentId": null }
-  Response 201: { "folder": { "id": "...", "name": "...", "parentId": null } }
-  Validation: name 1–80 chars; if parentId is non-null, it must reference a
-  folder owned by the same user.
-
-`PUT /api/folders/[id]` — rename and/or reparent.
-  Request body: { "name"?: "New Name", "parentId"?: "id"|null }
-  Response 200: { "folder": { ... updated ... } }
-  Response 409 (duplicate name in the target parent):
-    { "error": "A folder with that name already exists here" }
-  Validation: reject reparenting under a descendant (cycle protection).
-
-`DELETE /api/folders/[id]` — delete a folder.
-  Response 200: { "message": "Folder deleted successfully" }
-  Cascade: child lists move to root (folderId = null). Match whatever rule
-  `/api/documents/folders/[id]` uses today and keep it consistent.
-
-### Ownership and auth
-
-All routes are Bearer-token authenticated. 401 on missing/invalid token, 403
-when the folder belongs to another user, 404 when it does not exist.
-
-### Tests
-
-Mirror the existing `/api/documents/folders` test file. Cover: create at root,
-create nested, rename, reparent, reject cycle, delete cascades child lists to
-root, ownership 403, auth 401.
-```
+- The `/help/api` tree contains 17 sub-pages: authentication,
+  users-and-profile, public-profiles, messages, lists, list-folders,
+  documents, document-folders, following, organizations, notifications,
+  push-notifications, exports, github-integration, linkedin-integration,
+  utility-endpoints, administration.
+- **`/help/api/subscriptions` returns 404** — no dedicated subscriptions
+  docs page exists. (Earlier audit listed it; it may have been removed
+  or never published.) This raises B1 priority: the iOS app currently
+  has no documented Stripe / billing API surface to call at all.
+- **`/help/api/internal-endpoints` no longer in the tree** — prior audit
+  listed it; current tree does not. Minor (was internal-only anyway).
+- **New endpoint discovered on `/help/api/messages`:**
+  `POST /api/messages/:id/metadata` — not in the prior audit and not
+  used by iOS yet. Logged in `GAP-NEXT-STEPS.md` as a Phase 4 add-on.
+  Not a gap — just an iOS-side TODO.
 
 ---
 
-## 2. `PATCH /api/documents/[id]` — accept `folderId`
+## Part A — Original six gaps: all shipped ✅
 
-**Status:** Medium priority. iOS `APIClient.updateDocument(...)` already sends `folderId` in the PATCH body — the backend currently ignores it, so document moves silently no-op.
+The six backend gaps tracked in the prior version of this doc are now
+all confirmed live in the published docs.
 
-### Prompt
+| # | Endpoint | Docs page | Status |
+|---|---|---|---|
+| 1 | `GET/POST/PUT/DELETE /api/folders` (list folders) | `/help/api/list-folders` | ✅ Live (POST is subscriber-only) |
+| 2 | `PATCH /api/documents/[id]` accepts `folderId` | `/help/api/documents` | ✅ Live |
+| 3 | `GET /api/documents/search` | `/help/api/documents` | ✅ Live |
+| 4 | `GET /api/lists/search` | `/help/api/lists` | ✅ Live |
+| 5 | `PUT /api/lists/[id]` accepts `isPublic` | `/help/api/lists` | ✅ Live |
+| 6 | `PUT /api/lists/[id]/schema` | `/help/api/lists` | ✅ Live (body shape inferred — see §B0) |
+
+iOS-side fallout for all six gaps is complete: placeholders removed,
+swallows torn out, subscriber-403 paywall plumbed, integration tests
+added. No iOS work pending against these.
+
+---
+
+## Part B — Backend gaps still blocking iOS parity
+
+Each item below lists:
+
+1. **Gap** — what's missing.
+2. **Why it matters** — which iOS feature is blocked.
+3. **Proposed contract** — what the iOS client expects to call.
+4. **Prompt** — paste-into-backend-Claude prompt to implement.
+
+Ordered by iOS impact.
+
+### B0. Document `PUT /api/lists/[id]/schema` body shape
+
+**Status:** Endpoint is live but the docs publish no example body.
+**Re-verified 2026-06-23:** `/help/api/lists` still shows the endpoint
+in the table as "Update list schema" with no body spec, no example, no
+structured-properties variant. The iOS client currently sends
+`{ "schema": "Name:type, ..." }` (a DSL string) by analogy with the
+`POST /api/lists` example, but this is an assumption.
+
+**Why it matters:** Two issues.
+
+1. If the live server expects a different shape, every schema-edit save
+   from iOS fails silently.
+2. The DSL string format loses `isVisible`, `isRequired`,
+   `displayOrder`, `defaultValue`, `helpText`, `placeholder` — fields
+   the iOS editor lets users edit but can't round-trip.
+
+**Resolution options (pick one):**
+
+- (a) **Document the DSL shape** explicitly and accept the data loss —
+  ship a richer endpoint later if needed.
+- (b) **Expose a structured form** as a peer endpoint, e.g.
+  `PUT /api/lists/[id]/schema/structured` taking
+  `{ "properties": [{ "id": ..., "propertyKey": ..., "propertyName": ...,
+  "propertyType": ..., "displayOrder": ..., "isVisible": ...,
+  "isRequired": ..., "defaultValue": ..., "helpText": ...,
+  "placeholder": ... }] }` and returning the full updated schema. Keep
+  DSL as an alternate format on the same `/schema` route.
+
+**Prompt:**
 
 ```
-Extend `PATCH /api/documents/[id]` to accept a `folderId` field so the iOS
-client can move a document between folders (or to root via null) without a
-delete-and-recreate workaround.
+The InterlinedList iOS client calls `PUT /api/lists/[id]/schema` to
+persist schema edits, but the published API docs don't include a body
+example. Today the iOS client sends `{ "schema": "Name:type, ..." }`
+by analogy with `POST /api/lists`. Please either:
 
-The InterlinedList iOS client already sends this field in every document
-update PATCH. The endpoint must accept (but not require) it.
+1. Document the request body for `PUT /api/lists/[id]/schema` explicitly
+   on /help/api/lists, including an example, supported types, and
+   non-destructive merge semantics (rename / reorder / add / delete and
+   how each affects existing row data).
 
-### Change
+OR
 
-Update the route handler at `app/api/documents/[id]/route.ts` (or equivalent
-path in this codebase) to destructure `folderId` from the request body
-alongside the existing `title`, `content`, `isPublic` fields, and persist it.
+2. Expose a richer structured endpoint at
+   `PUT /api/lists/[id]/schema/structured` accepting a JSON array of
+   property objects with `id`, `propertyKey`, `propertyName`,
+   `propertyType`, `displayOrder`, `isVisible`, `isRequired`,
+   `defaultValue`, `helpText`, `placeholder` — semantics:
+     - existing `id` → update in place, preserve row data
+     - missing `id` → create new property
+     - omitted from request → soft-delete, drop key from row blobs
+     - reject duplicate `propertyKey` in same list
+     - reject unknown `propertyType`
+     - reject `propertyKey` change for existing id (rename
+       propertyName instead)
+   Response 200: `{ "properties": [ ... full updated schema ... ] }`.
 
-  const { title, content, isPublic, folderId } = body;
-  // ...
-  await prisma.document.update({
-    where: { id: params.id },
-    data: {
-      ...(title !== undefined && { title }),
-      ...(content !== undefined && { content }),
-      ...(isPublic !== undefined && { isPublic: isPublic === true }),
-      ...(folderId !== undefined && { folderId: folderId || null }),
-    },
-  });
-
-### Validation
-
-If `folderId` is non-null, verify it references a document folder owned by the
-same user (return 403 otherwise). Treat empty string `""` as null.
-
-### Tests
-
-Add a test case to the existing PATCH suite: move to a folder, move to root
-(folderId: null), reject move to another user's folder (403).
+Either path unblocks the iOS schema editor's `isVisible` / `isRequired`
+toggles.
 ```
 
 ---
 
-## 3. `GET /api/documents/search`
+### B1. Subscription plans catalog endpoint
 
-**Status:** Medium priority. iOS `APIClient.searchDocuments(q:limit:offset:)` already calls this endpoint and `APIClientSearchDocumentsTests.swift` asserts the shape below. Currently 404s in prod.
+**Gap:** No endpoint returns the available subscription tiers, their
+prices, feature comparisons, or marketing copy.
+**Re-verified 2026-06-23:** `/help/api/subscriptions` returns **404** —
+there is no dedicated subscriptions docs page at all. The iOS app has
+no documented API surface for plans, pricing, checkout, or billing
+portal. Earlier mentions of `POST /api/stripe/create-*` endpoints came
+from a now-removed page; treat them as unverified until re-published.
 
-### Prompt
+**Why it matters:** Blocks Phase 3 of `GAP-NEXT-STEPS.md`. The iOS
+paywall / upgrade screen has to hardcode plan info or punt to a
+webview. Even a simple "you'll get cross-posting + scheduled posts +
+image uploads + folders for $X/month" pitch needs data.
+
+**Proposed contract:**
 
 ```
-Implement document search at `GET /api/documents/search`. The InterlinedList
-iOS client already calls this endpoint with the contract below, and the iOS
-test suite asserts the response shape — match it exactly.
-
-### Endpoint
-
-`GET /api/documents/search?q={query}&limit={n}&offset={n}`
-
-Query params:
-  - q (required, 1–200 chars) — search string
-  - limit (optional, default 20, max 100)
-  - offset (optional, default 0)
-
+GET /api/subscriptions/plans
 Response 200:
   {
-    "documents": [
+    "plans": [
       {
-        "id": "...",
-        "title": "...",
-        "content": "...",        // include full content; iOS may render a snippet
-        "folderId": "..."|null,
-        "isPublic": true,
-        "createdAt": "ISO8601",
-        "updatedAt": "ISO8601"
+        "id": "monthly",
+        "name": "Monthly",
+        "priceCents": 500,
+        "currency": "USD",
+        "interval": "month",
+        "features": ["Cross-posting", "Scheduled posts",
+                     "Image uploads", "Video uploads", "Folders"]
+      },
+      {
+        "id": "annual",
+        "name": "Annual",
+        "priceCents": 5000,
+        "currency": "USD",
+        "interval": "year",
+        "features": [...]
       }
-    ],
-    "pagination": {
-      "total": 42,
-      "limit": 20,
-      "offset": 0,
-      "hasMore": true
-    }
+    ]
   }
+```
 
-### Implementation
+**Prompt:**
 
-Scope to the authenticated user's documents only. A simple case-insensitive
-`title ILIKE '%q%' OR content ILIKE '%q%'` is sufficient for v1. Order by
-`updatedAt DESC`. Postgres full-text (`tsvector`) can replace this later
-without changing the contract.
+```
+Add `GET /api/subscriptions/plans` returning the public-facing list of
+subscription tiers with price, interval, and a feature list. The
+InterlinedList iOS app needs this to render an in-app paywall / upgrade
+screen without hardcoding plan info. Match the response shape proposed
+in the iOS repo's `GAP-ENDPOINTS.md` §B1, or document any
+divergence.
 
-### Validation and errors
-
-  - 400 if q is missing, empty, or longer than 200 chars
-  - 400 if limit > 100
-  - 401 unauthenticated
-
-### Tests
-
-Cover: basic title match, basic content match, pagination (limit + offset),
-empty q rejected, ownership scoping (user A's docs do not appear in user B's
-search).
+Public endpoint (no auth required). If feature lists are tier-dependent
+and you'd rather keep them server-rendered, also return a `marketingUrl`
+per plan so the iOS app can fall back to webview.
 ```
 
 ---
 
-## 4. `GET /api/lists/search`
+### B2. Message search
 
-**Status:** Low priority. iOS `APIClient.searchLists(q:limit:offset:)` is wired but no iOS tests assert it yet, so the contract below is the source of truth.
+**Gap:** `/api/lists/search` and `/api/documents/search` exist;
+`/api/messages/search` does not.
+**Re-verified 2026-06-23:** `/help/api/messages` shows no search
+endpoint. Tags appear only as an optional field on message creation,
+not as a query/filter beyond `?tag=X` on the list endpoint.
 
-### Prompt
+**Why it matters:** Blocks Phase 13. The iOS feed has no search box. A
+social feed without search is a notable UX gap.
+
+**Proposed contract:**
 
 ```
-Implement list search at `GET /api/lists/search`, mirroring the document
-search endpoint exactly. The InterlinedList iOS client already calls this
-with the contract below.
-
-### Endpoint
-
-`GET /api/lists/search?q={query}&limit={n}&offset={n}`
-
-Query params:
-  - q (required, 1–200 chars) — matched against title and description
-  - limit (optional, default 20, max 100)
-  - offset (optional, default 0)
-
+GET /api/messages/search?q={query}&limit={n}&offset={n}&onlyMine={bool}
 Response 200:
   {
-    "lists": [
-      {
-        "id": "...",
-        "title": "...",
-        "description": "..."|null,
-        "isPublic": true,
-        "folderId": "..."|null,
-        "itemCount": 5,
-        "createdAt": "ISO8601",
-        "updatedAt": "ISO8601"
-      }
-    ],
-    "pagination": { "total": 10, "limit": 20, "offset": 0, "hasMore": false }
+    "messages": [ ... same shape as GET /api/messages items ... ],
+    "pagination": { "total": 42, "limit": 20, "offset": 0, "hasMore": true }
   }
+```
 
-The list object shape should match what `GET /api/lists` returns today —
-re-use the same DTO/serializer so any future field additions stay consistent.
+Visibility scoping: the user's own messages (public + private) plus
+public messages from anyone they can otherwise see (followers/public
+profiles). Match the existing visibility rules from `GET /api/messages`.
 
-### Implementation
+**Prompt:**
 
-Scope to the authenticated user's lists. Case-insensitive
-`title ILIKE '%q%' OR description ILIKE '%q%'`. Order by `updatedAt DESC`.
-
-### Validation and errors
-
-Identical to /api/documents/search (see gap #3).
-
-### Tests
-
-Cover: title match, description match, null description handled, pagination,
-ownership scoping.
+```
+Add `GET /api/messages/search` mirroring the existing
+`/api/documents/search` and `/api/lists/search` endpoints. Query
+parameters: `q` (required, 1–200 chars), `limit` (default 20, max 100),
+`offset` (default 0), `onlyMine` (optional boolean, default false).
+Response uses the same message object shape as `GET /api/messages`,
+wrapped under `messages` + `pagination`. Visibility scoping matches the
+existing `/api/messages` rules. The InterlinedList iOS app will add a
+search bar to its feed once this lands.
 ```
 
 ---
 
-## 5. `PUT /api/lists/[id]` — accept `isPublic`
+### B3. Notification preferences enumeration
 
-**Status:** Low priority. iOS `APIClient.updateList(id:title:description:isPublic:)` already sends `isPublic` in the PUT body. Without backend support, visibility changes from the iOS schema editor require a full schema rebuild via `PUT /api/lists/[id]/schema`, which is destructive.
+**Gap:** The push-notifications docs note that "per-event delivery
+preferences" live on user profile settings, but no endpoint enumerates
+which event types exist. iOS can't render a Settings → Notifications
+screen without hardcoding event keys.
+**Re-verified 2026-06-23:** Both `/help/api/users-and-profile` and
+`/help/api/push-notifications` confirm no enumeration endpoint. The
+push docs still reference "new follower, reply, dig, etc." as event
+types without an authoritative list.
 
-### Prompt
+**Why it matters:** Blocks the notification-preferences screen in Phase
+9 / Phase 12 of `GAP-NEXT-STEPS.md`. Without this, iOS users have no
+way to control what they're notified about beyond going to the web.
+
+**Proposed contract:**
 
 ```
-Extend `PUT /api/lists/[id]` to accept an `isPublic` field. Today this route
-accepts `title`, `description`, `messageId`, `metadata`, `parentId`, but
-ignores `isPublic`. The iOS client sends `isPublic` in every list metadata
-update — the backend silently drops it.
+GET /api/user/notification-preferences
+Response 200:
+  {
+    "events": [
+      {
+        "key": "follow",
+        "label": "New follower",
+        "description": "When someone follows you.",
+        "channels": { "push": true, "inApp": true, "email": false }
+      },
+      {
+        "key": "reply",
+        "label": "Replies to your messages",
+        ...
+      },
+      { "key": "dig", ... },
+      { "key": "follow_request_approved", ... },
+      { "key": "list_watcher_added", ... },
+      ...
+    ]
+  }
 
-### Change
-
-Update the route handler at `app/api/lists/[id]/route.ts` (or equivalent) to
-destructure and persist `isPublic`:
-
-  const { title, description, messageId, metadata, parentId, isPublic } = body;
-  // ...
-  await prisma.list.update({
-    where: { id: params.id },
-    data: {
-      ...(title !== undefined && { title }),
-      ...(description !== undefined && { description }),
-      ...(messageId !== undefined && { messageId }),
-      ...(metadata !== undefined && { metadata }),
-      ...(parentId !== undefined && { parentId: parentId || null }),
-      ...(isPublic !== undefined && { isPublic: isPublic === true }),
-    },
-  });
-
-### Tests
-
-Add a case to the existing PUT suite: toggle isPublic true → false and back,
-verify the schema DSL is not touched.
+PATCH /api/user/notification-preferences
+Body: { "key": "follow", "channels": { "push": false } }
+Response: updated event object
 ```
+
+**Prompt:**
+
+```
+Expose two endpoints so clients (specifically the InterlinedList iOS
+app) can render a notifications preferences screen without hardcoding
+event types:
+
+GET /api/user/notification-preferences
+  Returns every notification event the server can emit, with a
+  display-friendly label, a description, and per-channel boolean
+  settings (push, in-app, email) for the current user.
+
+PATCH /api/user/notification-preferences
+  Body: { "key": "<event-key>", "channels": { "push": bool, ... } }
+  Updates the per-channel preference for one event.
+
+The current `POST /api/user/update` endpoint can stay as the persistence
+layer; these two endpoints are just the enumeration + targeted-update
+surface that the docs already imply exists.
+```
+
+---
+
+### B4. Bearer-token support on `/api/github/*` endpoints
+
+**Gap:** GitHub integration endpoints (`/api/github/repos`,
+`/api/github/issues`, etc.) require a session cookie and explicitly
+reject Bearer tokens. The iOS app is Bearer-only.
+**Re-verified 2026-06-23:** `/help/api/github-integration` still states
+verbatim: *"All endpoints require a session cookie (Bearer tokens are
+not accepted), and require an active linked GitHub identity."* No
+session-from-Bearer exchange endpoint documented either.
+
+**Why it matters:** Blocks Phase 11 (GitHub integration) on iOS without
+forcing the client to implement a fragile cookie-jar flow that
+bypasses our Bearer-token security model.
+
+**Resolution options:**
+
+- (a) Accept Bearer tokens on `/api/github/*` — preferred. The Bearer
+  token already maps to a user identity; GitHub OAuth identity is
+  attached to that user.
+- (b) Document a documented session-cookie-via-Bearer-exchange
+  endpoint (e.g. `POST /api/auth/session-from-bearer` returns a
+  short-lived session cookie) — fallback if direct Bearer support is
+  hard.
+
+**Prompt:**
+
+```
+The InterlinedList iOS app authenticates with Bearer tokens
+(`/api/auth/sync-token`) and cannot use session cookies cleanly. Today
+`/api/github/*` endpoints require session-cookie auth and reject
+Bearer tokens, locking iOS out of GitHub-backed lists and "create
+issue from message" flows.
+
+Please either (a) accept Bearer tokens on the `/api/github/*` family —
+the Bearer token already identifies a user, and that user's linked
+GitHub identity provides the GitHub access token server-side — or
+(b) expose `POST /api/auth/session-from-bearer` that returns a short-
+lived session cookie usable for these endpoints. (a) is strongly
+preferred; (b) is a workaround.
+```
+
+---
+
+### B5. Document list-watcher role values
+
+**Gap:** `/help/api/lists` lists watcher endpoints but doesn't
+enumerate the role values that `PUT /api/lists/:id/watchers/:userId`
+accepts in its body. `/help/lists` mentions "Watcher", "Collaborator",
+"Manager" as user-facing terms but the wire values aren't documented.
+**Re-verified 2026-06-23:** Still no role enumeration. No body example
+for `POST /api/lists/:id/watchers` either.
+
+**Why it matters:** Blocks Phase 6 (list collaboration) on iOS — the
+role picker can't be built without knowing the canonical strings.
+
+**Proposed contract:** Document the role values explicitly on
+`/help/api/lists`. Likely candidates: `"watcher" | "collaborator" |
+"manager"` (lowercase, snake-case if multi-word). Also document the
+`POST /api/lists/:id/watchers` request body — it's not shown today.
+
+**Prompt:**
+
+```
+The /help/api/lists page lists watcher endpoints but doesn't enumerate
+the valid role strings or document the `POST /api/lists/:id/watchers`
+request body. Please add:
+
+1. The exact role string values that `PUT /api/lists/:id/watchers/:userId`
+   accepts in its `{ "role": "..." }` body. (Presumably "watcher" /
+   "collaborator" / "manager" to match /help/lists wording — confirm.)
+2. The `POST /api/lists/:id/watchers` request body shape — is it
+   `{ "userId": "..." }`, `{ "role": "watcher" }`, or both?
+3. The shape of the `users` field returned from
+   `GET /api/lists/:id/watchers/users` — at minimum each item should
+   have `userId`, `username`, `displayName?`, `role`.
+
+The InterlinedList iOS app's Phase 6 collaboration UI is gated on this.
+```
+
+---
+
+### B6. Tag / hashtag discovery
+
+**Gap:** `GET /api/messages?tag=X` filters by tag, but there's no
+endpoint to list trending or recent tags. Users can only follow tags
+they already know about.
+**Re-verified 2026-06-23:** Not documented on `/help/api/messages` or
+`/help/api/utility-endpoints` (the natural homes).
+
+**Why it matters:** Blocks the tag-explorer half of Phase 13. Also
+needed for tag autocomplete in `ComposeView`.
+
+**Proposed contract:**
+
+```
+GET /api/tags/trending?limit=20
+Response 200: { "tags": [{ "tag": "swift", "count": 42, "lastUsedAt": "..." }] }
+
+GET /api/tags/autocomplete?q=swi
+Response 200: { "tags": [{ "tag": "swift", "count": 42 }, { "tag": "swiftui", ... }] }
+```
+
+**Prompt:**
+
+```
+Add two tag-discovery endpoints:
+
+GET /api/tags/trending?limit={n}&window={day|week|month}
+  Returns the top tags by message count over the window. Default
+  limit 20, default window week.
+
+GET /api/tags/autocomplete?q={prefix}&limit={n}
+  Returns tags matching the prefix, ordered by usage. Used by the
+  InterlinedList iOS compose UI for `#...` autocomplete.
+
+Both endpoints scoped to public messages only.
+```
+
+---
+
+### B7. Avatar response includes updated user
+
+**Gap:** `POST /api/user/avatar/upload` returns `{ url }`. Per the docs
+no other user state is returned — clients have to re-fetch
+`GET /api/user` to see the new avatar reflected on the user object.
+**Re-verified 2026-06-23:** `/help/api/users-and-profile` still publishes
+no response shape for either avatar endpoint. Likely unchanged.
+
+**Why it matters:** Minor — costs one extra round-trip on Phase 3
+avatar upload. Worth noting but not blocking.
+
+**Proposed contract:** Return the full updated user object from both
+`POST /api/user/avatar/upload` and `POST /api/user/avatar/from-url`,
+e.g. `{ "user": { ... }, "url": "..." }`.
+
+**Prompt (low priority, can wait for a wider profile-endpoint pass):**
+
+```
+Have `POST /api/user/avatar/upload` and `POST /api/user/avatar/from-url`
+return the full updated user object alongside the new URL, so clients
+don't have to re-fetch `GET /api/user` to see the avatar change reflect
+across the app.
+```
+
+---
+
+### B9. `GET /api/follow/:userId/status` returns inconsistent shape for self
+
+**Gap:** When the authenticated user queries follow-status for **their own**
+user ID, the response is 200 but the body omits the documented
+`following` / `followedBy` / `pendingRequest` fields, breaking the
+documented `FollowStatus` decode contract.
+
+**Discovered:** 2026-06-23 via E2E test
+`E2EReadOnlyTests.test_e2e_followStatus_forSelf_respondsWithoutCrashing`.
+
+**Why it matters:** Low — the iOS app never queries self-follow-status in
+production (the UI doesn't render a follow button on the current user's
+own profile). But the behavior is undocumented and any client code that
+*does* hit the endpoint with self ID will crash on decode.
+
+**Resolution options:**
+
+- (a) Return 400 with `{ "error": "Cannot query follow status for self" }`
+  so clients get a clear contract violation.
+- (b) Return the documented shape with `following: false`,
+  `followedBy: false`, `pendingRequest: false` for self.
+- (c) Document the divergent shape on `/help/api/following`.
+
+**Priority:** Low. The iOS test tolerates the current behavior; this
+exists primarily to flag it for the backend team.
+
+---
+
+### B8. Real-time / push for feed updates
+
+**Gap:** No WebSocket, SSE, or long-poll endpoint for live feed /
+notification updates. Everything is pull-only.
+
+**Why it matters:** Not a blocker for any current iOS phase, but a
+social feed without real-time updates feels stale on mobile. Worth
+acknowledging as a long-term gap.
+
+**Resolution:** Not requesting implementation here — this is a major
+backend effort. iOS Phase 9 (APNs push) covers the highest-value real-
+time signal (notification tap → deep link to message). Live feed scroll
+can stay pull-to-refresh for v1.
+
+No prompt — this is a placeholder for "we acknowledge this exists and
+will revisit."
 
 ---
 
 ## Summary
 
-| # | Endpoint / Change | Priority | iOS already calls it? |
-|---|---|---|---|
-| 1 | `GET/POST/PUT/DELETE /api/folders` | High | Yes — `listsAndFolders`, `createListFolder`, `updateListFolder`, `deleteListFolder` |
-| 2 | `PATCH /api/documents/[id]` + `folderId` | Medium | Yes — `updateDocument` sends it today |
-| 3 | `GET /api/documents/search` | Medium | Yes — `searchDocuments`, asserted by iOS tests |
-| 4 | `GET /api/lists/search` | Low | Yes — `searchLists` (no iOS tests yet) |
-| 5 | `PUT /api/lists/[id]` + `isPublic` | Low | Yes — `updateList` sends it today |
+### What backend has now (we use ~all of it)
+
+The iOS client now calls every endpoint family the docs publish, except
+for the gaps below:
+
+| Endpoint family | iOS uses? | Notes |
+|---|---|---|
+| Auth (email/password, sync-token) | ✅ | OAuth ×5 + reset/verify pending (Phase 2) |
+| User core | ✅ | `customerStatus` now decoded |
+| Avatar upload | ❌ | Phase 3 |
+| Identities / orgs (user-level) | ❌ | Phase 2 / 3 |
+| Email change | ❌ | Phase 2 |
+| Messages CRUD | ✅ | cross-post fields + repost pending (Phase 4) |
+| Scheduled messages PATCH | ❌ | Phase 4 |
+| Image / video upload | ✅ | |
+| Lists CRUD + schema | ✅ | schema PUT body shape inferred (§B0) |
+| List folders | ✅ | subscriber-403 paywall plumbed |
+| List watchers | ❌ | Phase 6 (blocked partly on §B5) |
+| List connections | ✅ | |
+| Documents CRUD + folders + search | ✅ | |
+| Document sync | ❌ | Phase 10 |
+| Document image upload | ❌ | Phase 10 |
+| Following (basic) | ✅ | followers/following/mutuals/remove pending (Phase 5) |
+| Notifications tray | ✅ | per-notification GET/DELETE pending |
+| Push notifications | ❌ | Phase 9 |
+| Notification preferences | ❌ | blocked on §B3 |
+| Organizations | ❌ | Phase 8 |
+| Exports | ✅ | |
+| Subscriptions (Stripe) | ❌ | Phase 3 (blocked on §B1) |
+| GitHub integration | ❌ | Phase 11 (blocked on §B4) |
+| LinkedIn integration | ❌ | deferred |
+| Utility endpoints (location, weather, image proxy) | ❌ | out of scope for v1 iOS |
+
+### Backend gap priority (all re-verified 2026-06-23)
+
+| § | Gap | iOS phase blocked | Priority | Re-check |
+|---|---|---|---|---|
+| B0 | Document/structure schema PUT body | Phase 1 (fidelity) | High | Still standing |
+| B5 | Document watcher role values + POST body | Phase 6 | High | Still standing |
+| B1 | Subscription plans catalog (+ docs page itself 404s) | Phase 3 (paywall fidelity) | **Raised: High** | Worse than prior |
+| B2 | Message search | Phase 13 | Medium | Still standing |
+| B3 | Notification preferences enumeration | Phase 9 / 12 | Medium | Still standing |
+| B4 | Bearer auth on `/api/github/*` | Phase 11 | Low (deferred) | Still standing |
+| B6 | Tag discovery / autocomplete | Phase 13 | Low | Still standing |
+| B7 | Avatar response includes user | Phase 3 (UX nicety) | Low | Still standing |
+| B9 | `follow/:userId/status` shape inconsistent for self | n/a (edge case) | Low | New 2026-06-23 (via E2E test) |
+| B8 | Real-time feed updates | n/a (long-term) | Acknowledged | n/a |
+
+### What is NOT available via API (cannot ship on iOS until backend lands it)
+
+Pulled from the table above, sorted by what they enable:
+
+1. **Richer schema editing** — `isVisible` / `isRequired` toggles can't
+   round-trip until §B0 is resolved (DSL doc or structured endpoint).
+2. **List collaboration UI** — Phase 6 can't ship a role picker until
+   §B5 documents the role wire values.
+3. **In-app subscription paywall** — Phase 3 can hand-off to Safari
+   today, but a native paywall needs §B1's plans catalog.
+4. **Feed search** — Phase 13's search bar needs §B2's
+   `/api/messages/search`.
+5. **Notification preferences screen** — Phase 9 / 12 needs §B3's
+   enumeration endpoint.
+6. **GitHub features (Bearer)** — Phase 11 needs §B4 unless we accept
+   building a cookie-jar workaround.
+7. **Tag explorer / `#` autocomplete** — Phase 13 needs §B6.
+8. **Live feed updates** — §B8, long-term.

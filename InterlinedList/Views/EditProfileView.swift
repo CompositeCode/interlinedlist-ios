@@ -91,7 +91,7 @@ struct EditProfileView: View {
         displayName: "Test User", avatar: nil, bio: "Hello world",
         theme: nil, emailVerified: true, createdAt: nil,
         maxMessageLength: nil, showAdvancedPostSettings: nil,
-        defaultPubliclyVisible: true, isSubscriber: nil
+        defaultPubliclyVisible: true, customerStatus: nil
     ))
     .environmentObject(AuthState())
 }
