@@ -303,10 +303,11 @@ struct ComposeView: View {
             guard let data = try await item.loadTransferable(type: Data.self) else { return }
             let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "video/mp4"
             uploadedVideoURL = try await APIClient.shared.uploadVideo(data: data, mimeType: mimeType)
-        } catch APIError.status(403) {
-            errorMessage = "Video upload requires an active subscription."
-            selectedVideo = nil
         } catch {
+            // 403 falls through here. The video picker is hidden for free
+            // users so a subscriber-only response shouldn't normally reach
+            // this branch; no subscription copy surfaces either way per the
+            // iOS-free-app direction.
             errorMessage = "Failed to upload video. Please try again."
             selectedVideo = nil
         }
@@ -320,10 +321,8 @@ struct ComposeView: View {
             guard let data = try await item.loadTransferable(type: Data.self) else { return }
             let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
             uploadedImageURL = try await APIClient.shared.uploadImage(data: data, mimeType: mimeType)
-        } catch APIError.status(403) {
-            errorMessage = "Image upload requires an active subscription."
-            selectedPhoto = nil
         } catch {
+            // Picker is hidden for non-subscribers; 403 falls through here.
             errorMessage = "Failed to upload image. Please try again."
             selectedPhoto = nil
         }

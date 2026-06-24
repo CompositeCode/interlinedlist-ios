@@ -538,8 +538,6 @@ private struct CreateDocumentView: View {
             dismiss()
         } catch APIError.status(401) {
             authState.handleUnauthorized()
-        } catch APIError.status(403) {
-            errorMessage = "Requires active subscription."
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {
@@ -636,8 +634,6 @@ private struct EditDocumentView: View {
             dismiss()
         } catch APIError.status(401) {
             authState.handleUnauthorized()
-        } catch APIError.status(403) {
-            errorMessage = "Requires active subscription."
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {

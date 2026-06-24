@@ -74,11 +74,13 @@ struct ScheduledMessagesView: View {
         defer { isLoading = false }
         do {
             messages = try await APIClient.shared.scheduledMessages(range: range)
-        } catch APIError.status(403) {
-            errorMessage = "Scheduled posts require an active subscription."
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {
+            // The calendar entry point in FeedView is hidden for free users,
+            // so 403 from this subscriber-only endpoint shouldn't normally
+            // reach the UI. Generic message preserves strict-silence on
+            // subscription state.
             errorMessage = "Could not load scheduled posts."
         }
     }
