@@ -18,7 +18,16 @@ struct DocumentsView: View {
     @State private var searchError: String?
     @State private var isLoadingMoreSearch = false
 
-    private var allFolders: [DocumentFolder] { store.documentFolders }
+    private var canCreateFolders: Bool {
+        authState.user?.isSubscriber == true
+    }
+
+    // Folders are a subscriber-only feature. For free users we surface no
+    // folder UI and treat every document as root-level (regardless of its
+    // folderId on the server — the data is preserved, just not exposed).
+    private var allFolders: [DocumentFolder] {
+        canCreateFolders ? store.documentFolders : []
+    }
     private var allDocuments: [Document] { store.documents }
 
     private var folderNameLookup: [String: String] {
@@ -30,7 +39,9 @@ struct DocumentsView: View {
     }
 
     private var rootDocuments: [Document] {
-        allDocuments.filter { ($0.folderId ?? "").isEmpty }
+        canCreateFolders
+            ? allDocuments.filter { ($0.folderId ?? "").isEmpty }
+            : allDocuments
     }
 
     var body: some View {
@@ -85,10 +96,12 @@ struct DocumentsView: View {
                         } label: {
                             Label("New Document", systemImage: "doc.badge.plus")
                         }
-                        Button {
-                            showCreateFolder = true
-                        } label: {
-                            Label("New Folder", systemImage: "folder.badge.plus")
+                        if canCreateFolders {
+                            Button {
+                                showCreateFolder = true
+                            } label: {
+                                Label("New Folder", systemImage: "folder.badge.plus")
+                            }
                         }
                     } label: {
                         Image(systemName: "plus")
@@ -268,10 +281,12 @@ private struct DocumentFolderView: View {
                     } label: {
                         Label("New Document", systemImage: "doc.badge.plus")
                     }
-                    Button {
-                        showCreateFolder = true
-                    } label: {
-                        Label("New Folder", systemImage: "folder.badge.plus")
+                    if authState.user?.isSubscriber == true {
+                        Button {
+                            showCreateFolder = true
+                        } label: {
+                            Label("New Folder", systemImage: "folder.badge.plus")
+                        }
                     }
                 } label: {
                     Image(systemName: "plus")
