@@ -22,6 +22,7 @@ struct UserProfileView: View {
     @State private var targetUserId: String?
     @State private var followStatus: FollowStatus?
     @State private var followCounts: FollowCounts?
+    @State private var mutualCounts: MutualCounts?
     @State private var isFollowLoading = false
     @State private var followError: String?
     @State private var isExporting: ExportType? = nil
@@ -31,6 +32,10 @@ struct UserProfileView: View {
     @State private var exportError: String? = nil
     @State private var organizations: [Organization] = []
     @State private var organizationsLoaded = false
+    @State private var documents: [PublicDocumentSummary] = []
+    @State private var isLoadingDocuments = false
+    @State private var documentsError: String?
+    @State private var documentsLoaded = false
 
     var body: some View {
         NavigationStack {
@@ -42,14 +47,15 @@ struct UserProfileView: View {
                 Picker("Content", selection: $selectedTab) {
                     Text("Posts").tag(0)
                     Text("Lists").tag(1)
+                    Text("Documents").tag(2)
                 }
                 .pickerStyle(.segmented)
                 .padding()
 
-                if selectedTab == 0 {
-                    messagesTab
-                } else {
-                    listsTab
+                switch selectedTab {
+                case 0: messagesTab
+                case 1: listsTab
+                default: documentsTab
                 }
 
                 if authState.user?.username == username {
@@ -73,6 +79,8 @@ struct UserProfileView: View {
             .onChange(of: selectedTab) { _, tab in
                 if tab == 1 && lists.isEmpty && listsError == nil {
                     Task { await loadLists() }
+                } else if tab == 2 && !documentsLoaded {
+                    Task { await loadDocuments() }
                 }
             }
             .sheet(isPresented: $showShareSheet) {
@@ -87,21 +95,21 @@ struct UserProfileView: View {
     private var followHeader: some View {
         VStack(spacing: 8) {
             HStack(spacing: 24) {
-                if let counts = followCounts {
-                    VStack(spacing: 2) {
-                        Text("\(counts.followers)")
-                            .font(.headline)
-                        Text("Followers")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                if let counts = followCounts, let uid = targetUserId {
+                    NavigationLink {
+                        FollowListView(userId: uid, mode: .followers)
+                            .environmentObject(authState)
+                    } label: {
+                        countView(value: counts.followers, label: "Followers")
                     }
-                    VStack(spacing: 2) {
-                        Text("\(counts.following)")
-                            .font(.headline)
-                        Text("Following")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+                    NavigationLink {
+                        FollowListView(userId: uid, mode: .following)
+                            .environmentObject(authState)
+                    } label: {
+                        countView(value: counts.following, label: "Following")
                     }
+                    .buttonStyle(.plain)
                 }
                 Spacer()
                 if targetUserId != nil {
@@ -111,6 +119,14 @@ struct UserProfileView: View {
             .padding(.horizontal)
             .padding(.top, 8)
 
+            if let mutual = mutualCounts, mutual.mutualFollowers > 0 || mutual.mutualFollowing > 0 {
+                Text(mutualSummary(mutual))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+            }
+
             if let error = followError {
                 Text(error)
                     .font(.caption)
@@ -119,6 +135,27 @@ struct UserProfileView: View {
             }
         }
         Divider()
+    }
+
+    private func countView(value: Int, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text("\(value)")
+                .font(.headline)
+                .foregroundStyle(.primary)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(value) \(label)")
+        .accessibilityHint("Shows the full list")
+    }
+
+    private func mutualSummary(_ m: MutualCounts) -> String {
+        var parts: [String] = []
+        if m.mutualFollowers > 0 { parts.append("\(m.mutualFollowers) mutual follower\(m.mutualFollowers == 1 ? "" : "s")") }
+        if m.mutualFollowing > 0 { parts.append("\(m.mutualFollowing) followed in common") }
+        return parts.joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -199,23 +236,66 @@ struct UserProfileView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             List(lists) { list in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(list.name)
-                        .font(.body)
-                    if let desc = list.description, !desc.isEmpty {
-                        Text(desc)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                NavigationLink {
+                    PublicListDetailView(username: username, listId: list.id, listTitle: list.name)
+                        .environmentObject(authState)
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(list.name)
+                            .font(.body)
+                        if let desc = list.description, !desc.isEmpty {
+                            Text(desc)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let count = list.itemCount {
+                            Text("\(count) items")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    if let count = list.itemCount {
-                        Text("\(count) items")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 2)
             }
             .refreshable { await loadLists() }
+        }
+    }
+
+    @ViewBuilder
+    private var documentsTab: some View {
+        if isLoadingDocuments && documents.isEmpty {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error = documentsError {
+            ContentUnavailableView {
+                Label("Unable to load", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Retry") { Task { await loadDocuments() } }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if documents.isEmpty {
+            ContentUnavailableView {
+                Label("No Documents", systemImage: "doc.text")
+            } description: {
+                Text("@\(username) has no public documents.")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List(documents) { doc in
+                NavigationLink {
+                    PublicDocumentReader(documentId: doc.id, title: doc.title)
+                        .environmentObject(authState)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(doc.title).font(.body)
+                        if let path = doc.relativePath, !path.isEmpty {
+                            Text(path).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .refreshable { await loadDocuments() }
         }
     }
 
@@ -260,6 +340,18 @@ struct UserProfileView: View {
         }
     }
 
+    private func loadDocuments() async {
+        documentsError = nil
+        isLoadingDocuments = true
+        documentsLoaded = true
+        defer { isLoadingDocuments = false }
+        do {
+            documents = try await APIClient.shared.publicDocuments(username: username).documents
+        } catch {
+            documentsError = "Could not load documents."
+        }
+    }
+
     private func loadFollowInfo(userId: String) async {
         do {
             async let statusTask = APIClient.shared.followStatus(userId: userId)
@@ -270,6 +362,8 @@ struct UserProfileView: View {
         } catch {
             // Follow info is supplementary — silently ignore errors
         }
+        // Mutual counts are a separate, best-effort call.
+        mutualCounts = try? await APIClient.shared.mutualCounts(userId: userId)
     }
 
     @ViewBuilder
