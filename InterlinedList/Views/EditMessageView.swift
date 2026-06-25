@@ -12,14 +12,27 @@ struct EditMessageView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var content: String
     @State private var publiclyVisible: Bool
+    @State private var scheduledDate: Date
     @State private var isLoading = false
     @State private var errorMessage: String?
+
+    private let originalScheduledDate: Date?
+    private var isScheduled: Bool { originalScheduledDate != nil }
 
     init(message: Message, onSave: @escaping (Message) -> Void) {
         self.message = message
         self.onSave = onSave
         _content = State(initialValue: message.content)
         _publiclyVisible = State(initialValue: message.publiclyVisible ?? true)
+        let parsed = message.scheduledAt.flatMap { EditMessageView.parseISO($0) }
+        self.originalScheduledDate = parsed
+        _scheduledDate = State(initialValue: parsed ?? Date().addingTimeInterval(3600))
+    }
+
+    private static func parseISO(_ iso: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
     }
 
     var body: some View {
@@ -29,6 +42,17 @@ struct EditMessageView: View {
                     TextField("Content", text: $content, axis: .vertical)
                         .lineLimit(5...15)
                     Toggle("Public", isOn: $publiclyVisible)
+                }
+
+                if isScheduled {
+                    Section("Scheduled for") {
+                        DatePicker(
+                            "Send at",
+                            selection: $scheduledDate,
+                            in: Date()...,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                    }
                 }
 
                 if let error = errorMessage {
@@ -72,8 +96,17 @@ struct EditMessageView: View {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         do {
-            let updated = try await APIClient.shared.editMessage(id: message.id, content: trimmed, publiclyVisible: publiclyVisible)
-            onSave(updated)
+            // Reschedule first when the send time changed (scheduled, unpublished messages only).
+            if isScheduled, let original = originalScheduledDate,
+               abs(scheduledDate.timeIntervalSince(original)) > 1 {
+                let iso = ISO8601DateFormatter().string(from: scheduledDate)
+                _ = try await APIClient.shared.patchScheduledMessage(id: message.id, scheduledAt: iso, config: nil)
+            }
+            let contentChanged = trimmed != message.content || publiclyVisible != (message.publiclyVisible ?? true)
+            if contentChanged {
+                let updated = try await APIClient.shared.editMessage(id: message.id, content: trimmed, publiclyVisible: publiclyVisible)
+                onSave(updated)
+            }
             dismiss()
         } catch APIError.server(let msg) {
             errorMessage = msg

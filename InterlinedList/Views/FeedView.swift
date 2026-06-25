@@ -20,10 +20,15 @@ struct FeedView: View {
     @State private var deleteError: String?
     @State private var showCompose = false
     @State private var messageToEdit: Message?
+    @State private var messageToRepost: Message?
     @State private var threadMessage: Message?
     @State private var digStates: [String: (count: Int, dugByMe: Bool)] = [:]
     @State private var profileUsername: String? = nil
     @State private var showScheduled = false
+    @State private var searchText = ""
+    @State private var searchResults: [Message] = []
+    @State private var isSearching = false
+    @State private var searchPerformed = false
 
     private var distinctTags: [String] {
         var seen = Set<String>()
@@ -32,7 +37,9 @@ struct FeedView: View {
 
     @ViewBuilder
     private var feedContent: some View {
-        if isLoading && messages.isEmpty {
+        if !searchText.isEmpty {
+            searchResultsList
+        } else if isLoading && messages.isEmpty {
             FeedSkeletonView()
         } else if let error = errorMessage, messages.isEmpty {
             ContentUnavailableView {
@@ -44,6 +51,32 @@ struct FeedView: View {
             }
         } else {
             messageList
+        }
+    }
+
+    @ViewBuilder
+    private var searchResultsList: some View {
+        if isSearching {
+            ProgressView("Searching…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if searchResults.isEmpty && searchPerformed {
+            ContentUnavailableView.search(text: searchText)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List(searchResults) { message in
+                MessageRow(
+                    message: message,
+                    currentUserId: authState.user?.id,
+                    showPreviews: showPreviews,
+                    digState: digStates[message.id],
+                    onReply: { threadMessage = message },
+                    onDelete: { messageToDelete = message },
+                    onEdit: { messageToEdit = message },
+                    onDig: { Task { await toggleDig(for: message) } },
+                    onRepost: { messageToRepost = message },
+                    onTapAuthor: { username in profileUsername = username }
+                )
+            }
         }
     }
 
@@ -93,6 +126,7 @@ struct FeedView: View {
                     },
                     onEdit: { messageToEdit = message },
                     onDig: { Task { await toggleDig(for: message) } },
+                    onRepost: { messageToRepost = message },
                     onTapAuthor: { username in profileUsername = username }
                 )
             }
@@ -129,6 +163,10 @@ struct FeedView: View {
                 if let username = profileUsername { UserProfileView(username: username) }
             }
             .sheet(isPresented: $showScheduled) { ScheduledMessagesView() }
+            .sheet(item: $messageToRepost) { message in
+                ComposeView(repostOf: message)
+                    .environmentObject(authState)
+            }
             .sheet(item: $messageToEdit) { message in
                 EditMessageView(message: message) { updated in
                     if let index = messages.firstIndex(where: { $0.id == updated.id }) {
@@ -156,6 +194,14 @@ struct FeedView: View {
             feedContent
                 .navigationTitle("InterlinedList")
                 .navigationBarTitleDisplayMode(.inline)
+                .searchable(text: $searchText, prompt: "Search posts")
+                .onSubmit(of: .search) { Task { await runSearch() } }
+                .onChange(of: searchText) { _, newValue in
+                    if newValue.isEmpty {
+                        searchResults = []
+                        searchPerformed = false
+                    }
+                }
                 .toolbar { feedToolbar }
         }
         .sheet(isPresented: $showCompose) {
@@ -253,6 +299,24 @@ struct FeedView: View {
         }
     }
 
+    private func runSearch() async {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        isSearching = true
+        defer { isSearching = false }
+        do {
+            let (results, _) = try await APIClient.shared.searchMessages(q: q)
+            searchResults = results
+            searchPerformed = true
+            initDigStates(from: results)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            searchResults = []
+            searchPerformed = true
+        }
+    }
+
     private func loadMessages() async {
         errorMessage = nil
         isLoading = true
@@ -304,6 +368,7 @@ struct MessageRow: View {
     let onDelete: () -> Void
     let onEdit: () -> Void
     let onDig: () -> Void
+    var onRepost: (() -> Void)? = nil
     var onTapAuthor: ((String) -> Void)? = nil
 
     private var canDelete: Bool {
@@ -390,6 +455,15 @@ struct MessageRow: View {
                     Text("\(effectiveDigCount)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+                if let onRepost {
+                    Button {
+                        onRepost()
+                    } label: {
+                        Label("Repost", systemImage: "arrow.2.squarepath")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
                 }
                 if canDelete {
                     Button {
