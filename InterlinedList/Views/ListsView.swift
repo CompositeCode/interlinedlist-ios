@@ -448,6 +448,7 @@ struct ListDetailView: View {
     @State private var editingItem: ListItem? = nil
     @State private var deletingItem: ListItem? = nil
     @State private var showDeleteConfirm = false
+    @State private var showWatchers = false
 
     var body: some View {
         Group {
@@ -544,11 +545,25 @@ struct ListDetailView: View {
         }
         .navigationTitle(list.name)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showWatchers = true
+                } label: {
+                    Image(systemName: "person.2")
+                }
+                .accessibilityLabel("Manage watchers")
+            }
+        }
         .task {
             await loadData()
         }
         .refreshable {
             await loadData()
+        }
+        .sheet(isPresented: $showWatchers) {
+            WatchersListView(listId: list.id)
+                .environmentObject(authState)
         }
         .sheet(isPresented: $showAddConnection) {
             NavigationStack {
