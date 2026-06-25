@@ -6,8 +6,9 @@ functionality parity with `interlinedlist.com`.
 This is the **iOS-side** punchlist. For backend endpoints that still need
 to ship before some of these can be done, see `GAP-ENDPOINTS.md`.
 
-Last updated: 2026-06-24 — after Phase 2 (auth surface) and Phase 3
-(profile / account management) shipped.
+Last updated: 2026-06-25 — after Phases 4, 5, 6, 7, 8, 12 and the
+feed-search half of 13 shipped (plus B0 structured schema editing),
+unblocked by the backend resolving B0/B2/B3/B5.
 
 ## Subscription / billing direction
 
@@ -25,10 +26,19 @@ bundle. Subscription management is entirely on the web at
 | 1 | Gap-closure + schema editor + subscriber awareness | 2026-06-23 | — |
 | 2 | Auth surface parity | 2026-06-24 | Fully closed: reset, verify, OAuth ×5, identity linking, and email change (entry row + deep link + API + view) all in. |
 | 3 | Profile / account management | 2026-06-24 | Avatar upload + from-URL, organizations strip, delete-account all in. |
+| B0 | Structured list-schema editing | 2026-06-25 | `updateListSchemaStructured` + editor round-trips isVisible/isRequired/order; 409 → force-delete confirm. |
+| 4 | Compose feature parity | 2026-06-25 | Cross-post toggles (Mastodon picker, Bluesky, LinkedIn, X) hidden for free users; repost (pushedMessageId); edit scheduledAt via PATCH; crossPostResults toast; metadata endpoint wired. |
+| 5 | Follow surface parity | 2026-06-25 | Followers/following lists (paginated), mutual-count strip, remove-follower, tappable counts. |
+| 6 | List collaboration / watchers | 2026-06-25 | WatchersListView (manager view) from owner's ListDetailView: roles, role picker, add/remove. Watch CTA on public lists (Phase 7). |
+| 7 | Public browse end-to-end | 2026-06-25 | PublicListDetailView (read-only rows + Watch CTA), public Documents segment + reader. |
+| 8 | Organizations | 2026-06-25 | Org list/detail/members CRUD, owner/admin/member roles, last-owner guard, create/edit/delete, join. |
+| 12 | Settings panel | 2026-06-25 | SettingsView (theme→PATCH + applied via RootView, default visibility, advanced toggle, connected accounts, About webviews, sign-out) + NotificationPreferencesView (real catalog). |
+| 13 | Feed search | 2026-06-25 | `.searchable` feed → `GET /api/messages/search`. Tag discovery still blocked on §B6. |
 
-Per-phase detail for 1–3 has been collapsed to short stubs below; the
-full acceptance-criteria history lives in git. Remaining work starts at
-Phase 4.
+Per-phase detail for shipped phases has been collapsed; the full
+acceptance-criteria history lives in git. Remaining work: Phase 9 (APNs),
+Phase 10 (documents sync/image upload), Phase 11 (GitHub — blocked §B4),
+and the tag-discovery half of Phase 13 (blocked §B6).
 
 ## Status snapshot — what works today
 
@@ -410,19 +420,25 @@ When the endpoints ship:
 |---|---|---|---|
 | 2 | Auth (reset / verify / OAuth ×5 / linking / email change) | Medium | ✅ shipped 2026-06-24 |
 | 3 | Profile / avatar / orgs / delete account | Small | ✅ shipped 2026-06-24 |
-| 4 | Compose: schedule + cross-post + gating + edit / repost | Medium | scaffold present, needs wiring |
-| 5 | Followers / following / mutuals / remove-follower | Small | not started |
-| 6 | List watchers / roles / permission model | Large | not started |
-| 7 | Public browse end-to-end | Small | not started |
-| 8 | Organizations | Large | not started |
-| 9 | Push notifications (APNs) | Medium | not started |
-| 10 | Documents: image upload + sync + public reader | Large | not started |
-| 11 | GitHub integration | Medium | **deferred** (auth model conflict) |
-| 12 | Settings panel + webview content | Small | not started |
-| 13 | Feed search + tag discovery | Small | **blocked on backend** |
+| 4 | Compose: schedule + cross-post + gating + edit / repost | Medium | ✅ shipped 2026-06-25 |
+| 5 | Followers / following / mutuals / remove-follower | Small | ✅ shipped 2026-06-25 |
+| 6 | List watchers / roles / permission model | Large | ✅ shipped 2026-06-25 |
+| 7 | Public browse end-to-end | Small | ✅ shipped 2026-06-25 |
+| 8 | Organizations | Large | ✅ shipped 2026-06-25 |
+| 9 | Push notifications (APNs) | Medium | not started (needs Xcode capability + entitlement) |
+| 10 | Documents: image upload + sync + public reader | Large | public reader shipped (Phase 7); image upload + sync not started |
+| 11 | GitHub integration | Medium | **deferred** (auth model conflict, §B4) |
+| 12 | Settings panel + webview content | Small | ✅ shipped 2026-06-25 |
+| 13 | Feed search + tag discovery | Small | search ✅ shipped 2026-06-25; tag discovery **blocked on §B6** |
 
-With Phases 1–3 shipped, the remaining unblocked work is Phases 4–10 and
-12. Phase 13 lights up automatically once the backend endpoints ship.
+With Phases 1–8 and 12 shipped (plus B0 and feed search), the remaining
+work is **Phase 9** (APNs push — requires the Push Notifications
+capability + APNs entitlement in the Xcode project, so it needs a signing
+config decision), **Phase 10** (document image upload + delta sync — the
+public reader already shipped under Phase 7), **Phase 11** (GitHub —
+deferred on §B4), and the **tag-discovery** half of Phase 13 (blocked on
+§B6). Everything unblocked and code-only is now done; the full test suite
+is green (365 tests).
 
 ---
 
