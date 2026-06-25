@@ -20,6 +20,8 @@ struct ListSchemaEditorView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showUnsavedConfirm = false
+    @State private var showForceDeleteConfirm = false
+    @State private var conflictMessage: String?
 
     private let originalTitle: String
     private let originalDescription: String
@@ -181,6 +183,18 @@ struct ListSchemaEditorView: View {
                 Button("Discard", role: .destructive) { dismiss() }
                 Button("Keep Editing", role: .cancel) {}
             }
+            .confirmationDialog(
+                "Some columns still contain data",
+                isPresented: $showForceDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete anyway", role: .destructive) {
+                    Task { await save(force: true) }
+                }
+                Button("Keep Editing", role: .cancel) {}
+            } message: {
+                Text(conflictMessage ?? "Deleting these properties will remove their values from every row.")
+            }
             .alert("Save Failed", isPresented: .constant(errorMessage != nil && !isSaving), actions: {
                 Button("OK") { errorMessage = nil }
             }, message: {
@@ -189,7 +203,7 @@ struct ListSchemaEditorView: View {
         }
     }
 
-    private func save() async {
+    private func save(force: Bool = false) async {
         guard isTitleValid else { return }
         isSaving = true
         errorMessage = nil
@@ -202,15 +216,19 @@ struct ListSchemaEditorView: View {
                 isPublic: isPublic
             )
             if schemaChanged {
-                // PUT /api/lists/[id]/schema body format is inferred from the POST /api/lists
-                // example ("schema": "Name:type, ..."); response shape isn't documented, so
-                // updateListSchema tolerates missing/varying fields. Reload of schema is the
-                // caller's responsibility on next view appearance.
-                let dsl = ListSchemaDraft.serializeSchemaDSL(properties)
-                _ = try await APIClient.shared.updateListSchema(listId: list.id, schemaDSL: dsl)
+                // Structured form (GAP §B0): round-trips isVisible / isRequired /
+                // order. New rows are created, existing rows updated in place, and
+                // omitted properties soft-deleted. `force` confirms dropping a
+                // column that still has data (the server returns 409 otherwise).
+                let structured = ListSchemaDraft.structuredProperties(properties)
+                _ = try await APIClient.shared.updateListSchemaStructured(
+                    listId: list.id, properties: structured, force: force)
             }
             onSave(updated)
             dismiss()
+        } catch APIError.conflict(let msg) {
+            conflictMessage = msg
+            showForceDeleteConfirm = true
         } catch APIError.status(401) {
             authState.handleUnauthorized()
             errorMessage = "Session expired. Please sign in again."
