@@ -33,6 +33,14 @@ enum OAuthProvider: String, CaseIterable {
         case .twitter: return "bird"
         }
     }
+
+    /// Whether this provider's OAuth callback supports the native custom-scheme
+    /// token handoff. GitHub's callback has no mobile branch — it sets a web
+    /// session cookie and redirects to /dashboard, so it never returns
+    /// `interlinedlist://oauth/callback?token=…` and can't complete inside
+    /// `ASWebAuthenticationSession`. Hidden until the backend adds that branch.
+    /// (Backend auth contract — Open Dependency #1.)
+    var supportsNativeAuth: Bool { self != .github }
 }
 
 enum OAuthError: Error {

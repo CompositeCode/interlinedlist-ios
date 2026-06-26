@@ -6,10 +6,17 @@
 import SwiftUI
 
 /// Lists the OAuth providers linked to the signed-in account and lets the user disconnect
-/// them (`DELETE /api/user/identities`) or link a new one by re-running the OAuth flow with
-/// `?link=true`. Reachable only for subscribers (gated by the caller in `MainTabView`).
+/// them (`DELETE /api/user/identities`). In-app *linking* of a new provider is gated off
+/// (see `linkingEnabled`). Reachable only for subscribers (gated by the caller in `MainTabView`).
 struct LinkedIdentitiesView: View {
     @EnvironmentObject var authState: AuthState
+
+    /// In-app provider linking is disabled: the backend `?link=true` callback
+    /// authenticates via the web session cookie (`getCurrentUser()`), not the
+    /// Bearer token, so a native (Bearer-only) client can't link a new provider
+    /// through it. Flip to `true` once the backend exposes a Bearer-authenticated
+    /// link endpoint. (Backend auth contract — Open Dependency #2.)
+    private let linkingEnabled = false
 
     @State private var identities: [APIClient.LinkedIdentity] = []
     @State private var isLoading = true
@@ -44,23 +51,31 @@ struct LinkedIdentitiesView: View {
                 Text("Connected accounts")
             }
 
-            Section {
-                Menu {
-                    ForEach(OAuthProvider.allCases, id: \.rawValue) { provider in
-                        Button {
-                            startLink(provider: provider)
-                        } label: {
-                            Label(provider.displayName, systemImage: provider.systemImageName)
+            if linkingEnabled {
+                Section {
+                    Menu {
+                        ForEach(OAuthProvider.allCases.filter(\.supportsNativeAuth), id: \.rawValue) { provider in
+                            Button {
+                                startLink(provider: provider)
+                            } label: {
+                                Label(provider.displayName, systemImage: provider.systemImageName)
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Label("Link another provider", systemImage: "plus.circle")
+                            Spacer()
+                            if linkInFlight { ProgressView() }
                         }
                     }
-                } label: {
-                    HStack {
-                        Label("Link another provider", systemImage: "plus.circle")
-                        Spacer()
-                        if linkInFlight { ProgressView() }
-                    }
+                    .disabled(linkInFlight)
                 }
-                .disabled(linkInFlight)
+            } else {
+                Section {
+                    Text("To connect another account, sign in at interlinedlist.com. In-app linking will return once it's supported for app sign-ins.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle("Linked accounts")

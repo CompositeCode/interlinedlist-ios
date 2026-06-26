@@ -102,6 +102,7 @@ struct RegisterView: View {
 
     private var visibleProviders: [OAuthProvider] {
         OAuthProvider.allCases.filter {
+            guard $0.supportsNativeAuth else { return false }
             switch $0 {
             case .linkedin: return linkedinVisible
             case .twitter: return twitterVisible
