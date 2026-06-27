@@ -10,6 +10,8 @@ struct DocumentsView: View {
     @EnvironmentObject var store: AppDataStore
     @State private var showCreate = false
     @State private var showCreateFolder = false
+    @State private var folderToDelete: DocumentFolder?
+    @State private var showDeleteFolderConfirm = false
     @State private var searchText = ""
     @State private var searchResults: [Document] = []
     @State private var isSearching = false
@@ -120,6 +122,30 @@ struct DocumentsView: View {
                     store.insertDocumentFolder(newFolder)
                 }
             }
+            .confirmationDialog(
+                folderToDelete.map { "Delete “\($0.name)”?" } ?? "Delete folder?",
+                isPresented: $showDeleteFolderConfirm,
+                titleVisibility: .visible,
+                presenting: folderToDelete
+            ) { folder in
+                Button("Delete Folder & Contents", role: .destructive) {
+                    Task { await deleteFolder(folder) }
+                }
+            } message: { _ in
+                Text("This also deletes any documents and subfolders inside it.")
+            }
+        }
+    }
+
+    private func deleteFolder(_ folder: DocumentFolder) async {
+        do {
+            try await APIClient.shared.deleteDocumentFolder(id: folder.id)
+            store.removeDocumentFolder(id: folder.id)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            // Re-sync so a failed delete doesn't leave the folder missing from the UI.
+            await store.refreshDocuments()
         }
     }
 
@@ -222,6 +248,22 @@ struct DocumentsView: View {
                         NavigationLink(destination: DocumentFolderView(folder: folder)) {
                             Label(folder.name, systemImage: "folder")
                         }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                folderToDelete = folder
+                                showDeleteFolderConfirm = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                folderToDelete = folder
+                                showDeleteFolderConfirm = true
+                            } label: {
+                                Label("Delete Folder", systemImage: "trash")
+                            }
+                        }
                     }
                 }
             }
@@ -262,6 +304,8 @@ private struct DocumentFolderView: View {
     @State private var isLoading = false
     @State private var showCreate = false
     @State private var showCreateFolder = false
+    @State private var folderToDelete: DocumentFolder?
+    @State private var showDeleteFolderConfirm = false
 
     var body: some View {
         Group {
@@ -306,6 +350,18 @@ private struct DocumentFolderView: View {
                 subfolders.append(newFolder)
             }
         }
+        .confirmationDialog(
+            folderToDelete.map { "Delete “\($0.name)”?" } ?? "Delete folder?",
+            isPresented: $showDeleteFolderConfirm,
+            titleVisibility: .visible,
+            presenting: folderToDelete
+        ) { sub in
+            Button("Delete Folder & Contents", role: .destructive) {
+                Task { await deleteFolder(sub) }
+            }
+        } message: { _ in
+            Text("This also deletes any documents and subfolders inside it.")
+        }
     }
 
     private var folderList: some View {
@@ -315,6 +371,22 @@ private struct DocumentFolderView: View {
                     ForEach(subfolders) { sub in
                         NavigationLink(destination: DocumentFolderView(folder: sub)) {
                             Label(sub.name, systemImage: "folder")
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                folderToDelete = sub
+                                showDeleteFolderConfirm = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                folderToDelete = sub
+                                showDeleteFolderConfirm = true
+                            } label: {
+                                Label("Delete Folder", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -362,6 +434,18 @@ private struct DocumentFolderView: View {
         documents.remove(atOffsets: offsets)
         for doc in toDelete {
             try? await APIClient.shared.deleteDocument(id: doc.id)
+        }
+    }
+
+    private func deleteFolder(_ sub: DocumentFolder) async {
+        do {
+            try await APIClient.shared.deleteDocumentFolder(id: sub.id)
+            subfolders.removeAll { $0.id == sub.id }
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            // Re-sync this folder's contents so a failed delete is reflected accurately.
+            await load()
         }
     }
 }

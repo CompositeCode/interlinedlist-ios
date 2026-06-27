@@ -127,6 +127,7 @@ final class AppDataStore: ObservableObject {
     }
     func removeDocument(id: String) { documents.removeAll { $0.id == id }; saveToCache() }
     func insertDocumentFolder(_ folder: DocumentFolder) { documentFolders.append(folder); saveToCache() }
+    func removeDocumentFolder(id: String) { documentFolders.removeAll { $0.id == id }; saveToCache() }
 
     func reset() {
         feedMessages = []

@@ -69,7 +69,12 @@
       "Bash(plutil *)",
       "Bash(git stash *)",
       "Bash(curl -s \"https://interlinedlist.com/api/openapi.json\" -H \"Accept: application/json\" -o openapi.json)",
-      "Bash(echo \"HTTP fetch exit: $?  size: $\\(wc -c < openapi.json\\) bytes\")"
+      "Bash(echo \"HTTP fetch exit: $?  size: $\\(wc -c < openapi.json\\) bytes\")",
+      "Bash(git rev-list *)",
+      "Bash(gh auth *)",
+      "Bash(git ls-remote *)",
+      "Bash(gh pr *)",
+      "Bash(git push *)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

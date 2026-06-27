@@ -1,18 +1,21 @@
 # GAP-ENDPOINTS — API contracts that are under-documented
 
-This file no longer tracks *missing* endpoints — as of 2026-06-25 the iOS
-app consumes every endpoint family it needs, and the high/medium backend
-gaps (B0/B2/B3/B5) are resolved and shipped. What remains is a list of
-**contracts that are live but under-documented or ambiguous**, where the
-iOS client had to guess a shape, decode defensively, or work around an
-inconsistency.
+This file tracks two things: (1) **contracts that are live but
+under-documented or ambiguous**, where the iOS client had to guess a shape,
+decode defensively, or work around an inconsistency (most of the file); and
+(2) the handful of **genuinely missing / blocked** endpoints in §F.
+
+The high/medium backend gaps that once blocked shipped phases (B0/B2/B3/B5)
+are resolved. **One new high-priority gap was opened 2026-06-27:** §H —
+moderation/UGC-safety endpoints (report/block/mute) are unverified, and
+they gate **Phase 14**, an App Store ship-blocker. Resolve §H early.
 
 Each item says: what's unclear, what the iOS client currently assumes,
 and what documentation (or small contract change) would remove the guess.
 Sources cross-checked this pass: `/api/openapi.json` (route-generated) and
 the `/help/api/*` pages — which **disagree** in a few places noted below.
 
-Last updated: 2026-06-25.
+Last updated: 2026-06-27 (added §H — moderation endpoints, B10).
 
 ---
 
@@ -164,6 +167,42 @@ These remain real gaps blocking specific iOS features:
 | **B6** | No tag discovery: `GET /api/tags/trending` / `GET /api/tags/autocomplete` don't exist. `?tag=` filtering works but has no discovery path. | Tag explorer + `#` autocomplete (the second half of Phase 13). |
 | **B9** | `GET /api/follow/{userId}/status` for the caller's **own** id returns 200 but omits `following`/`followedBy`/`pendingRequest`. | Edge case only — iOS never queries self-status in production; flagged for contract correctness. |
 | **B8** | No realtime (WebSocket/SSE) for feed/notifications; everything is pull-only. | Long-term; APNs (Phase 9) covers the highest-value push. |
+| **B10** | **Moderation endpoints unverified** — it's unconfirmed whether report-content, report-user, block-user, blocked-list, and mute endpoints exist. See §H. | **Phase 14 (UGC safety) — a hard App Store ship-blocker.** |
+
+---
+
+## H. Moderation / UGC-safety endpoints — unverified (Phase 14, ship-blocker)
+
+Apple Guideline 1.2 requires a UGC app to let users **report content**,
+**block abusive users**, and accept a **community-guidelines EULA**. The
+iOS app has none of this yet, and it's **not confirmed** which (if any)
+backend endpoints back these flows. Phase 14 starts with a discovery pass;
+record the real contracts here as they're confirmed, or escalate the
+backend gap if they're missing.
+
+Candidate contracts the client will probe (names/shapes to confirm):
+
+| Need | Guessed endpoint | Must confirm |
+|---|---|---|
+| Report a message | `POST /api/messages/{id}/report` or `POST /api/report` | path, body (`reason`, free-text detail?), casing, response |
+| Report a user | `POST /api/users/{id}/report` | same |
+| Block a user | `POST /api/users/{id}/block` | path, whether it's idempotent, response shape |
+| Unblock a user | `DELETE /api/users/{id}/block` | symmetric path |
+| List blocked users | `GET /api/blocks` / `GET /api/user/blocks` | wrapping key, per-item fields |
+| Mute a user (optional) | `POST /api/users/{id}/mute` | whether mute exists server-side at all, or is local-only |
+| Server-side filtering | n/a | whether the backend already filters/queues reported content, or the client must hide it |
+
+**What would help:** publish whatever moderation surface exists (even if
+partial), and confirm whether blocking is enforced server-side (blocked
+users' content omitted from feed/replies/public responses) or whether the
+client must filter locally. The web app's own report/block UI is the
+reference — pointing to those routes would unblock this immediately.
+
+Also needed (not an endpoint, but a content dependency): a published
+**Community Guidelines / zero-tolerance EULA** page URL the iOS terms-gate
+can link to (Apple 1.2). Confirm whether `interlinedlist.com` already hosts
+one (e.g. `/terms`, `/guidelines`, `/community`) or whether the app should
+fall back to Apple's standard EULA.
 
 ---
 
