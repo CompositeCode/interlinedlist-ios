@@ -15,8 +15,16 @@ struct ListsView: View {
     @State private var searchResults: [UserList] = []
     @State private var isSearching = false
 
+    private var canCreateFolders: Bool {
+        authState.user?.isSubscriber == true
+    }
+
     private var treeNodes: [ListTreeNode] {
-        ListTreeNode.buildTree(folders: store.listFolders, lists: store.userLists)
+        // Folders are a subscriber-only feature. For free users we pass an empty
+        // folder array so any lists that were nested under folders (e.g. from when
+        // the user was a subscriber) surface at root via buildTree's orphan rule.
+        let visibleFolders = canCreateFolders ? store.listFolders : []
+        return ListTreeNode.buildTree(folders: visibleFolders, lists: store.userLists)
     }
 
     var body: some View {
@@ -81,10 +89,12 @@ struct ListsView: View {
                         } label: {
                             Label("New List", systemImage: "plus.rectangle")
                         }
-                        Button {
-                            showCreateFolder = true
-                        } label: {
-                            Label("New Folder", systemImage: "folder.badge.plus")
+                        if canCreateFolders {
+                            Button {
+                                showCreateFolder = true
+                            } label: {
+                                Label("New Folder", systemImage: "folder.badge.plus")
+                            }
                         }
                     } label: {
                         Image(systemName: "plus")
@@ -211,17 +221,16 @@ private struct CreateListFolderView: View {
             )
             onSave()
             dismiss()
-        } catch APIError.status(403) {
-            errorMessage = Self.paywallMessage
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {
+            // 403 falls through here — the New Folder button is hidden for
+            // non-subscribers, so this catch should only trigger on transient
+            // errors. Per the iOS-free-app direction, no subscription copy is
+            // ever surfaced.
             errorMessage = "Failed to create folder."
         }
     }
-
-    private static let paywallMessage =
-        "Creating folders requires a subscription. You can subscribe at interlinedlist.com."
 }
 
 // MARK: - Rename list sheet
@@ -439,6 +448,7 @@ struct ListDetailView: View {
     @State private var editingItem: ListItem? = nil
     @State private var deletingItem: ListItem? = nil
     @State private var showDeleteConfirm = false
+    @State private var showWatchers = false
 
     var body: some View {
         Group {
@@ -535,11 +545,25 @@ struct ListDetailView: View {
         }
         .navigationTitle(list.name)
         .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showWatchers = true
+                } label: {
+                    Image(systemName: "person.2")
+                }
+                .accessibilityLabel("Manage watchers")
+            }
+        }
         .task {
             await loadData()
         }
         .refreshable {
             await loadData()
+        }
+        .sheet(isPresented: $showWatchers) {
+            WatchersListView(listId: list.id)
+                .environmentObject(authState)
         }
         .sheet(isPresented: $showAddConnection) {
             NavigationStack {

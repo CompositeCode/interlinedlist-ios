@@ -32,6 +32,16 @@ struct LinkMetadata: Codable {
     let links: [LinkMetadataItem]
 }
 
+/// A single resolved link preview from POST /api/messages/:id/metadata.
+struct MessageLinkPreview: Codable, Identifiable {
+    let url: String
+    let title: String?
+    let description: String?
+    let image: String?
+
+    var id: String { url }
+}
+
 struct Message: Codable, Identifiable {
     let id: String
     let content: String
@@ -75,6 +85,34 @@ struct Pagination: Codable {
     let hasMore: Bool
 }
 
+/// A single cross-post target on LinkedIn (personal profile or an organization page).
+struct LinkedInTarget: Codable, Equatable {
+    let kind: String          // "personal" | "organization"
+    let organizationId: String?
+
+    init(kind: String, organizationId: String? = nil) {
+        self.kind = kind
+        self.organizationId = organizationId
+    }
+}
+
+/// Cross-post configuration carried on a scheduled message (PATCH /api/messages/:id).
+struct ScheduledCrossPostConfig: Codable, Equatable {
+    var mastodonProviderIds: [String]?
+    var crossPostToBluesky: Bool?
+    var crossPostToLinkedIn: Bool?
+    var linkedInLinkAsFirstComment: Bool?
+    var linkedInTargets: [LinkedInTarget]?
+    var crossPostToTwitter: Bool?
+
+    var isEmpty: Bool {
+        (mastodonProviderIds?.isEmpty ?? true)
+            && crossPostToBluesky != true
+            && crossPostToLinkedIn != true
+            && crossPostToTwitter != true
+    }
+}
+
 struct CreateMessageBody: Encodable {
     let content: String
     let publiclyVisible: Bool?
@@ -83,9 +121,30 @@ struct CreateMessageBody: Encodable {
     let scheduledAt: String?
     let imageUrls: [String]?
     let videoUrls: [String]?
+    // Repost / push
+    var pushedMessageId: String?
+    // Cross-posting (subscriber-only; omitted entirely for free users)
+    var mastodonProviderIds: [String]?
+    var crossPostToBluesky: Bool?
+    var crossPostToLinkedIn: Bool?
+    var linkedInTargets: [LinkedInTarget]?
+    var linkedInLinkAsFirstComment: Bool?
+    var crossPostToTwitter: Bool?
+    var scheduledCrossPostConfig: ScheduledCrossPostConfig?
+}
+
+/// One platform's result after a cross-post attempt. Surfaced in a post-publish toast.
+/// Best-effort: the create response may or may not include this depending on deployment.
+struct CrossPostResult: Codable, Identifiable {
+    let platform: String
+    let success: Bool
+    let error: String?
+
+    var id: String { platform }
 }
 
 struct CreateMessageResponse: Codable {
     let message: String?
     let data: Message?
+    let crossPostResults: [CrossPostResult]?
 }

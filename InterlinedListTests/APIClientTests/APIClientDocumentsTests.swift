@@ -15,6 +15,11 @@ final class APIClientDocumentsTests: XCTestCase {
         sut.setBearerToken("tok")
     }
 
+    private func bodyString() -> String {
+        guard let data = session.lastRequest?.httpBody else { return "" }
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
     // MARK: documents()
 
     func test_documents_sendsGetToCorrectPath() async throws {
@@ -24,18 +29,20 @@ final class APIClientDocumentsTests: XCTestCase {
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents")
     }
 
-    func test_documents_withFolderId_appendsQuery() async throws {
+    func test_documents_withFolderId_usesFolderScopedPath() async throws {
+        // `GET /api/documents` ignores a folderId query and returns root docs, so a folder's
+        // contents must come from the folder-scoped endpoint.
         session.stub(json: #"{"documents":[]}"#)
         _ = try await sut.documents(folderId: "f1")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents/folders/f1/documents")
         let url = session.lastRequest?.url?.absoluteString ?? ""
-        XCTAssertTrue(url.contains("folderId=f1"))
+        XCTAssertFalse(url.contains("folderId="))
     }
 
-    func test_documents_emptyFolderId_noQuery() async throws {
+    func test_documents_emptyFolderId_usesRootPath() async throws {
         session.stub(json: #"{"documents":[]}"#)
         _ = try await sut.documents(folderId: "")
-        let url = session.lastRequest?.url?.absoluteString ?? ""
-        XCTAssertFalse(url.contains("folderId"))
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents")
     }
 
     func test_documents_decodesResult() async throws {
@@ -57,11 +64,29 @@ final class APIClientDocumentsTests: XCTestCase {
 
     // MARK: createDocument()
 
-    func test_createDocument_sendsPostToCorrectPath() async throws {
+    func test_createDocument_root_sendsPostToDocumentsPath() async throws {
         session.stub(json: #"{"document":\#(docJSON)}"#)
         _ = try await sut.createDocument(title: "Doc", content: nil, isPublic: false, folderId: nil)
         XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents")
+    }
+
+    func test_createDocument_withFolderId_postsToFolderScopedPath() async throws {
+        session.stub(json: #"{"document":\#(docJSON)}"#)
+        _ = try await sut.createDocument(title: "Doc", content: nil, isPublic: true, folderId: "f1")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents/folders/f1/documents")
+    }
+
+    func test_createDocument_bodyUsesCamelCaseAndNoFolderField() async throws {
+        session.stub(json: #"{"document":\#(docJSON)}"#)
+        _ = try await sut.createDocument(title: "Doc", content: "x", isPublic: true, folderId: "f1")
+        let body = bodyString()
+        XCTAssertTrue(body.contains("\"isPublic\""), "expected camelCase isPublic, got: \(body)")
+        XCTAssertFalse(body.contains("is_public"), "snake_case isPublic is dropped server-side")
+        // Folder is conveyed by the path; the body must not carry a folder field.
+        XCTAssertFalse(body.contains("folderId"))
+        XCTAssertFalse(body.contains("folder_id"))
     }
 
     // MARK: updateDocument()
@@ -71,6 +96,16 @@ final class APIClientDocumentsTests: XCTestCase {
         _ = try await sut.updateDocument(id: "d1", title: "New", content: nil, isPublic: true)
         XCTAssertEqual(session.lastRequest?.httpMethod, "PATCH")
         XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/documents/d1") == true)
+    }
+
+    func test_updateDocument_bodyUsesCamelCase() async throws {
+        session.stub(json: #"{"document":\#(docJSON)}"#)
+        _ = try await sut.updateDocument(id: "d1", title: "New", content: nil, isPublic: true, folderId: "f1")
+        let body = bodyString()
+        XCTAssertTrue(body.contains("\"folderId\""), "expected camelCase folderId, got: \(body)")
+        XCTAssertTrue(body.contains("\"isPublic\""))
+        XCTAssertFalse(body.contains("folder_id"))
+        XCTAssertFalse(body.contains("is_public"))
     }
 
     // MARK: deleteDocument()
@@ -98,5 +133,13 @@ final class APIClientDocumentsTests: XCTestCase {
         let folder = try await sut.createDocumentFolder(name: "Folder", parentId: nil)
         XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
         XCTAssertEqual(folder.name, "Folder")
+    }
+
+    func test_createDocumentFolder_nested_bodyUsesCamelCaseParentId() async throws {
+        session.stub(json: #"{"folder":\#(folderJSON)}"#)
+        _ = try await sut.createDocumentFolder(name: "Sub", parentId: "f1")
+        let body = bodyString()
+        XCTAssertTrue(body.contains("\"parentId\""), "expected camelCase parentId, got: \(body)")
+        XCTAssertFalse(body.contains("parent_id"))
     }
 }

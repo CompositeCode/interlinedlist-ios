@@ -92,9 +92,10 @@ final class AppDataStore: ObservableObject {
             documents = d
             saveToCache()
         } catch APIError.status(401) {
-        } catch APIError.status(403) {
-            documentsError = "Requires active subscription."
         } catch {
+            // GET /api/documents is not documented as subscriber-only, so a
+            // 403 here would be an unexpected case. Surface it as a generic
+            // load failure rather than subscription copy.
             if documents.isEmpty { documentsError = "Failed to load documents." }
         }
     }

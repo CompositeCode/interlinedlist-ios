@@ -71,7 +71,10 @@ final class APIClientPeopleTests: XCTestCase {
     func test_publicLists_encodesSpecialCharacters() async throws {
         session.stub(json: #"{"lists":[]}"#)
         _ = try await sut.publicLists(username: "user name")
-        let path = session.lastRequest?.url?.path ?? ""
-        XCTAssertFalse(path.contains(" "), "Username with spaces must be percent-encoded")
+        // URL.path returns the percent-DECODED path, so inspect absoluteString to confirm
+        // the space was actually encoded on the wire.
+        let urlString = session.lastRequest?.url?.absoluteString ?? ""
+        XCTAssertFalse(urlString.contains(" "), "Username with spaces must be percent-encoded")
+        XCTAssertTrue(urlString.contains("user%20name"))
     }
 }

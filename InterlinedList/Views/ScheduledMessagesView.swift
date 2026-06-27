@@ -11,6 +11,7 @@ struct ScheduledMessagesView: View {
     @State private var messages: [Message] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var messageToEdit: Message?
 
     private let ranges = [
         ("today", "Today"),
@@ -42,7 +43,12 @@ struct ScheduledMessagesView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(messages) { message in
-                        ScheduledMessageRow(message: message)
+                        Button {
+                            messageToEdit = message
+                        } label: {
+                            ScheduledMessageRow(message: message)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .refreshable { await load() }
                 }
@@ -65,6 +71,9 @@ struct ScheduledMessagesView: View {
             }
             .task { await load() }
             .onChange(of: range) { _, _ in Task { await load() } }
+            .sheet(item: $messageToEdit, onDismiss: { Task { await load() } }) { message in
+                EditMessageView(message: message) { _ in }
+            }
         }
     }
 
@@ -74,11 +83,13 @@ struct ScheduledMessagesView: View {
         defer { isLoading = false }
         do {
             messages = try await APIClient.shared.scheduledMessages(range: range)
-        } catch APIError.status(403) {
-            errorMessage = "Scheduled posts require an active subscription."
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {
+            // The calendar entry point in FeedView is hidden for free users,
+            // so 403 from this subscriber-only endpoint shouldn't normally
+            // reach the UI. Generic message preserves strict-silence on
+            // subscription state.
             errorMessage = "Could not load scheduled posts."
         }
     }

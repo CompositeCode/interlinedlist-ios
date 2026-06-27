@@ -22,6 +22,8 @@ struct MainTabView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
+            EmailVerificationBanner()
+                .environmentObject(authState)
             sectionContent
         }
         .background(Color(.systemGroupedBackground))
@@ -153,6 +155,7 @@ struct MainTabView: View {
 private struct ProfileView: View {
     @EnvironmentObject var authState: AuthState
     @State private var showEditProfile = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -163,8 +166,24 @@ private struct ProfileView: View {
                     preferencesSection(user: user)
                 }
                 Section("Social") {
+                    if let userId = authState.user?.id {
+                        NavigationLink(destination: FollowListView(userId: userId, mode: .followers, isOwnProfile: true).environmentObject(authState)) {
+                            Label("Followers", systemImage: "person.2")
+                        }
+                        NavigationLink(destination: FollowListView(userId: userId, mode: .following, isOwnProfile: true).environmentObject(authState)) {
+                            Label("Following", systemImage: "person.2.fill")
+                        }
+                    }
                     NavigationLink(destination: FollowRequestsView().environmentObject(authState)) {
                         Label("Follow Requests", systemImage: "person.crop.circle.badge.plus")
+                    }
+                    NavigationLink(destination: OrganizationsListView().environmentObject(authState)) {
+                        Label("Organizations", systemImage: "building.2")
+                    }
+                    if authState.user?.isSubscriber == true {
+                        NavigationLink(destination: LinkedIdentitiesView().environmentObject(authState)) {
+                            Label("Linked accounts", systemImage: "link")
+                        }
                     }
                 }
                 Section {
@@ -177,6 +196,14 @@ private struct ProfileView: View {
             }
             .navigationTitle("Profile")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Settings")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Edit") {
                         showEditProfile = true
@@ -188,6 +215,10 @@ private struct ProfileView: View {
                     EditProfileView(user: user)
                         .environmentObject(authState)
                 }
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+                    .environmentObject(authState)
             }
         }
     }

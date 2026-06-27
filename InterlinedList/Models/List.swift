@@ -72,6 +72,31 @@ struct ListDetailResponse: Decodable {
     let data: ListDetailData
 }
 
+/// One property in the structured PUT /api/lists/[id]/schema body.
+/// `id` present → update in place (preserve row data); `id` nil → create new.
+/// Properties omitted from the array are soft-deleted (use `?force=true` to drop
+/// columns that still contain data). Array order is authoritative for displayOrder.
+struct SchemaPropertyInput: Encodable {
+    let id: String?
+    let propertyKey: String
+    let propertyName: String
+    let propertyType: String
+    let displayOrder: Int
+    let isVisible: Bool
+    let isRequired: Bool
+    let defaultValue: String?
+    let helpText: String?
+    let placeholder: String?
+}
+
+struct StructuredSchemaBody: Encodable {
+    let properties: [SchemaPropertyInput]
+}
+
+struct SchemaUpdateResponse: Decodable {
+    let properties: [ListPropertyDef]?
+}
+
 // MARK: - Core list models
 
 struct UserList: Identifiable, Codable, Hashable {

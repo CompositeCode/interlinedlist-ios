@@ -70,8 +70,28 @@ final class AuthState: ObservableObject {
         try await login(email: email, password: password)
     }
 
+    func completeOAuthLogin(token: String) async throws {
+        guard KeychainService.saveToken(token) else {
+            throw APIError.server("Failed to save session")
+        }
+        api.setBearerToken(token)
+        hasToken = true
+        let currentUser = try await api.currentUser()
+        user = currentUser
+    }
+
+    func refreshUser() async {
+        do {
+            user = try await api.currentUser()
+        } catch APIError.status(401) {
+            logout()
+        } catch {
+            // Keep current user state; transient failure.
+        }
+    }
+
     func logout() {
-        KeychainService.deleteToken()
+        _ = KeychainService.deleteToken()
         api.setBearerToken(nil)
         user = nil
         hasToken = false

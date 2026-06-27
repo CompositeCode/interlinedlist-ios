@@ -15,6 +15,9 @@ enum APIError: Error {
     case server(String)
     case status(Int)
     case network(Error)
+    /// 409 — the request conflicts with existing data (e.g. deleting a list
+    /// property that still has row values without `?force=true`).
+    case conflict(String)
 }
 
 enum ExportType: String, CaseIterable {
@@ -93,6 +96,143 @@ final class APIClient {
         let _: Response = try await post("/api/auth/register", body: Body(email: email, username: username, password: password, displayName: displayName), authenticated: false)
     }
 
+    // MARK: - Password reset
+
+    func forgotPassword(email: String) async throws {
+        struct Body: Encodable { let email: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/forgot-password", body: Body(email: email), authenticated: false)
+    }
+
+    func resetPassword(token: String, password: String) async throws {
+        struct Body: Encodable { let token: String; let password: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/reset-password", body: Body(token: token, password: password), authenticated: false)
+    }
+
+    // MARK: - Email verification
+
+    func sendVerificationEmail() async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/send-verification-email", body: Empty())
+    }
+
+    func verifyEmail(token: String) async throws {
+        struct Body: Encodable { let token: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/verify-email", body: Body(token: token), authenticated: false)
+    }
+
+    func verifyEmailChange(token: String) async throws {
+        struct Body: Encodable { let token: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/auth/verify-email-change", body: Body(token: token), authenticated: false)
+    }
+
+    // MARK: - Email change
+
+    func requestEmailChange(newEmail: String, password: String) async throws {
+        struct Body: Encodable { let newEmail: String; let password: String }
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await postCamel("/api/user/change-email/request", body: Body(newEmail: newEmail, password: password))
+    }
+
+    // MARK: - Linked identities
+
+    struct LinkedIdentity: Identifiable, Codable {
+        let id: String
+        let provider: String
+        let providerUsername: String?
+        let createdAt: String?
+    }
+
+    func linkedIdentities() async throws -> [LinkedIdentity] {
+        struct Response: Decodable { let identities: [LinkedIdentity]? }
+        let response: Response = try await get("/api/user/identities")
+        return response.identities ?? []
+    }
+
+    func unlinkIdentity(provider: String, providerId: String) async throws {
+        struct Body: Encodable { let provider: String; let providerId: String }
+        guard let url = URL(string: baseURL + "/api/user/identities") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(Body(provider: provider, providerId: providerId))
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func verifyIdentity(provider: String, providerId: String) async throws {
+        struct Body: Encodable { let provider: String; let providerId: String }
+        struct Response: Decodable { let ok: Bool? }
+        let _: Response = try await postCamel("/api/user/identities/verify", body: Body(provider: provider, providerId: providerId))
+    }
+
+    // MARK: - OAuth configuration status
+
+    struct OAuthConfigStatus: Decodable {
+        let configured: Bool
+        let redirectUri: String?
+    }
+
+    func linkedinStatus() async throws -> OAuthConfigStatus {
+        return try await get("/api/auth/linkedin/status")
+    }
+
+    func twitterStatus() async throws -> OAuthConfigStatus {
+        return try await get("/api/auth/twitter/status")
+    }
+
+    // MARK: - Avatar upload (Phase 3 — sister agent dependency)
+
+    func uploadAvatar(data: Data, mimeType: String) async throws -> User {
+        guard let url = URL(string: baseURL + "/api/user/avatar/upload") else { throw APIError.invalidURL }
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let ext = mimeType == "image/png" ? "png" : "jpg"
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"avatar.\(ext)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+        let (responseData, response) = try await session.data(for: request)
+        try checkResponse(data: responseData, response: response)
+        // Endpoint returns { url } only; refresh the user object to satisfy the signature.
+        return try await currentUser()
+    }
+
+    func setAvatarFromURL(_ url: String) async throws -> User {
+        struct Body: Encodable { let url: String }
+        struct Response: Decodable { let url: String? }
+        let _: Response = try await post("/api/user/avatar/from-url", body: Body(url: url))
+        return try await currentUser()
+    }
+
+    // MARK: - Organizations (Phase 3 — sister agent dependency)
+
+    func userOrganizations() async throws -> [Organization] {
+        struct Response: Decodable { let organizations: [Organization]? }
+        let response: Response = try await get("/api/user/organizations")
+        return response.organizations ?? []
+    }
+
+    // MARK: - Delete account (Phase 3 — sister agent dependency)
+
+    func deleteAccount() async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let message: String? }
+        let _: Response = try await post("/api/user/delete", body: Empty())
+    }
+
     // MARK: - Messages
 
     func messages(limit: Int = 50, offset: Int = 0, onlyMine: Bool = false, tag: String? = nil) async throws -> (messages: [Message], pagination: Pagination?) {
@@ -112,11 +252,38 @@ final class APIClient {
         return (response.messages, response.pagination)
     }
 
-    func postMessage(content: String, publiclyVisible: Bool? = nil, parentId: String? = nil, tags: [String]? = nil, scheduledAt: String? = nil, imageUrls: [String]? = nil, videoUrls: [String]? = nil) async throws -> Message {
-        struct Response: Decodable {
-            let data: Message?
-        }
-        let body = CreateMessageBody(content: content, publiclyVisible: publiclyVisible, parentId: parentId, tags: tags, scheduledAt: scheduledAt, imageUrls: imageUrls, videoUrls: videoUrls)
+    /// Result of creating a message — the created message plus any cross-post
+    /// outcomes the server reported (empty when cross-posting wasn't requested or
+    /// the deployment doesn't echo results).
+    struct PostMessageResult {
+        let message: Message
+        let crossPostResults: [CrossPostResult]
+    }
+
+    @discardableResult
+    func postMessage(
+        content: String,
+        publiclyVisible: Bool? = nil,
+        parentId: String? = nil,
+        tags: [String]? = nil,
+        scheduledAt: String? = nil,
+        imageUrls: [String]? = nil,
+        videoUrls: [String]? = nil,
+        pushedMessageId: String? = nil,
+        mastodonProviderIds: [String]? = nil,
+        crossPostToBluesky: Bool? = nil,
+        crossPostToLinkedIn: Bool? = nil,
+        linkedInTargets: [LinkedInTarget]? = nil,
+        linkedInLinkAsFirstComment: Bool? = nil,
+        crossPostToTwitter: Bool? = nil
+    ) async throws -> PostMessageResult {
+        let body = CreateMessageBody(
+            content: content, publiclyVisible: publiclyVisible, parentId: parentId,
+            tags: tags, scheduledAt: scheduledAt, imageUrls: imageUrls, videoUrls: videoUrls,
+            pushedMessageId: pushedMessageId, mastodonProviderIds: mastodonProviderIds,
+            crossPostToBluesky: crossPostToBluesky, crossPostToLinkedIn: crossPostToLinkedIn,
+            linkedInTargets: linkedInTargets, linkedInLinkAsFirstComment: linkedInLinkAsFirstComment,
+            crossPostToTwitter: crossPostToTwitter, scheduledCrossPostConfig: nil)
         // Backend expects camelCase (publiclyVisible, parentId); snake_case would send publicly_visible and be ignored.
         guard let url = URL(string: baseURL + "/api/messages") else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
@@ -129,9 +296,43 @@ final class APIClient {
         request.httpBody = try camelCaseEncoder.encode(body)
         let (data, response) = try await session.data(for: request)
         try checkResponse(data: data, response: response)
-        let decoded: Response = try decoder.decode(Response.self, from: data)
+        let decoded: CreateMessageResponse = try decoder.decode(CreateMessageResponse.self, from: data)
         guard let message = decoded.data else { throw APIError.noData }
-        return message
+        return PostMessageResult(message: message, crossPostResults: decoded.crossPostResults ?? [])
+    }
+
+    /// Edit a scheduled (not-yet-published) message's send time and cross-post config.
+    @discardableResult
+    func patchScheduledMessage(id: String, scheduledAt: String, config: ScheduledCrossPostConfig?) async throws -> Message? {
+        struct Body: Encodable {
+            let scheduledAt: String
+            let scheduledCrossPostConfig: ScheduledCrossPostConfig?
+        }
+        struct Response: Decodable { let data: Message? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/messages/\(encoded)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(Body(scheduledAt: scheduledAt, scheduledCrossPostConfig: config))
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+        return (try? decoder.decode(Response.self, from: data))?.data
+    }
+
+    /// Fetch/refresh OpenGraph link-preview metadata for a message's links.
+    @discardableResult
+    func refreshMessageMetadata(messageId: String) async throws -> [MessageLinkPreview] {
+        struct Response: Decodable {
+            struct Meta: Decodable { let links: [MessageLinkPreview]? }
+            let metadata: Meta?
+        }
+        let encoded = messageId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? messageId
+        struct Empty: Encodable {}
+        let response: Response = try await postCamel("/api/messages/\(encoded)/metadata", body: Empty())
+        return response.metadata?.links ?? []
     }
 
     func editMessage(id: String, content: String, publiclyVisible: Bool?) async throws -> Message {
@@ -261,28 +462,49 @@ final class APIClient {
     // MARK: - Documents
 
     func documents(folderId: String? = nil) async throws -> [Document] {
-        var path = "/api/documents"
+        // `GET /api/documents` returns ONLY root-level documents (folderId is null) and
+        // ignores any query string — passing `?folderId=` made every folder show the root
+        // documents. Documents inside a folder must come from the folder-scoped endpoint.
+        let path: String
         if let folderId, !folderId.isEmpty,
-           let encoded = folderId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-            path += "?folderId=\(encoded)"
+           let encoded = folderId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            path = "/api/documents/folders/\(encoded)/documents"
+        } else {
+            path = "/api/documents"
         }
         let response: DocumentsResponse = try await get(path)
         return response.documents
     }
 
     func createDocument(title: String, content: String?, isPublic: Bool, folderId: String?) async throws -> Document {
-        struct Body: Encodable { let title: String; let content: String?; let isPublic: Bool; let folderId: String? }
+        // The folder is chosen by the *path*, not a body field: `POST /api/documents` always
+        // creates at root (it has no folderId field), so a document "created in a folder" via
+        // that route silently lands at root. Post to the folder-scoped endpoint instead.
+        // Bodies are camelCase (`isPublic`) — use postCamel or the flag is dropped server-side.
+        struct Body: Encodable { let title: String; let content: String?; let isPublic: Bool }
         struct Response: Decodable { let document: Document? }
-        let response: Response = try await post("/api/documents", body: Body(title: title, content: content, isPublic: isPublic, folderId: folderId))
+        let body = Body(title: title, content: content, isPublic: isPublic)
+        let path: String
+        if let folderId, !folderId.isEmpty,
+           let encoded = folderId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            path = "/api/documents/folders/\(encoded)/documents"
+        } else {
+            path = "/api/documents"
+        }
+        let response: Response = try await postCamel(path, body: body)
         guard let doc = response.document else { throw APIError.noData }
         return doc
     }
 
     func updateDocument(id: String, title: String, content: String?, isPublic: Bool, folderId: String? = nil) async throws -> Document {
+        // PATCH is the only documents write that accepts `folderId` (to move between folders).
+        // The body is camelCase (`folderId`, `isPublic`); patchCamel keeps it that way so the
+        // server actually applies the move and visibility change. (Sending `folderId: nil`
+        // omits the key, so this can move a doc *into* a folder but not back out to root.)
         struct Body: Encodable { let title: String; let content: String?; let isPublic: Bool; let folderId: String? }
         struct Response: Decodable { let document: Document? }
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: Response = try await patch("/api/documents/\(encoded)", body: Body(title: title, content: content, isPublic: isPublic, folderId: folderId))
+        let response: Response = try await patchCamel("/api/documents/\(encoded)", body: Body(title: title, content: content, isPublic: isPublic, folderId: folderId))
         guard let doc = response.document else { throw APIError.noData }
         return doc
     }
@@ -304,9 +526,11 @@ final class APIClient {
     }
 
     func createDocumentFolder(name: String, parentId: String?) async throws -> DocumentFolder {
+        // Body is camelCase (`parentId`); postCamel keeps a nested folder under its parent
+        // instead of dropping `parent_id` and creating it at root.
         struct Body: Encodable { let name: String; let parentId: String? }
         struct Response: Decodable { let folder: DocumentFolder? }
-        let response: Response = try await post("/api/documents/folders", body: Body(name: name, parentId: parentId))
+        let response: Response = try await postCamel("/api/documents/folders", body: Body(name: name, parentId: parentId))
         guard let folder = response.folder else { throw APIError.noData }
         return folder
     }
@@ -510,6 +734,21 @@ final class APIClient {
         return try await currentUser()
     }
 
+    /// Update user preferences (theme, default visibility, advanced-post toggle).
+    /// Returns the refreshed user.
+    func updateUserSettings(theme: String? = nil, defaultVisibility: Bool? = nil, showAdvancedPostSettings: Bool? = nil) async throws -> User {
+        struct Body: Encodable {
+            let theme: String?
+            let defaultVisibility: Bool?
+            let showAdvancedPostSettings: Bool?
+        }
+        struct WrappedResponse: Decodable { let user: User? }
+        let body = Body(theme: theme, defaultVisibility: defaultVisibility, showAdvancedPostSettings: showAdvancedPostSettings)
+        let wrapped: WrappedResponse = try await post("/api/user/update", body: body)
+        if let user = wrapped.user { return user }
+        return try await currentUser()
+    }
+
     func deleteMessage(id: String) async throws {
         var request = URLRequest(url: URL(string: baseURL + "/api/messages/" + id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)!)
         request.httpMethod = "DELETE"
@@ -561,6 +800,243 @@ final class APIClient {
         if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let (data, response) = try await session.data(for: request)
         try checkResponse(data: data, response: response)
+    }
+
+    // MARK: - List schema (structured)
+
+    /// Persist a structured schema update. Properties with an `id` are updated in
+    /// place (row data preserved); those without are created; any existing property
+    /// omitted from `properties` is soft-deleted. `force` allows dropping a column
+    /// that still has row data (otherwise the server returns 409).
+    @discardableResult
+    func updateListSchemaStructured(listId: String, properties: [SchemaPropertyInput], force: Bool = false) async throws -> [ListPropertyDef] {
+        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        var path = "/api/lists/\(encoded)/schema"
+        if force { path += "?force=true" }
+        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(StructuredSchemaBody(properties: properties))
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode == 409 {
+            let msg = (try? decoder.decode(ErrorResponse.self, from: data))?.error
+                ?? "This property still contains data."
+            throw APIError.conflict(msg)
+        }
+        try checkResponse(data: data, response: response)
+        return (try? decoder.decode(SchemaUpdateResponse.self, from: data))?.properties ?? []
+    }
+
+    // MARK: - Follow surface (Phase 5)
+
+    func followers(userId: String, limit: Int = 30, offset: Int = 0) async throws -> (users: [FollowUser], pagination: Pagination?) {
+        let encoded = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        let response: FollowersResponse = try await get("/api/follow/\(encoded)/followers?limit=\(limit)&offset=\(offset)")
+        return (response.followers, response.pagination)
+    }
+
+    func following(userId: String, limit: Int = 30, offset: Int = 0) async throws -> (users: [FollowUser], pagination: Pagination?) {
+        let encoded = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        let response: FollowingResponse = try await get("/api/follow/\(encoded)/following?limit=\(limit)&offset=\(offset)")
+        return (response.following, response.pagination)
+    }
+
+    func mutualCounts(userId: String) async throws -> MutualCounts {
+        let encoded = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        return try await get("/api/follow/\(encoded)/mutual")
+    }
+
+    func removeFollower(userId: String) async throws {
+        let encoded = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        guard let url = URL(string: baseURL + "/api/follow/\(encoded)/remove") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    // MARK: - List watchers (Phase 6)
+
+    func listWatchers(listId: String) async throws -> [ListWatcher] {
+        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let response: WatchersResponse = try await get("/api/lists/\(encoded)/watchers")
+        return response.watchers
+    }
+
+    func isWatchingList(listId: String) async throws -> Bool {
+        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let response: WatchingResponse = try await get("/api/lists/\(encoded)/watchers/me")
+        return response.watching
+    }
+
+    func searchWatcherCandidates(listId: String, limit: Int = 20, offset: Int = 0) async throws -> [WatcherCandidate] {
+        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let response: WatcherCandidatesResponse = try await get("/api/lists/\(encoded)/watchers/users?limit=\(limit)&offset=\(offset)")
+        return response.users
+    }
+
+    @discardableResult
+    func addWatcher(listId: String, userId: String, role: WatcherRole) async throws -> Bool {
+        struct Body: Encodable { let userId: String; let role: String }
+        struct Response: Decodable { let watching: Bool? }
+        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let response: Response = try await postCamel("/api/lists/\(encoded)/watchers", body: Body(userId: userId, role: role.rawValue))
+        return response.watching ?? true
+    }
+
+    @discardableResult
+    func setWatcherRole(listId: String, userId: String, role: WatcherRole) async throws -> String {
+        struct Body: Encodable { let role: String }
+        struct Response: Decodable { let role: String? }
+        let encodedList = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        let response: Response = try await putCamel("/api/lists/\(encodedList)/watchers/\(encodedUser)", body: Body(role: role.rawValue))
+        return response.role ?? role.rawValue
+    }
+
+    func removeWatcher(listId: String, userId: String) async throws {
+        let encodedList = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        guard let url = URL(string: baseURL + "/api/lists/\(encodedList)/watchers/\(encodedUser)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    // MARK: - Public browse (Phase 7)
+
+    func publicListDetail(username: String, listId: String) async throws -> PublicListDetail {
+        let u = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        let l = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        return try await get("/api/users/\(u)/lists/\(l)")
+    }
+
+    func publicListData(username: String, listId: String, limit: Int = 50, offset: Int = 0) async throws -> PublicListData {
+        let u = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        let l = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        return try await get("/api/users/\(u)/lists/\(l)/data?limit=\(limit)&offset=\(offset)")
+    }
+
+    func publicDocuments(username: String) async throws -> PublicDocumentsResponse {
+        let u = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        return try await get("/api/users/\(u)/documents")
+    }
+
+    func publicDocument(id: String) async throws -> Document {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        struct Response: Decodable { let document: Document? }
+        // The endpoint may wrap the document or return it bare; tolerate both.
+        let data = try await getRawData("/api/documents/\(encoded)")
+        if let wrapped = try? decoder.decode(Response.self, from: data), let doc = wrapped.document {
+            return doc
+        }
+        return try decoder.decode(Document.self, from: data)
+    }
+
+    // MARK: - Organizations (Phase 8)
+
+    func organizations(limit: Int = 30, offset: Int = 0) async throws -> (orgs: [Organization], pagination: Pagination?) {
+        let response: OrganizationsResponse = try await get("/api/organizations?limit=\(limit)&offset=\(offset)")
+        return (response.organizations, response.pagination)
+    }
+
+    func organization(id: String) async throws -> Organization {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: OrganizationResponse = try await get("/api/organizations/\(encoded)")
+        return response.organization
+    }
+
+    @discardableResult
+    func createOrganization(name: String, description: String?, isPublic: Bool) async throws -> Organization? {
+        struct Body: Encodable { let name: String; let description: String?; let isPublic: Bool }
+        struct Response: Decodable { let organization: Organization? }
+        let response: Response = try await postCamel("/api/organizations", body: Body(name: name, description: description, isPublic: isPublic))
+        return response.organization
+    }
+
+    func updateOrganization(id: String, name: String?, description: String?, isPublic: Bool?) async throws {
+        struct Body: Encodable { let name: String?; let description: String?; let isPublic: Bool? }
+        struct Response: Decodable { let ok: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await putCamel("/api/organizations/\(encoded)", body: Body(name: name, description: description, isPublic: isPublic))
+    }
+
+    func deleteOrganization(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/organizations/\(encoded)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func organizationMembers(id: String, limit: Int = 50, offset: Int = 0) async throws -> (members: [OrganizationMember], pagination: Pagination?) {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: OrganizationMembersResponse = try await get("/api/organizations/\(encoded)/members?limit=\(limit)&offset=\(offset)")
+        return (response.members, response.pagination)
+    }
+
+    func addOrganizationMember(id: String, userId: String, role: OrgRole) async throws {
+        struct Body: Encodable { let userId: String; let role: String }
+        struct Response: Decodable { let ok: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/organizations/\(encoded)/members", body: Body(userId: userId, role: role.rawValue))
+    }
+
+    func setOrganizationMemberRole(id: String, userId: String, role: OrgRole, active: Bool? = nil) async throws {
+        struct Body: Encodable { let role: String; let active: Bool? }
+        struct Response: Decodable { let ok: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        let _: Response = try await putCamel("/api/organizations/\(encoded)/members/\(encodedUser)", body: Body(role: role.rawValue, active: active))
+    }
+
+    func removeOrganizationMember(id: String, userId: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        guard let url = URL(string: baseURL + "/api/organizations/\(encoded)/members/\(encodedUser)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func joinOrganization(organizationId: String) async throws {
+        struct Body: Encodable { let organizationId: String }
+        struct Response: Decodable { let ok: Bool? }
+        let _: Response = try await postCamel("/api/user/organizations", body: Body(organizationId: organizationId))
+    }
+
+    // MARK: - Notification preferences (Phase 12 / B3)
+
+    func notificationPreferences() async throws -> [NotificationPreference] {
+        let response: NotificationPreferencesResponse = try await get("/api/user/notification-preferences")
+        return response.events
+    }
+
+    @discardableResult
+    func updateNotificationPreference(key: String, channels: NotificationChannels) async throws -> NotificationPreference {
+        return try await patchCamel("/api/user/notification-preferences", body: NotificationPreferenceUpdate(key: key, channels: channels))
+    }
+
+    // MARK: - Message search (Phase 13 / B2)
+
+    func searchMessages(q: String, limit: Int = 20, offset: Int = 0) async throws -> (messages: [Message], pagination: Pagination?) {
+        let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
+        let response: MessagesResponse = try await get("/api/messages/search?q=\(qEncoded)&limit=\(limit)&offset=\(offset)")
+        return (response.messages, response.pagination)
     }
 
     // MARK: - Private helpers
@@ -657,6 +1133,17 @@ final class APIClient {
         guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(body)
+        return try await perform(request)
+    }
+
+    private func patchCamel<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
+        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }

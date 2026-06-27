@@ -29,7 +29,10 @@ final class APIClientVideoUploadTests: XCTestCase {
     }
 
     func test_uploadVideo_403_throwsStatusError() async throws {
-        session.stub(json: #"{"error":"subscription required"}"#, statusCode: 403)
+        // A 403 with no decodable error body surfaces as `.status`; a 403 carrying a
+        // `{"error":...}` body surfaces as `.server(message)` (see checkResponse and the
+        // list-folder subscriber-403 test). This case exercises the status-error path.
+        session.stub(data: Data(), statusCode: 403)
         let data = Data("fake video bytes".utf8)
         do {
             _ = try await sut.uploadVideo(data: data, mimeType: "video/mp4")

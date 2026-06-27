@@ -108,24 +108,22 @@ A user could have created folders, scheduled posts, or set up
 cross-posting while subscribed, then let their subscription lapse. The
 server still has their data.
 
-**Default behavior:** their existing folders/scheduled posts/etc.
-still render (read-only or view-only). They just can't create new ones.
+**Resolved direction:** hide everything they don't have access to.
+Their data isn't deleted — the server still honors it — but the iOS
+UI surfaces nothing.
 
-This needs explicit decisions:
-
-- **Existing folders:** show them in the tree (they're returned by
-  `GET /api/folders`). Allow rename/delete? Or just show?
-  **Recommendation:** show as read-only — they can move lists out and
-  delete the folder once empty. No "rename" UI for free users.
-- **Scheduled posts:** the calendar button is hidden, so they can't
-  reach the scheduled view from the UI. But scheduled posts will still
-  fire on the server. **Recommendation:** that's fine — the server
-  honors what was already scheduled.
-- **Existing cross-post connections:** identities are linked at the
-  account level (`/api/user/identities`). They stay linked but can't
-  be triggered for new posts. **Recommendation:** Phase 2 identity
-  management UI gates linking new ones on subscriber status too; the
-  list itself is informational.
+- **Existing folders:** filter out from the displayed tree. Lists that
+  were inside those folders surface at root. Implementation point: in
+  `ListsView` and `DocumentsView`, gate the folder fetch + render on
+  `authState.user?.isSubscriber == true`.
+- **Scheduled posts:** calendar entry point in `FeedView` toolbar is
+  hidden. `ScheduledMessagesView` is unreachable. Server still fires
+  the scheduled posts on time — that's a feature, not a bug.
+- **Existing cross-post identities:** Phase 2 identity-management UI
+  is itself gated on subscriber status. If a free user has linked
+  identities from when they were a subscriber, the management UI
+  doesn't render and they see no indication. (Backend continues to
+  honor whatever credentials exist on the account record.)
 
 ### 2. Unauthenticated state
 
@@ -196,27 +194,22 @@ literally nothing subscription-related in the iOS bundle to review.
 - **Delete.** No `/api/subscriptions/plans` endpoint needed from
   backend. Lower the backend team's pending-asks pile.
 
-## Open questions for the user
+## Resolved decisions (2026-06-24)
 
-1. **Degraded-subscriber UX**: confirm the recommendation above
-   (existing folders show read-only, scheduled posts honor on server,
-   linked identities stay linked but new cross-posts blocked). Or
-   different stance?
-2. **Empty-state copy when a free user looks at a screen that USED to
-   show subscriber features**: for example, if we hide the "New Folder"
-   button entirely, do we want any text explaining "Folders are
-   available with a subscription, manage at interlinedlist.com" — or
-   pure silence (the principle of "the feature doesn't exist")? The
-   strict reading of the new principle says silence; some users may be
-   confused.
-3. **Settings → About / Help links**: still appropriate to link out to
-   `interlinedlist.com/help/*` etc. via `SFSafariViewController`?
-   That's not commerce, but it is "web app handles X." Probably yes,
-   but worth confirming.
-4. **Onboarding / first-launch screen**: when a brand-new user opens
-   the iOS app, do we want any "to upgrade visit interlinedlist.com"
-   text anywhere — first-launch tooltip, About screen — or zero
-   mentions anywhere in the bundle? Strict reading: zero.
+1. **Degraded subscribers**: hide everything they don't have access to,
+   including any folders / scheduled posts / cross-post connections
+   they created when subscribed. Server still honors what's there
+   (scheduled posts fire on schedule); iOS just doesn't expose any UI
+   for it. Existing folders that contain lists are not shown — lists
+   inside them appear at root.
+2. **Empty-state copy**: **strict silence**. No "available with
+   subscription" text anywhere. This is also the Apple-policy-aligned
+   stance for a free iOS app that doesn't offer IAP.
+3. **Help / About links**: opening `interlinedlist.com/help/*` via
+   `SFSafariViewController` is fine. Help isn't commerce.
+4. **Onboarding / About**: **no mention of subscriptions anywhere in
+   the iOS bundle** at this time. No first-launch tooltip, no About
+   text, nothing.
 
 ## Suggested execution order once approved
 

@@ -176,6 +176,19 @@ final class E2EReadOnlyTests: XCTestCase {
         }
     }
 
+    // MARK: - OAuth configuration status (read-only, unauthenticated)
+
+    func test_e2e_linkedinStatus_returnsConfiguredField() async throws {
+        let status = try await client.linkedinStatus()
+        // Server may report either true or false; what matters is the decode succeeded.
+        _ = status.configured
+    }
+
+    func test_e2e_twitterStatus_returnsConfiguredField() async throws {
+        let status = try await client.twitterStatus()
+        _ = status.configured
+    }
+
     // MARK: - Bearer token rejected when stripped
 
     func test_e2e_unauthenticatedCall_returns401() async throws {

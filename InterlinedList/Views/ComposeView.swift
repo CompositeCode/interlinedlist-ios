@@ -14,6 +14,8 @@ struct ComposeView: View {
     @Environment(\.dismiss) private var dismiss
     /// When set, this view posts a reply to the given message.
     var replyTo: Message? = nil
+    /// When set, this view reposts (pushes) the given message, with optional commentary.
+    var repostOf: Message? = nil
     @State private var content = ""
     @State private var tags = ""
     @State private var publiclyVisible = true
@@ -29,8 +31,32 @@ struct ComposeView: View {
     @State private var isUploadingVideo = false
     @State private var scheduledDate: Date?
     @State private var showSchedulePicker = false
+    // Cross-posting (subscriber-only)
+    @State private var crossPostBluesky = false
+    @State private var crossPostLinkedIn = false
+    @State private var crossPostTwitter = false
+    @State private var mastodonIdentities: [APIClient.LinkedIdentity] = []
+    @State private var selectedMastodonIds: Set<String> = []
+    @State private var identitiesLoaded = false
+    @State private var lastCrossPostResults: [CrossPostResult] = []
 
     private var isReply: Bool { replyTo != nil }
+    private var isRepost: Bool { repostOf != nil }
+
+    /// Subscriber-only compose features (image / video upload, cross-posting,
+    /// scheduling) are hidden entirely for non-subscribers per the iOS-free-app
+    /// direction. No paywall, no disabled-but-tappable controls — the UI
+    /// simply does not surface them.
+    private var canUseSubscriberFeatures: Bool {
+        authState.user?.isSubscriber == true
+    }
+
+    /// Free users with unverified email cannot post (matches site behavior).
+    /// User is missing while view is initializing; treat that as verified so the
+    /// button isn't disabled in the brief window before authState lands.
+    private var isEmailVerified: Bool {
+        authState.user.map { $0.emailVerified != false } ?? true
+    }
 
     /// Apply user's default settings for public visibility and advanced bar. Call when view appears (new post) or after successful post.
     private func applyUserDefaults() {
@@ -44,8 +70,13 @@ struct ComposeView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let original = repostOf {
+                    Section {
+                        repostPreview(original)
+                    }
+                }
                 Section {
-                    TextField(isReply ? "Write a reply…" : "What's on your mind?", text: $content, axis: .vertical)
+                    TextField(composePlaceholder, text: $content, axis: .vertical)
                         .lineLimit(5...15)
                     if !isReply {
                         TextField("Tags (comma-separated)", text: $tags)
@@ -56,7 +87,7 @@ struct ComposeView: View {
                         advancedToolbar
                         Toggle("Public", isOn: $publiclyVisible)
                     }
-                    if showSchedulePicker && !isReply {
+                    if showSchedulePicker && !isReply && canUseSubscriberFeatures {
                         schedulePicker
                     }
                     if let url = uploadedImageURL {
@@ -65,6 +96,10 @@ struct ComposeView: View {
                     if let url = uploadedVideoURL {
                         uploadedVideoPreview(url: url)
                     }
+                }
+
+                if showAdvancedBar && !isReply && canUseSubscriberFeatures {
+                    crossPostSection
                 }
 
                 if let error = errorMessage {
@@ -84,20 +119,29 @@ struct ComposeView: View {
                                 ProgressView()
                                     .frame(width: 20, height: 20)
                             }
-                            Text(scheduledDate != nil ? "Schedule" : (isReply ? "Reply" : "Post"))
+                            Text(postButtonLabel)
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(isLoading || content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isLoading || !canSubmit || !isEmailVerified)
+                } footer: {
+                    if !isEmailVerified {
+                        Text("Verify your email to enable posting.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(isReply ? "Reply" : "New post")
+            .navigationTitle(navTitle)
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 applyUserDefaults()
             }
-            .alert(isReply ? "Replied" : (scheduledDate != nil ? "Scheduled" : "Posted"), isPresented: $showSuccess) {
+            .task {
+                await loadMastodonIdentitiesIfNeeded()
+            }
+            .alert(successTitle, isPresented: $showSuccess) {
                 Button("OK") {
                     content = ""
                     uploadedImageURL = nil
@@ -106,10 +150,11 @@ struct ComposeView: View {
                     selectedVideo = nil
                     scheduledDate = nil
                     showSchedulePicker = false
+                    lastCrossPostResults = []
                     applyUserDefaults()
                 }
             } message: {
-                Text(isReply ? "Your reply was posted." : (scheduledDate != nil ? "Your message has been scheduled." : "Your message was posted."))
+                Text(successMessage)
             }
             .onChange(of: selectedPhoto) { _, newItem in
                 guard let newItem else { return }
@@ -118,24 +163,70 @@ struct ComposeView: View {
         }
     }
 
+    // MARK: - Derived strings
+
+    private var composePlaceholder: String {
+        if isReply { return "Write a reply…" }
+        if isRepost { return "Add a comment (optional)…" }
+        return "What's on your mind?"
+    }
+
+    private var navTitle: String {
+        if isReply { return "Reply" }
+        if isRepost { return "Repost" }
+        return "New post"
+    }
+
+    private var postButtonLabel: String {
+        if isRepost { return "Repost" }
+        if scheduledDate != nil { return "Schedule" }
+        return isReply ? "Reply" : "Post"
+    }
+
+    /// Reposts may have empty commentary; everything else requires content.
+    private var canSubmit: Bool {
+        isRepost || !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var successTitle: String {
+        if isReply { return "Replied" }
+        if isRepost { return "Reposted" }
+        return scheduledDate != nil ? "Scheduled" : "Posted"
+    }
+
+    private var successMessage: String {
+        let base: String
+        if isReply { base = "Your reply was posted." }
+        else if isRepost { base = "You reposted this." }
+        else if scheduledDate != nil { base = "Your message has been scheduled." }
+        else { base = "Your message was posted." }
+        guard !lastCrossPostResults.isEmpty else { return base }
+        let summary = lastCrossPostResults.map { r in
+            "\(r.platform.capitalized) \(r.success ? "✓" : "✗")"
+        }.joined(separator: " · ")
+        return base + "\n" + summary
+    }
+
     @ViewBuilder
     private var advancedToolbar: some View {
         HStack(alignment: .center, spacing: 8) {
             Text("\(remainingCharacters) characters remaining")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    showAdvancedBar.toggle()
+            if canUseSubscriberFeatures {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showAdvancedBar.toggle()
+                    }
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(showAdvancedBar ? 90 : 0))
                 }
-            } label: {
-                Image(systemName: "gearshape.fill")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(showAdvancedBar ? 90 : 0))
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
-            if showAdvancedBar {
+            if showAdvancedBar && canUseSubscriberFeatures {
                 HStack(spacing: 12) {
                     PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         if isUploadingImage {
@@ -167,30 +258,6 @@ struct ComposeView: View {
                         guard let newItem else { return }
                         Task { await uploadVideo(newItem) }
                     }
-                    Button { } label: {
-                        Text("M")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 22, height: 22)
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(true)
-                    Button { } label: {
-                        Text("BS")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 22, height: 22)
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(true)
-                    Button { } label: {
-                        Text("in")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 22, height: 22)
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(true)
                     Button {
                         withAnimation {
                             showSchedulePicker.toggle()
@@ -285,6 +352,98 @@ struct ComposeView: View {
         }
     }
 
+    // MARK: - Cross-post controls
+
+    private var hasMastodon: Bool { !mastodonIdentities.isEmpty }
+
+    @ViewBuilder
+    private var crossPostSection: some View {
+        Section {
+            Toggle(isOn: $crossPostBluesky) {
+                Label("Bluesky", systemImage: "cloud")
+            }
+            Toggle(isOn: $crossPostLinkedIn) {
+                Label("LinkedIn", systemImage: "briefcase")
+            }
+            Toggle(isOn: $crossPostTwitter) {
+                Label("X", systemImage: "xmark")
+            }
+            if hasMastodon {
+                Menu {
+                    ForEach(mastodonIdentities) { identity in
+                        Button {
+                            toggleMastodon(identity.id)
+                        } label: {
+                            if selectedMastodonIds.contains(identity.id) {
+                                Label(mastodonLabel(identity), systemImage: "checkmark")
+                            } else {
+                                Text(mastodonLabel(identity))
+                            }
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Label("Mastodon", systemImage: "number")
+                        Spacer()
+                        Text(selectedMastodonIds.isEmpty ? "Off" : "\(selectedMastodonIds.count) selected")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } header: {
+            Text("Cross-post")
+        } footer: {
+            Text("Cross-posts are sent when this message publishes.")
+                .font(.caption)
+        }
+    }
+
+    private func mastodonLabel(_ identity: APIClient.LinkedIdentity) -> String {
+        identity.providerUsername ?? "Mastodon account"
+    }
+
+    private func toggleMastodon(_ id: String) {
+        if selectedMastodonIds.contains(id) {
+            selectedMastodonIds.remove(id)
+        } else {
+            selectedMastodonIds.insert(id)
+        }
+    }
+
+    private func loadMastodonIdentitiesIfNeeded() async {
+        guard !identitiesLoaded, canUseSubscriberFeatures, !isReply else { return }
+        identitiesLoaded = true
+        do {
+            let identities = try await APIClient.shared.linkedIdentities()
+            mastodonIdentities = identities.filter { $0.provider == "mastodon" }
+        } catch {
+            mastodonIdentities = []
+        }
+    }
+
+    @ViewBuilder
+    private func repostPreview(_ original: Message) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.2.squarepath")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(original.authorDisplay)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
+            Text(original.content)
+                .font(.subheadline)
+                .lineLimit(4)
+                .foregroundStyle(.primary)
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Reposting \(original.authorDisplay): \(original.content)")
+    }
+
     private func uploadVideo(_ item: PhotosPickerItem) async {
         isUploadingVideo = true
         errorMessage = nil
@@ -293,10 +452,11 @@ struct ComposeView: View {
             guard let data = try await item.loadTransferable(type: Data.self) else { return }
             let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "video/mp4"
             uploadedVideoURL = try await APIClient.shared.uploadVideo(data: data, mimeType: mimeType)
-        } catch APIError.status(403) {
-            errorMessage = "Video upload requires an active subscription."
-            selectedVideo = nil
         } catch {
+            // 403 falls through here. The video picker is hidden for free
+            // users so a subscriber-only response shouldn't normally reach
+            // this branch; no subscription copy surfaces either way per the
+            // iOS-free-app direction.
             errorMessage = "Failed to upload video. Please try again."
             selectedVideo = nil
         }
@@ -310,10 +470,8 @@ struct ComposeView: View {
             guard let data = try await item.loadTransferable(type: Data.self) else { return }
             let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
             uploadedImageURL = try await APIClient.shared.uploadImage(data: data, mimeType: mimeType)
-        } catch APIError.status(403) {
-            errorMessage = "Image upload requires an active subscription."
-            selectedPhoto = nil
         } catch {
+            // Picker is hidden for non-subscribers; 403 falls through here.
             errorMessage = "Failed to upload image. Please try again."
             selectedPhoto = nil
         }
@@ -324,25 +482,34 @@ struct ComposeView: View {
         isLoading = true
         defer { isLoading = false }
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        guard canSubmit else { return }
         let tagList = tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         let isoScheduled = scheduledDate.map {
             ISO8601DateFormatter().string(from: $0)
         }
         let urls = uploadedImageURL.map { [$0] }
         let videoUrls = uploadedVideoURL.map { [$0] }
+        // Cross-post params only when the user is a subscriber and not replying.
+        let crossPostEnabled = canUseSubscriberFeatures && !isReply
+        let mastodonIds = crossPostEnabled && !selectedMastodonIds.isEmpty ? Array(selectedMastodonIds) : nil
         do {
-            _ = try await APIClient.shared.postMessage(
+            let result = try await APIClient.shared.postMessage(
                 content: text,
                 publiclyVisible: publiclyVisible,
                 parentId: replyTo?.id,
                 tags: tagList.isEmpty ? nil : tagList,
                 scheduledAt: isoScheduled,
                 imageUrls: urls,
-                videoUrls: videoUrls
+                videoUrls: videoUrls,
+                pushedMessageId: repostOf?.id,
+                mastodonProviderIds: mastodonIds,
+                crossPostToBluesky: crossPostEnabled && crossPostBluesky ? true : nil,
+                crossPostToLinkedIn: crossPostEnabled && crossPostLinkedIn ? true : nil,
+                crossPostToTwitter: crossPostEnabled && crossPostTwitter ? true : nil
             )
+            lastCrossPostResults = result.crossPostResults
             showSuccess = true
-            if isReply {
+            if isReply || isRepost {
                 dismiss()
             }
         } catch APIError.status(401) {
