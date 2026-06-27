@@ -1,6 +1,6 @@
 # InterlinedList iOS
 
-iPhone app for [InterlinedList](https://interlinedlist.com): sign in with email/password (sync token), view the feed, post and reply to messages, and switch between feed, lists, documents, and profile via a top navigation bar.
+Native iOS app for [InterlinedList](https://interlinedlist.com) — a social list-sharing service. Sign in, browse a message feed, post and reply, and manage nested lists, documents, organizations, and your social graph. Built in SwiftUI with no third-party dependencies.
 
 ## Requirements
 
@@ -15,36 +15,73 @@ iPhone app for [InterlinedList](https://interlinedlist.com): sign in with email/
 
 ## Navigation
 
-A **top bar** (tab-style) runs across the app with four items, left to right:
+A **top bar** runs across the app with four sections plus a notifications bell:
 
-- **Home** – Messages feed. Tap the pencil in the toolbar to compose a new post.
-- **Lists** – Placeholder (lists not yet implemented in the app).
-- **Documents** – Placeholder (documents not yet implemented in the app).
-- **Profile** – User avatar and display name; **Log out** is here.
+- **Home** — Messages feed; tap the pencil to compose.
+- **Lists** — Your lists and folders.
+- **Documents** — Your documents and folders.
+- **Profile** — Avatar, account details, social links, settings (gear), and Log out.
+- **🔔 Bell** — Notifications, with a badge for unread notifications and pending follow requests.
+
+An email-verification banner appears beneath the top bar until the account's email is verified.
 
 ## Features
 
-- **Login / Register** – Email and password; token is stored in Keychain so you stay logged in.
-- **Feed (Home)** – Messages from the site with pull-to-refresh and infinite scroll. Each message shows:
-  - Author, date, content, and a lock icon when the message is private.
-  - Optional **previews** (link cards, images, video) with a “Show previews” toggle at the top of the feed.
-  - **Reply** and **Delete** (Delete only for your own messages). Reply opens a sheet to post a reply.
-- **Compose** – Opened from the feed via the pencil button. Text posts with:
-  - **Public** toggle (default comes from your account setting).
-  - **Character count** from your account’s max message length.
-  - **Advanced bar** (gear): toggles a row of icons (image, video, Mastodon, Bluesky, LinkedIn, calendar). Bar visibility default comes from your “Show advanced post settings” setting. Icon actions are not implemented yet.
-- **Profile** – Avatar, display name, username, and Log out.
+### Accounts & auth
+- **Email / password** sign-in (issues a sync token stored in the Keychain) and registration.
+- **Forgot / reset password** and **email verification**, reachable via `interlinedlist://` deep links.
+- **OAuth sign-in** via the system browser (`ASWebAuthenticationSession`) for Mastodon, Bluesky, LinkedIn, and Twitter. *(GitHub is hidden pending backend support for the native callback.)*
+- **Linked accounts** management (subscribers).
+- **Change email** and **delete account** from Settings.
+
+### Feed & messages
+- Feed with pull-to-refresh and infinite scroll; cached data renders instantly on launch, then refreshes.
+- Each message shows author, date, content, a lock icon when private, and optional **previews** (link cards, images, video) behind a "Show previews" toggle.
+- **Reply**, **edit**, and **delete** (your own messages); threaded conversation view.
+
+### Compose
+- **Public** toggle (default from your account setting) and a live **character count** (your account's max length).
+- **Subscriber features**: image and video upload, **scheduled posts**, and cross-posting to linked Mastodon / Bluesky / LinkedIn accounts.
+
+### Lists & documents
+- Browse lists and documents as a tree; **search** within each.
+- Create lists and documents; edit a list's **schema** (its columns/fields) and rows.
+- **Nested folders** organize both (subscriber feature; free accounts see a flat view).
+- List **connections** and **watchers**; public list/document detail views.
+
+### Social & organizations
+- **Followers / following**, **follow requests** (accept/decline).
+- **Organizations** with member management.
+- View other users' profiles.
+
+### Settings & preferences
+- Edit profile (display name, bio, avatar), theme (light/dark/system, applied app-wide), default post visibility, advanced-post-settings toggle, and notification preferences.
 
 ## Configuration
 
-- **API base URL** – The app uses `https://interlinedlist.com` by default. To use another instance (e.g. local or staging), set the `ILAPIBaseURL` key in `Info.plist` to the base URL (e.g. `http://localhost:3000`). Leave it empty to use production.
+- **API base URL** — defaults to `https://interlinedlist.com`. To target another instance (local/staging), set `ILAPIBaseURL` in `Info.plist` (e.g. `http://localhost:3000`). Leave it empty for production.
+
+## Testing
+
+- **Unit tests** stub the network through `MockURLSession` — no connectivity required.
+- **End-to-end tests** (`InterlinedListTests/E2E`) run **read-only** checks against the live API. They auto-skip unless credentials are provided via the Xcode scheme's Test action environment, or a gitignored `.env` at the repo root:
+  ```
+  INTERLINEDLIST_EMAIL=you@example.com
+  INTERLINEDLIST_PASSWORD=...
+  ```
+
+Run from Xcode (⌘U) or via `xcodebuild` — see `CLAUDE.md` for command-line invocations and a note on pinning a simulator UDID.
 
 ## Known console messages (safe to ignore)
 
-These come from the system or simulator, not from app logic. They do not indicate bugs in this app.
+These come from the system or simulator, not from app logic, and do not indicate bugs:
 
-- **"Error creating the CFMessagePort needed to communicate with PPT"** — Apple’s internal PPT in UIKit. Known simulator/device message; doesn’t affect behavior.
-- **"Failed to send CA Event for app launch measurements … FirstFramePresentationMetric"** — System launch metrics sometimes fail in simulator. Safe to ignore.
-- **"[RTIInputSystemClient …] perform input operation requires a valid sessionID"** — System text input/emoji (RTI) can log this when the keyboard is involved during a transition. The app dismisses the keyboard before presenting reply/delete so this is less likely; if it still appears, it’s system-only and safe to ignore.
-- **"Unable to simultaneously satisfy constraints"** involving **SystemInputAssistantView**, **UIRemoteKeyboardPlaceholderView**, **assistantHeight** — These are in the system keyboard/input assistant UI. iOS recovers by breaking a constraint; no app fix. Dismissing the keyboard before opening sheets/alerts can reduce how often it happens.
-- **"nw_endpoint_flow_failed_with_error"**, **"nw_connection_copy_*"**, **"Socket is not connected"** — Low-level Network framework logs from failed or cancelled connections (e.g. network unreachable, request cancelled). Can appear when the system or app cancels requests. Safe to ignore unless the app’s own API calls are failing in the UI.
+- **"Error creating the CFMessagePort needed to communicate with PPT"** — Apple's internal PPT in UIKit; a known simulator/device message.
+- **"Failed to send CA Event … FirstFramePresentationMetric"** — system launch metrics occasionally failing in the simulator.
+- **"[RTIInputSystemClient …] perform input operation requires a valid sessionID"** — system text-input/emoji (RTI) logging during transitions. The app dismisses the keyboard before presenting sheets to reduce this.
+- **"Unable to simultaneously satisfy constraints"** involving **SystemInputAssistantView** / **UIRemoteKeyboardPlaceholderView** / **assistantHeight** — system keyboard/input-assistant UI; iOS recovers by breaking a constraint.
+- **"nw_endpoint_flow_failed_with_error"**, **"nw_connection_copy_*"**, **"Socket is not connected"** — low-level Network framework logs from cancelled/failed connections. Safe to ignore unless the app's own API calls are failing in the UI.
+
+## Project guide
+
+See `CLAUDE.md` for architecture, conventions, and build/test commands.

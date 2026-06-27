@@ -462,28 +462,49 @@ final class APIClient {
     // MARK: - Documents
 
     func documents(folderId: String? = nil) async throws -> [Document] {
-        var path = "/api/documents"
+        // `GET /api/documents` returns ONLY root-level documents (folderId is null) and
+        // ignores any query string — passing `?folderId=` made every folder show the root
+        // documents. Documents inside a folder must come from the folder-scoped endpoint.
+        let path: String
         if let folderId, !folderId.isEmpty,
-           let encoded = folderId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-            path += "?folderId=\(encoded)"
+           let encoded = folderId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            path = "/api/documents/folders/\(encoded)/documents"
+        } else {
+            path = "/api/documents"
         }
         let response: DocumentsResponse = try await get(path)
         return response.documents
     }
 
     func createDocument(title: String, content: String?, isPublic: Bool, folderId: String?) async throws -> Document {
-        struct Body: Encodable { let title: String; let content: String?; let isPublic: Bool; let folderId: String? }
+        // The folder is chosen by the *path*, not a body field: `POST /api/documents` always
+        // creates at root (it has no folderId field), so a document "created in a folder" via
+        // that route silently lands at root. Post to the folder-scoped endpoint instead.
+        // Bodies are camelCase (`isPublic`) — use postCamel or the flag is dropped server-side.
+        struct Body: Encodable { let title: String; let content: String?; let isPublic: Bool }
         struct Response: Decodable { let document: Document? }
-        let response: Response = try await post("/api/documents", body: Body(title: title, content: content, isPublic: isPublic, folderId: folderId))
+        let body = Body(title: title, content: content, isPublic: isPublic)
+        let path: String
+        if let folderId, !folderId.isEmpty,
+           let encoded = folderId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            path = "/api/documents/folders/\(encoded)/documents"
+        } else {
+            path = "/api/documents"
+        }
+        let response: Response = try await postCamel(path, body: body)
         guard let doc = response.document else { throw APIError.noData }
         return doc
     }
 
     func updateDocument(id: String, title: String, content: String?, isPublic: Bool, folderId: String? = nil) async throws -> Document {
+        // PATCH is the only documents write that accepts `folderId` (to move between folders).
+        // The body is camelCase (`folderId`, `isPublic`); patchCamel keeps it that way so the
+        // server actually applies the move and visibility change. (Sending `folderId: nil`
+        // omits the key, so this can move a doc *into* a folder but not back out to root.)
         struct Body: Encodable { let title: String; let content: String?; let isPublic: Bool; let folderId: String? }
         struct Response: Decodable { let document: Document? }
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: Response = try await patch("/api/documents/\(encoded)", body: Body(title: title, content: content, isPublic: isPublic, folderId: folderId))
+        let response: Response = try await patchCamel("/api/documents/\(encoded)", body: Body(title: title, content: content, isPublic: isPublic, folderId: folderId))
         guard let doc = response.document else { throw APIError.noData }
         return doc
     }
@@ -505,9 +526,11 @@ final class APIClient {
     }
 
     func createDocumentFolder(name: String, parentId: String?) async throws -> DocumentFolder {
+        // Body is camelCase (`parentId`); postCamel keeps a nested folder under its parent
+        // instead of dropping `parent_id` and creating it at root.
         struct Body: Encodable { let name: String; let parentId: String? }
         struct Response: Decodable { let folder: DocumentFolder? }
-        let response: Response = try await post("/api/documents/folders", body: Body(name: name, parentId: parentId))
+        let response: Response = try await postCamel("/api/documents/folders", body: Body(name: name, parentId: parentId))
         guard let folder = response.folder else { throw APIError.noData }
         return folder
     }
