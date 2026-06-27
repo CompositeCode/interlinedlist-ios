@@ -7,115 +7,140 @@ import SwiftUI
 
 struct FeedView: View {
     @EnvironmentObject var authState: AuthState
+    @EnvironmentObject var store: AppDataStore
     @State private var messages: [Message] = []
     @State private var isLoading = true
+    @State private var syncedFromStore = false
     @State private var errorMessage: String?
     @State private var pagination: Pagination?
     @State private var showPreviews = true
-    @State private var replyToMessage: Message?
+    @State private var showOnlyMine = false
+    @State private var tagFilter: String? = nil
     @State private var messageToDelete: Message?
     @State private var deleteError: String?
     @State private var showCompose = false
+    @State private var messageToEdit: Message?
+    @State private var threadMessage: Message?
+    @State private var digStates: [String: (count: Int, dugByMe: Bool)] = [:]
+    @State private var profileUsername: String? = nil
+    @State private var showScheduled = false
+
+    private var distinctTags: [String] {
+        var seen = Set<String>()
+        return messages.compactMap { $0.tags }.flatMap { $0 }.filter { seen.insert($0).inserted }
+    }
+
+    @ViewBuilder
+    private var feedContent: some View {
+        if isLoading && messages.isEmpty {
+            FeedSkeletonView()
+        } else if let error = errorMessage, messages.isEmpty {
+            ContentUnavailableView {
+                Label("Unable to load", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Retry") { Task { await loadMessages() } }
+            }
+        } else {
+            messageList
+        }
+    }
+
+    private var messageList: some View {
+        List {
+            Section {
+                Toggle("Show previews", isOn: $showPreviews)
+                Toggle("My Posts", isOn: $showOnlyMine)
+            }
+            if !distinctTags.isEmpty {
+                Section {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(distinctTags, id: \.self) { tag in
+                                let isActive = tagFilter == tag
+                                Button {
+                                    tagFilter = isActive ? nil : tag
+                                } label: {
+                                    Text(tag)
+                                        .font(.caption)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(isActive ? Color.accentColor : Color(.secondarySystemFill))
+                                        .foregroundStyle(isActive ? Color.white : Color.secondary)
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+            ForEach(messages) { message in
+                MessageRow(
+                    message: message,
+                    currentUserId: authState.user?.id,
+                    showPreviews: showPreviews,
+                    digState: digStates[message.id],
+                    onReply: {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        threadMessage = message
+                    },
+                    onDelete: {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        messageToDelete = message
+                    },
+                    onEdit: { messageToEdit = message },
+                    onDig: { Task { await toggleDig(for: message) } },
+                    onTapAuthor: { username in profileUsername = username }
+                )
+            }
+            if let pagination = pagination, pagination.hasMore, !isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView().frame(width: 24, height: 24)
+                    Spacer()
+                }
+                .onAppear { Task { await loadMore() } }
+            }
+        }
+        .refreshable {
+            if showOnlyMine || tagFilter != nil {
+                await loadMessages()
+            } else {
+                syncedFromStore = false
+                pagination = nil
+                await store.refreshFeed()
+            }
+        }
+    }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if isLoading && messages.isEmpty {
-                    ProgressView("Loading messages…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .frame(minWidth: 44, minHeight: 44)
-                } else if let error = errorMessage, messages.isEmpty {
-                    ContentUnavailableView {
-                        Label("Unable to load", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Retry") {
-                            Task { await loadMessages() }
-                        }
-                    }
-                } else {
-                    List {
-                        Section {
-                            Toggle("Show previews", isOn: $showPreviews)
-                        }
-                        ForEach(messages) { message in
-                            MessageRow(
-                                message: message,
-                                currentUserId: authState.user?.id,
-                                showPreviews: showPreviews,
-                                onReply: {
-                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                    replyToMessage = message
-                                },
-                                onDelete: {
-                                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                                    messageToDelete = message
-                                }
-                            )
-                        }
-                        if let pagination = pagination, pagination.hasMore, !isLoading {
-                            HStack {
-                                Spacer()
-                                ProgressView()
-                                    .frame(width: 24, height: 24)
-                                Spacer()
-                            }
-                            .onAppear {
-                                Task { await loadMore() }
-                            }
-                        }
-                    }
-                    .refreshable {
-                        await loadMessages()
-                    }
-                }
-            }
-            .navigationTitle("InterlinedList")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 8) {
-                        Image("Logo")
-                            .resizable()
-                            .frame(width: 28, height: 28)
-                            .clipped()
-                        Text("InterlinedList")
-                            .font(.headline)
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showCompose = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                    }
-                }
-            }
-            .sheet(isPresented: $showCompose) {
-                ComposeView()
+        navigationContent
+            .sheet(item: $threadMessage) { message in
+                MessageThreadView(rootMessage: message, currentUserId: authState.user?.id)
                     .environmentObject(authState)
             }
-            .task {
-                await loadMessages()
+            .sheet(isPresented: Binding(
+                get: { profileUsername != nil },
+                set: { if !$0 { profileUsername = nil } }
+            )) {
+                if let username = profileUsername { UserProfileView(username: username) }
             }
-            .onChange(of: authState.user?.id) { _, _ in
-                if authState.isLoggedIn {
-                    Task { await loadMessages() }
+            .sheet(isPresented: $showScheduled) { ScheduledMessagesView() }
+            .sheet(item: $messageToEdit) { message in
+                EditMessageView(message: message) { updated in
+                    if let index = messages.firstIndex(where: { $0.id == updated.id }) {
+                        messages[index] = updated
+                    }
                 }
-            }
-            .sheet(item: $replyToMessage, onDismiss: { replyToMessage = nil }) { message in
-                ComposeView(replyTo: message)
-                    .environmentObject(authState)
             }
             .alert("Delete message?", isPresented: Binding(
                 get: { messageToDelete != nil },
                 set: { if !$0 { messageToDelete = nil; deleteError = nil } }
             )) {
-                Button("Cancel", role: .cancel) {
-                    messageToDelete = nil
-                    deleteError = nil
-                }
+                Button("Cancel", role: .cancel) { messageToDelete = nil; deleteError = nil }
                 Button("Delete", role: .destructive) {
                     guard let msg = messageToDelete else { return }
                     deleteError = nil
@@ -124,6 +149,92 @@ struct FeedView: View {
             } message: {
                 Text(deleteError ?? "This cannot be undone.")
             }
+    }
+
+    private var navigationContent: some View {
+        let nav = NavigationStack {
+            feedContent
+                .navigationTitle("InterlinedList")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { feedToolbar }
+        }
+        .sheet(isPresented: $showCompose) {
+            ComposeView().environmentObject(authState)
+        }
+        .task { await applyInitialState() }
+        .onChange(of: authState.user?.id) { _, _ in
+            if authState.isLoggedIn { Task { await loadMessages() } }
+        }
+        return nav
+            .onChange(of: store.feedMessages.count) { _, _ in
+                guard !syncedFromStore && !showOnlyMine && tagFilter == nil else { return }
+                let msgs = store.feedMessages
+                messages = msgs
+                initDigStates(from: msgs)
+                isLoading = false
+                syncedFromStore = !msgs.isEmpty
+            }
+            .onChange(of: store.feedLoading) { _, loading in
+                guard !showOnlyMine && tagFilter == nil else { return }
+                if !loading && messages.isEmpty {
+                    messages = store.feedMessages
+                    initDigStates(from: messages)
+                    isLoading = false
+                    syncedFromStore = !messages.isEmpty
+                }
+            }
+            .onChange(of: showOnlyMine) { _, _ in Task { await loadMessages() } }
+            .onChange(of: tagFilter) { _, _ in Task { await loadMessages() } }
+    }
+
+    @ToolbarContentBuilder
+    private var feedToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            HStack(spacing: 8) {
+                Image("Logo").resizable().frame(width: 28, height: 28).clipped()
+                Text("InterlinedList").font(.headline)
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: 4) {
+                // Scheduled posts are a subscriber-only feature; entry point hidden
+                // entirely for free users per the iOS-free-app direction.
+                if authState.user?.isSubscriber == true {
+                    Button { showScheduled = true } label: { Image(systemName: "calendar") }
+                        .accessibilityLabel("Scheduled posts")
+                }
+                Button { showCompose = true } label: { Image(systemName: "square.and.pencil") }
+                    .accessibilityLabel("Compose")
+            }
+        }
+    }
+
+    private func applyInitialState() async {
+        if !store.feedMessages.isEmpty && messages.isEmpty {
+            messages = store.feedMessages
+            initDigStates(from: messages)
+            isLoading = false
+            syncedFromStore = true
+        } else {
+            isLoading = store.feedLoading
+        }
+    }
+
+    private func toggleDig(for message: Message) async {
+        let current = digStates[message.id]
+        let isDug = current?.dugByMe ?? message.dugByMe ?? false
+        do {
+            let result: APIClient.DigResponse
+            if isDug {
+                result = try await APIClient.shared.undig(messageId: message.id)
+            } else {
+                result = try await APIClient.shared.dig(messageId: message.id)
+            }
+            digStates[message.id] = (count: result.digCount, dugByMe: result.dugByMe)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            // Silently ignore dig errors — not critical
         }
     }
 
@@ -147,9 +258,10 @@ struct FeedView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            let (list, pag) = try await APIClient.shared.messages(limit: 50, offset: 0)
+            let (list, pag) = try await APIClient.shared.messages(limit: 50, offset: 0, onlyMine: showOnlyMine, tag: tagFilter)
             messages = list
             pagination = pag
+            initDigStates(from: list)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch APIError.server(let message) {
@@ -160,15 +272,25 @@ struct FeedView: View {
     }
 
     private func loadMore() async {
+        syncedFromStore = true
         guard let pag = pagination, pag.hasMore else { return }
         isLoading = true
         defer { isLoading = false }
         do {
-            let (list, pag) = try await APIClient.shared.messages(limit: 50, offset: messages.count)
+            let (list, pag) = try await APIClient.shared.messages(limit: 50, offset: messages.count, onlyMine: showOnlyMine, tag: tagFilter)
             messages.append(contentsOf: list)
             pagination = pag
+            initDigStates(from: list)
         } catch {
             errorMessage = "Failed to load more."
+        }
+    }
+
+    private func initDigStates(from list: [Message]) {
+        for message in list {
+            if digStates[message.id] == nil {
+                digStates[message.id] = (count: message.digCount ?? 0, dugByMe: message.dugByMe ?? false)
+            }
         }
     }
 }
@@ -177,8 +299,12 @@ struct MessageRow: View {
     let message: Message
     let currentUserId: String?
     let showPreviews: Bool
+    let digState: (count: Int, dugByMe: Bool)?
     let onReply: () -> Void
     let onDelete: () -> Void
+    let onEdit: () -> Void
+    let onDig: () -> Void
+    var onTapAuthor: ((String) -> Void)? = nil
 
     private var canDelete: Bool {
         guard let uid = currentUserId else { return false }
@@ -189,12 +315,32 @@ struct MessageRow: View {
         message.publiclyVisible == false
     }
 
+    private var effectiveDigCount: Int {
+        digState?.count ?? message.digCount ?? 0
+    }
+
+    private var effectiveDugByMe: Bool {
+        digState?.dugByMe ?? message.dugByMe ?? false
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(message.authorDisplay)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                if let onTapAuthor, let username = message.user?.username {
+                    Button {
+                        onTapAuthor(username)
+                    } label: {
+                        Text(message.authorDisplay)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text(message.authorDisplay)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
                 if isPrivate {
                     Image(systemName: "lock.fill")
                         .font(.caption2)
@@ -207,6 +353,21 @@ struct MessageRow: View {
             }
             Text(message.content)
                 .font(.body)
+            if let tags = message.tags, !tags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color(.secondarySystemFill))
+                                .clipShape(Capsule())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
             if showPreviews && message.hasPreviews {
                 previewSection
             }
@@ -218,7 +379,26 @@ struct MessageRow: View {
                         .font(.caption)
                 }
                 .buttonStyle(.borderless)
+                Button {
+                    onDig()
+                } label: {
+                    Label(effectiveDugByMe ? "Dug" : "Dig", systemImage: effectiveDugByMe ? "hand.thumbsup.fill" : "hand.thumbsup")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                if effectiveDigCount > 0 {
+                    Text("\(effectiveDigCount)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if canDelete {
+                    Button {
+                        onEdit()
+                    } label: {
+                        Label("Edit", systemImage: "pencil")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
                     Button(role: .destructive) {
                         onDelete()
                     } label: {

@@ -1,0 +1,29 @@
+{
+  "configurations" : [
+    {
+      "id" : "6ECEBF98-7B4C-4CF3-A0F5-014342640855",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:InterlinedList.xcodeproj",
+      "identifier" : "A1B1C1D1E1F10023",
+      "name" : "InterlinedList"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:InterlinedList.xcodeproj",
+        "identifier" : "T1E5T1E5T1E5000D",
+        "name" : "InterlinedListTests"
+      }
+    }
+  ],
+  "version" : 1
+}

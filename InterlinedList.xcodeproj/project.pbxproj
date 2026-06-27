@@ -20,7 +20,87 @@
 		A1B1C1D1E1F10015 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10016 /* FeedView.swift */; };
 		A1B1C1D1E1F10017 /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10018 /* ComposeView.swift */; };
 		A1B1C1D1E1F10019 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1001A /* Assets.xcassets */; };
+		A1B1C1D1E1F1002D /* List.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1002E /* List.swift */; };
+		A1B1C1D1E1F1002F /* ListsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10030 /* ListsView.swift */; };
+		A1B1C1D1E1F10031 /* EditMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10032 /* EditMessageView.swift */; };
+		A1B1C1D1E1F100A1 /* ListSchemaEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */; };
+		A1B1C1D1E1F100A3 /* ListSchemaDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F100A4 /* ListSchemaDraft.swift */; };
+		A1B1C1D1E1F10033 /* MessageThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10034 /* MessageThreadView.swift */; };
+		A1B1C1D1E1F10035 /* CreateListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10036 /* CreateListView.swift */; };
+		A1B1C1D1E1F10037 /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10038 /* UserProfileView.swift */; };
+		A1B1C1D1E1F10039 /* ScheduledMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1003A /* ScheduledMessagesView.swift */; };
+		A2B2C2D2E2F20041 /* AppNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F20042 /* AppNotification.swift */; };
+		A2B2C2D2E2F20043 /* FollowState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F20044 /* FollowState.swift */; };
+		A2B2C2D2E2F20045 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F20046 /* NotificationsView.swift */; };
+		A2B2C2D2E2F20047 /* FollowRequestsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F20048 /* FollowRequestsView.swift */; };
+		A2B2C2D2E2F20049 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B2C2D2E2F2004A /* EditProfileView.swift */; };
+		A3C3D3E3F3A30051 /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C3D3E3F3A30052 /* Document.swift */; };
+		A3C3D3E3F3A30053 /* DocumentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C3D3E3F3A30054 /* DocumentsView.swift */; };
+		A3C3D3E3F3A30055 /* URLSessionProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3C3D3E3F3A30056 /* URLSessionProtocol.swift */; };
+		B1C1D1E1F1A10001 /* DataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10002 /* DataCache.swift */; };
+		B1C1D1E1F1A10003 /* AppDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10004 /* AppDataStore.swift */; };
+		B1C1D1E1F1A10005 /* SkeletonBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10006 /* SkeletonBlock.swift */; };
+		B1C1D1E1F1A10007 /* FeedSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10008 /* FeedSkeletonView.swift */; };
+		B1C1D1E1F1A10009 /* ListSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000A /* ListSkeletonView.swift */; };
+		B1C1D1E1F1A1000B /* DocumentSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */; };
+		B1C1D1E1F1A1000D /* ListItemFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000E /* ListItemFormView.swift */; };
+		C1D1E1F1A1B10001 /* Organization.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1D1E1F1A1B10002 /* Organization.swift */; };
+		D0A1D0A1D0A10001 /* OAuthCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10002 /* OAuthCoordinator.swift */; };
+		D0A1D0A1D0A10003 /* ChangeEmailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10004 /* ChangeEmailView.swift */; };
+		D0A1D0A1D0A10005 /* ForgotPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10006 /* ForgotPasswordView.swift */; };
+		D0A1D0A1D0A10007 /* ResetPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10008 /* ResetPasswordView.swift */; };
+		D0A1D0A1D0A10009 /* EmailVerificationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A1000A /* EmailVerificationBanner.swift */; };
+		D0A1D0A1D0A1000B /* LinkedIdentitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A1000C /* LinkedIdentitiesView.swift */; };
+		D0A1D0A1D0A1000D /* OAuthSignInButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A1000E /* OAuthSignInButton.swift */; };
+		T1E5T1E5T1E50001 /* InterlinedListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50002 /* InterlinedListTests.swift */; };
+		T1E5T1E5T1E50003 /* MockURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50004 /* MockURLSession.swift */; };
+		T1E5T1E5T1E50005 /* APIClientAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50006 /* APIClientAuthTests.swift */; };
+		T1E5T1E5T1E50007 /* ListModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50008 /* ListModelTests.swift */; };
+		T1E5T1E5T1E50009 /* UserModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5000A /* UserModelTests.swift */; };
+		T1E5T1E5T1E5D001 /* APIClientVideoUploadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5D002 /* APIClientVideoUploadTests.swift */; };
+		T1E5T1E5T1E5G001 /* APIClientExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5G002 /* APIClientExportTests.swift */; };
+		T1E5T1E5T1E5H001 /* APIClientConnectionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5H002 /* APIClientConnectionsTests.swift */; };
+		T1E5T1E5T1E5H003 /* ListConnectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5H004 /* ListConnectionTests.swift */; };
+		T1E5T1E5T1E5M001 /* MessageModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5M002 /* MessageModelTests.swift */; };
+		T1E5T1E5T1E5M003 /* AppNotificationModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5M004 /* AppNotificationModelTests.swift */; };
+		T1E5T1E5T1E5M005 /* FollowStateModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5M006 /* FollowStateModelTests.swift */; };
+		T1E5T1E5T1E5M007 /* DocumentModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5M008 /* DocumentModelTests.swift */; };
+		T1E5T1E5T1E5N001 /* APIClientMessagesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5N002 /* APIClientMessagesTests.swift */; };
+		T1E5T1E5T1E5N003 /* APIClientListsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5N004 /* APIClientListsTests.swift */; };
+		T1E5T1E5T1E5N005 /* APIClientDocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5N006 /* APIClientDocumentsTests.swift */; };
+		T1E5T1E5T1E5N007 /* APIClientNotificationsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5N008 /* APIClientNotificationsTests.swift */; };
+		T1E5T1E5T1E5N009 /* APIClientFollowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5N010 /* APIClientFollowTests.swift */; };
+		T1E5T1E5T1E5N011 /* APIClientProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5N012 /* APIClientProfileTests.swift */; };
+		T1E5T1E5T1E5N013 /* APIClientImageUploadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5N014 /* APIClientImageUploadTests.swift */; };
+		T1E5T1E5T1E5N015 /* APIClientPeopleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5N016 /* APIClientPeopleTests.swift */; };
+		T1E5T1E5T1E5P001 /* APIClientListFolderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P002 /* APIClientListFolderTests.swift */; };
+		T1E5T1E5T1E5P003 /* APIClientSearchDocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */; };
+		T1E5T1E5T1E5P005 /* APIClientSearchListsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */; };
+		T1E5T1E5T1E5P007 /* ListSchemaDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P008 /* ListSchemaDraftTests.swift */; };
+		T1E5T1E5T1E5P009 /* APIClientUpdateListSchemaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */; };
+		T1E5T1E5T1E5P011 /* EnvLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P012 /* EnvLoader.swift */; };
+		T1E5T1E5T1E5P013 /* E2EReadOnlyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */; };
+		T1E5T1E5T1E5P015 /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */; };
+		T1E5T1E5T1E5P017 /* APIClientPasswordResetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P018 /* APIClientPasswordResetTests.swift */; };
+		T1E5T1E5T1E5P019 /* APIClientEmailVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P01A /* APIClientEmailVerificationTests.swift */; };
+		T1E5T1E5T1E5P01B /* APIClientIdentitiesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P01C /* APIClientIdentitiesTests.swift */; };
+		T1E5T1E5T1E5P01D /* APIClientOAuthStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P01E /* APIClientOAuthStatusTests.swift */; };
+		T1E5T1E5T1E5P01F /* APIClientAvatarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P020 /* APIClientAvatarTests.swift */; };
+		T1E5T1E5T1E5P021 /* APIClientOrganizationsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P022 /* APIClientOrganizationsTests.swift */; };
+		T1E5T1E5T1E5P023 /* APIClientDeleteAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P024 /* APIClientDeleteAccountTests.swift */; };
+		T1E5T1E5T1E5P025 /* OrganizationModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P026 /* OrganizationModelTests.swift */; };
+		T1E5T1E5T1E5P027 /* LinkedIdentityModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P028 /* LinkedIdentityModelTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		T1E5T1E5T1E5000B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1B1C1D1E1F10027 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B1C1D1E1F10023;
+			remoteInfo = InterlinedList;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A1B1C1D1E1F10000 /* InterlinedList.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = InterlinedList.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -38,6 +118,78 @@
 		A1B1C1D1E1F10018 /* ComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F1001A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1B1C1D1E1F10022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1B1C1D1E1F1002E /* List.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = List.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10030 /* ListsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListsView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10032 /* EditMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMessageView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaEditorView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F100A4 /* ListSchemaDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaDraft.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10034 /* MessageThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageThreadView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10036 /* CreateListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateListView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10038 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileView.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F1003A /* ScheduledMessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledMessagesView.swift; sourceTree = "<group>"; };
+		A2B2C2D2E2F20042 /* AppNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNotification.swift; sourceTree = "<group>"; };
+		A2B2C2D2E2F20044 /* FollowState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowState.swift; sourceTree = "<group>"; };
+		A2B2C2D2E2F20046 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		A2B2C2D2E2F20048 /* FollowRequestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowRequestsView.swift; sourceTree = "<group>"; };
+		A2B2C2D2E2F2004A /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
+		A3C3D3E3F3A30052 /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
+		A3C3D3E3F3A30054 /* DocumentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentsView.swift; sourceTree = "<group>"; };
+		A3C3D3E3F3A30056 /* URLSessionProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLSessionProtocol.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A10002 /* DataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataCache.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A10004 /* AppDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataStore.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A10006 /* SkeletonBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonBlock.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A10008 /* FeedSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedSkeletonView.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A1000A /* ListSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSkeletonView.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentSkeletonView.swift; sourceTree = "<group>"; };
+		B1C1D1E1F1A1000E /* ListItemFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemFormView.swift; sourceTree = "<group>"; };
+		C1D1E1F1A1B10002 /* Organization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Organization.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A10002 /* OAuthCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCoordinator.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A10004 /* ChangeEmailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeEmailView.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A10006 /* ForgotPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgotPasswordView.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A10008 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A1000A /* EmailVerificationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationBanner.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A1000C /* LinkedIdentitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedIdentitiesView.swift; sourceTree = "<group>"; };
+		D0A1D0A1D0A1000E /* OAuthSignInButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthSignInButton.swift; sourceTree = "<group>"; };
+		F379C02B2FCEB9440069B81C /* InterlinedList.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = InterlinedList.xctestplan; sourceTree = "<group>"; };
+		T1E5T1E5T1E50000 /* InterlinedListTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = InterlinedListTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		T1E5T1E5T1E50002 /* InterlinedListTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterlinedListTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E50004 /* MockURLSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockURLSession.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E50006 /* APIClientAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientAuthTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E50008 /* ListModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListModelTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5000A /* UserModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserModelTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5D002 /* APIClientVideoUploadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientVideoUploadTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5G002 /* APIClientExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientExportTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5H002 /* APIClientConnectionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientConnectionsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5H004 /* ListConnectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListConnectionTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5M002 /* MessageModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageModelTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5M004 /* AppNotificationModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNotificationModelTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5M006 /* FollowStateModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowStateModelTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5M008 /* DocumentModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentModelTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5N002 /* APIClientMessagesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientMessagesTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5N004 /* APIClientListsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientListsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5N006 /* APIClientDocumentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientDocumentsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5N008 /* APIClientNotificationsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientNotificationsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5N010 /* APIClientFollowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientFollowTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5N012 /* APIClientProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientProfileTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5N014 /* APIClientImageUploadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientImageUploadTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5N016 /* APIClientPeopleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientPeopleTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P002 /* APIClientListFolderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientListFolderTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientSearchDocumentsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientSearchListsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P008 /* ListSchemaDraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaDraftTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientUpdateListSchemaTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P012 /* EnvLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvLoader.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2EReadOnlyTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P018 /* APIClientPasswordResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientPasswordResetTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P01A /* APIClientEmailVerificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientEmailVerificationTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P01C /* APIClientIdentitiesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientIdentitiesTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P01E /* APIClientOAuthStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientOAuthStatusTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P020 /* APIClientAvatarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientAvatarTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P022 /* APIClientOrganizationsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientOrganizationsTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P024 /* APIClientDeleteAccountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientDeleteAccountTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P026 /* OrganizationModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationModelTests.swift; sourceTree = "<group>"; };
+		T1E5T1E5T1E5P028 /* LinkedIdentityModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedIdentityModelTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,13 +200,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		T1E5T1E5T1E5000C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		A1B1C1D1E1F1001C /* InterlinedList */ = {
+		A1B1C1D1E1F1001C = {
 			isa = PBXGroup;
 			children = (
+				F379C02B2FCEB9440069B81C /* InterlinedList.xctestplan */,
 				A1B1C1D1E1F1001D /* InterlinedList */,
+				T1E5T1E5T1E50010 /* InterlinedListTests */,
 				A1B1C1D1E1F1001E /* Products */,
 			);
 			sourceTree = "<group>";
@@ -76,6 +237,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B1C1D1E1F10000 /* InterlinedList.app */,
+				T1E5T1E5T1E50000 /* InterlinedListTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -85,6 +247,12 @@
 			children = (
 				A1B1C1D1E1F10006 /* User.swift */,
 				A1B1C1D1E1F10008 /* Message.swift */,
+				A1B1C1D1E1F1002E /* List.swift */,
+				A1B1C1D1E1F100A4 /* ListSchemaDraft.swift */,
+				A2B2C2D2E2F20042 /* AppNotification.swift */,
+				A2B2C2D2E2F20044 /* FollowState.swift */,
+				A3C3D3E3F3A30052 /* Document.swift */,
+				C1D1E1F1A1B10002 /* Organization.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -95,6 +263,10 @@
 				A1B1C1D1E1F1000A /* KeychainService.swift */,
 				A1B1C1D1E1F1000C /* APIClient.swift */,
 				A1B1C1D1E1F1000E /* AuthState.swift */,
+				A3C3D3E3F3A30056 /* URLSessionProtocol.swift */,
+				B1C1D1E1F1A10002 /* DataCache.swift */,
+				B1C1D1E1F1A10004 /* AppDataStore.swift */,
+				D0A1D0A1D0A10002 /* OAuthCoordinator.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -108,8 +280,107 @@
 				A1B1C1D1E1F10014 /* MainTabView.swift */,
 				A1B1C1D1E1F10016 /* FeedView.swift */,
 				A1B1C1D1E1F10018 /* ComposeView.swift */,
+				A1B1C1D1E1F10030 /* ListsView.swift */,
+				A1B1C1D1E1F10032 /* EditMessageView.swift */,
+				A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */,
+				A1B1C1D1E1F10034 /* MessageThreadView.swift */,
+				A1B1C1D1E1F10036 /* CreateListView.swift */,
+				A1B1C1D1E1F10038 /* UserProfileView.swift */,
+				A1B1C1D1E1F1003A /* ScheduledMessagesView.swift */,
+				A2B2C2D2E2F20046 /* NotificationsView.swift */,
+				A2B2C2D2E2F20048 /* FollowRequestsView.swift */,
+				A2B2C2D2E2F2004A /* EditProfileView.swift */,
+				A3C3D3E3F3A30054 /* DocumentsView.swift */,
+				B1C1D1E1F1A10006 /* SkeletonBlock.swift */,
+				B1C1D1E1F1A10008 /* FeedSkeletonView.swift */,
+				B1C1D1E1F1A1000A /* ListSkeletonView.swift */,
+				B1C1D1E1F1A1000C /* DocumentSkeletonView.swift */,
+				B1C1D1E1F1A1000E /* ListItemFormView.swift */,
+				D0A1D0A1D0A10004 /* ChangeEmailView.swift */,
+				D0A1D0A1D0A10006 /* ForgotPasswordView.swift */,
+				D0A1D0A1D0A10008 /* ResetPasswordView.swift */,
+				D0A1D0A1D0A1000A /* EmailVerificationBanner.swift */,
+				D0A1D0A1D0A1000C /* LinkedIdentitiesView.swift */,
+				D0A1D0A1D0A1000E /* OAuthSignInButton.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		T1E5T1E5T1E50010 /* InterlinedListTests */ = {
+			isa = PBXGroup;
+			children = (
+				T1E5T1E5T1E50002 /* InterlinedListTests.swift */,
+				T1E5T1E5T1E50004 /* MockURLSession.swift */,
+				T1E5T1E5T1E50011 /* APIClientTests */,
+				T1E5T1E5T1E50012 /* ModelTests */,
+				T1E5T1E5T1E5Q001 /* ServiceTests */,
+				T1E5T1E5T1E5Q002 /* E2E */,
+			);
+			path = InterlinedListTests;
+			sourceTree = "<group>";
+		};
+		T1E5T1E5T1E5Q001 /* ServiceTests */ = {
+			isa = PBXGroup;
+			children = (
+				T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */,
+			);
+			path = ServiceTests;
+			sourceTree = "<group>";
+		};
+		T1E5T1E5T1E5Q002 /* E2E */ = {
+			isa = PBXGroup;
+			children = (
+				T1E5T1E5T1E5P012 /* EnvLoader.swift */,
+				T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */,
+			);
+			path = E2E;
+			sourceTree = "<group>";
+		};
+		T1E5T1E5T1E50011 /* APIClientTests */ = {
+			isa = PBXGroup;
+			children = (
+				T1E5T1E5T1E50006 /* APIClientAuthTests.swift */,
+				T1E5T1E5T1E5D002 /* APIClientVideoUploadTests.swift */,
+				T1E5T1E5T1E5G002 /* APIClientExportTests.swift */,
+				T1E5T1E5T1E5H002 /* APIClientConnectionsTests.swift */,
+				T1E5T1E5T1E5N002 /* APIClientMessagesTests.swift */,
+				T1E5T1E5T1E5N004 /* APIClientListsTests.swift */,
+				T1E5T1E5T1E5N006 /* APIClientDocumentsTests.swift */,
+				T1E5T1E5T1E5N008 /* APIClientNotificationsTests.swift */,
+				T1E5T1E5T1E5N010 /* APIClientFollowTests.swift */,
+				T1E5T1E5T1E5N012 /* APIClientProfileTests.swift */,
+				T1E5T1E5T1E5N014 /* APIClientImageUploadTests.swift */,
+				T1E5T1E5T1E5N016 /* APIClientPeopleTests.swift */,
+				T1E5T1E5T1E5P002 /* APIClientListFolderTests.swift */,
+				T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */,
+				T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */,
+				T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */,
+				T1E5T1E5T1E5P018 /* APIClientPasswordResetTests.swift */,
+				T1E5T1E5T1E5P01A /* APIClientEmailVerificationTests.swift */,
+				T1E5T1E5T1E5P01C /* APIClientIdentitiesTests.swift */,
+				T1E5T1E5T1E5P01E /* APIClientOAuthStatusTests.swift */,
+				T1E5T1E5T1E5P020 /* APIClientAvatarTests.swift */,
+				T1E5T1E5T1E5P022 /* APIClientOrganizationsTests.swift */,
+				T1E5T1E5T1E5P024 /* APIClientDeleteAccountTests.swift */,
+			);
+			path = APIClientTests;
+			sourceTree = "<group>";
+		};
+		T1E5T1E5T1E50012 /* ModelTests */ = {
+			isa = PBXGroup;
+			children = (
+				T1E5T1E5T1E50008 /* ListModelTests.swift */,
+				T1E5T1E5T1E5000A /* UserModelTests.swift */,
+				T1E5T1E5T1E5H004 /* ListConnectionTests.swift */,
+				T1E5T1E5T1E5M002 /* MessageModelTests.swift */,
+				T1E5T1E5T1E5M004 /* AppNotificationModelTests.swift */,
+				T1E5T1E5T1E5M006 /* FollowStateModelTests.swift */,
+				T1E5T1E5T1E5M008 /* DocumentModelTests.swift */,
+				T1E5T1E5T1E5P008 /* ListSchemaDraftTests.swift */,
+				T1E5T1E5T1E5P026 /* OrganizationModelTests.swift */,
+				T1E5T1E5T1E5P028 /* LinkedIdentityModelTests.swift */,
+			);
+			path = ModelTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -132,6 +403,23 @@
 			productReference = A1B1C1D1E1F10000 /* InterlinedList.app */;
 			productType = "com.apple.product-type.application";
 		};
+		T1E5T1E5T1E5000D /* InterlinedListTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = T1E5T1E5T1E50013 /* Build configuration list for PBXNativeTarget "InterlinedListTests" */;
+			buildPhases = (
+				T1E5T1E5T1E5000E /* Sources */,
+				T1E5T1E5T1E5000C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				T1E5T1E5T1E5000F /* PBXTargetDependency */,
+			);
+			name = InterlinedListTests;
+			productName = InterlinedListTests;
+			productReference = T1E5T1E5T1E50000 /* InterlinedListTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -140,7 +428,13 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					T1E5T1E5T1E5000D = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = A1B1C1D1E1F10023;
+					};
+				};
 			};
 			buildConfigurationList = A1B1C1D1E1F10028 /* Build configuration list for PBXProject "InterlinedList" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -156,6 +450,7 @@
 			projectRoot = "";
 			targets = (
 				A1B1C1D1E1F10023 /* InterlinedList */,
+				T1E5T1E5T1E5000D /* InterlinedListTests */,
 			);
 		};
 /* End PBXProject section */
@@ -188,10 +483,95 @@
 				A1B1C1D1E1F10013 /* MainTabView.swift in Sources */,
 				A1B1C1D1E1F10015 /* FeedView.swift in Sources */,
 				A1B1C1D1E1F10017 /* ComposeView.swift in Sources */,
+				A1B1C1D1E1F1002D /* List.swift in Sources */,
+				A1B1C1D1E1F1002F /* ListsView.swift in Sources */,
+				A1B1C1D1E1F10031 /* EditMessageView.swift in Sources */,
+				A1B1C1D1E1F100A1 /* ListSchemaEditorView.swift in Sources */,
+				A1B1C1D1E1F100A3 /* ListSchemaDraft.swift in Sources */,
+				A1B1C1D1E1F10033 /* MessageThreadView.swift in Sources */,
+				A1B1C1D1E1F10035 /* CreateListView.swift in Sources */,
+				A1B1C1D1E1F10037 /* UserProfileView.swift in Sources */,
+				A1B1C1D1E1F10039 /* ScheduledMessagesView.swift in Sources */,
+				A2B2C2D2E2F20041 /* AppNotification.swift in Sources */,
+				A2B2C2D2E2F20043 /* FollowState.swift in Sources */,
+				A2B2C2D2E2F20045 /* NotificationsView.swift in Sources */,
+				A2B2C2D2E2F20047 /* FollowRequestsView.swift in Sources */,
+				A2B2C2D2E2F20049 /* EditProfileView.swift in Sources */,
+				A3C3D3E3F3A30051 /* Document.swift in Sources */,
+				A3C3D3E3F3A30053 /* DocumentsView.swift in Sources */,
+				A3C3D3E3F3A30055 /* URLSessionProtocol.swift in Sources */,
+				B1C1D1E1F1A10001 /* DataCache.swift in Sources */,
+				B1C1D1E1F1A10003 /* AppDataStore.swift in Sources */,
+				B1C1D1E1F1A10005 /* SkeletonBlock.swift in Sources */,
+				B1C1D1E1F1A10007 /* FeedSkeletonView.swift in Sources */,
+				B1C1D1E1F1A10009 /* ListSkeletonView.swift in Sources */,
+				B1C1D1E1F1A1000B /* DocumentSkeletonView.swift in Sources */,
+				B1C1D1E1F1A1000D /* ListItemFormView.swift in Sources */,
+				D0A1D0A1D0A10001 /* OAuthCoordinator.swift in Sources */,
+				D0A1D0A1D0A10003 /* ChangeEmailView.swift in Sources */,
+				D0A1D0A1D0A10005 /* ForgotPasswordView.swift in Sources */,
+				D0A1D0A1D0A10007 /* ResetPasswordView.swift in Sources */,
+				D0A1D0A1D0A10009 /* EmailVerificationBanner.swift in Sources */,
+				D0A1D0A1D0A1000B /* LinkedIdentitiesView.swift in Sources */,
+				D0A1D0A1D0A1000D /* OAuthSignInButton.swift in Sources */,
+				C1D1E1F1A1B10001 /* Organization.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		T1E5T1E5T1E5000E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				T1E5T1E5T1E50001 /* InterlinedListTests.swift in Sources */,
+				T1E5T1E5T1E50003 /* MockURLSession.swift in Sources */,
+				T1E5T1E5T1E50005 /* APIClientAuthTests.swift in Sources */,
+				T1E5T1E5T1E5D001 /* APIClientVideoUploadTests.swift in Sources */,
+				T1E5T1E5T1E5G001 /* APIClientExportTests.swift in Sources */,
+				T1E5T1E5T1E5H001 /* APIClientConnectionsTests.swift in Sources */,
+				T1E5T1E5T1E50007 /* ListModelTests.swift in Sources */,
+				T1E5T1E5T1E50009 /* UserModelTests.swift in Sources */,
+				T1E5T1E5T1E5H003 /* ListConnectionTests.swift in Sources */,
+				T1E5T1E5T1E5M001 /* MessageModelTests.swift in Sources */,
+				T1E5T1E5T1E5M003 /* AppNotificationModelTests.swift in Sources */,
+				T1E5T1E5T1E5M005 /* FollowStateModelTests.swift in Sources */,
+				T1E5T1E5T1E5M007 /* DocumentModelTests.swift in Sources */,
+				T1E5T1E5T1E5N001 /* APIClientMessagesTests.swift in Sources */,
+				T1E5T1E5T1E5N003 /* APIClientListsTests.swift in Sources */,
+				T1E5T1E5T1E5N005 /* APIClientDocumentsTests.swift in Sources */,
+				T1E5T1E5T1E5N007 /* APIClientNotificationsTests.swift in Sources */,
+				T1E5T1E5T1E5N009 /* APIClientFollowTests.swift in Sources */,
+				T1E5T1E5T1E5N011 /* APIClientProfileTests.swift in Sources */,
+				T1E5T1E5T1E5N013 /* APIClientImageUploadTests.swift in Sources */,
+				T1E5T1E5T1E5N015 /* APIClientPeopleTests.swift in Sources */,
+				T1E5T1E5T1E5P001 /* APIClientListFolderTests.swift in Sources */,
+				T1E5T1E5T1E5P003 /* APIClientSearchDocumentsTests.swift in Sources */,
+				T1E5T1E5T1E5P005 /* APIClientSearchListsTests.swift in Sources */,
+				T1E5T1E5T1E5P007 /* ListSchemaDraftTests.swift in Sources */,
+				T1E5T1E5T1E5P009 /* APIClientUpdateListSchemaTests.swift in Sources */,
+				T1E5T1E5T1E5P011 /* EnvLoader.swift in Sources */,
+				T1E5T1E5T1E5P013 /* E2EReadOnlyTests.swift in Sources */,
+				T1E5T1E5T1E5P015 /* KeychainServiceTests.swift in Sources */,
+				T1E5T1E5T1E5P017 /* APIClientPasswordResetTests.swift in Sources */,
+				T1E5T1E5T1E5P019 /* APIClientEmailVerificationTests.swift in Sources */,
+				T1E5T1E5T1E5P01B /* APIClientIdentitiesTests.swift in Sources */,
+				T1E5T1E5T1E5P01D /* APIClientOAuthStatusTests.swift in Sources */,
+				T1E5T1E5T1E5P01F /* APIClientAvatarTests.swift in Sources */,
+				T1E5T1E5T1E5P021 /* APIClientOrganizationsTests.swift in Sources */,
+				T1E5T1E5T1E5P023 /* APIClientDeleteAccountTests.swift in Sources */,
+				T1E5T1E5T1E5P025 /* OrganizationModelTests.swift in Sources */,
+				T1E5T1E5T1E5P027 /* LinkedIdentityModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		T1E5T1E5T1E5000F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B1C1D1E1F10023 /* InterlinedList */;
+			targetProxy = T1E5T1E5T1E5000B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A1B1C1D1E1F10029 /* Debug */ = {
@@ -202,21 +582,48 @@
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
 					"$(inherited)",
 				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -230,15 +637,42 @@
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = s;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -248,17 +682,18 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = BJA9558E4B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = InterlinedList/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -266,6 +701,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.interlinedlist.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -276,17 +712,18 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = BJA9558E4B;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = InterlinedList/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -294,9 +731,60 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.interlinedlist.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		T1E5T1E5T1E50014 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BJA9558E4B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.interlinedlist.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/InterlinedList.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/InterlinedList";
+			};
+			name = Debug;
+		};
+		T1E5T1E5T1E50015 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = BJA9558E4B;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.interlinedlist.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/InterlinedList.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/InterlinedList";
 			};
 			name = Release;
 		};
@@ -317,6 +805,15 @@
 			buildConfigurations = (
 				A1B1C1D1E1F10029 /* Debug */,
 				A1B1C1D1E1F1002A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		T1E5T1E5T1E50013 /* Build configuration list for PBXNativeTarget "InterlinedListTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				T1E5T1E5T1E50014 /* Debug */,
+				T1E5T1E5T1E50015 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

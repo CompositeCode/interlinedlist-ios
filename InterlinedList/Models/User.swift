@@ -21,9 +21,18 @@ struct User: Codable, Identifiable {
     let showAdvancedPostSettings: Bool?
     /// Default visibility for new messages (true = public).
     let defaultPubliclyVisible: Bool?
+    /// Subscription state from the API. Known values: "free", "subscriber",
+    /// "subscriber:monthly", "subscriber:annual". Any prefix of "subscriber"
+    /// grants subscriber access. Optional because older API deployments
+    /// may omit the field.
+    let customerStatus: String?
 
     var displayNameOrUsername: String {
         displayName?.isEmpty == false ? (displayName ?? username) : username
+    }
+
+    var isSubscriber: Bool {
+        customerStatus?.hasPrefix("subscriber") == true
     }
 }
 

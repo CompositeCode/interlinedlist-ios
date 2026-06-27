@@ -14,6 +14,11 @@ struct RegisterView: View {
     @State private var password = ""
     @State private var errorMessage: String?
     @State private var isLoading = false
+    @State private var showMastodonPrompt = false
+    @State private var mastodonInstance = ""
+    @State private var oauthInFlight = false
+    @State private var linkedinVisible = false
+    @State private var twitterVisible = false
 
     var body: some View {
         NavigationStack {
@@ -59,6 +64,14 @@ struct RegisterView: View {
                     }
                     .disabled(isLoading || email.isEmpty || username.isEmpty || password.count < 8)
                 }
+
+                Section("Or sign up with") {
+                    ForEach(visibleProviders, id: \.rawValue) { provider in
+                        OAuthSignInButton(provider: provider, inFlight: oauthInFlight) {
+                            handleOAuthTap(provider: provider)
+                        }
+                    }
+                }
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Sign up")
@@ -70,8 +83,68 @@ struct RegisterView: View {
                     }
                 }
             }
+            .alert("Mastodon instance",
+                   isPresented: $showMastodonPrompt) {
+                TextField("mastodon.social", text: $mastodonInstance)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+                Button("Continue") {
+                    Task { await runOAuth(provider: .mastodon, instance: mastodonInstance) }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Enter your Mastodon server hostname.")
+            }
         }
+        .task { await refreshOAuthVisibility() }
         .onAppear { errorMessage = nil }
+    }
+
+    private var visibleProviders: [OAuthProvider] {
+        OAuthProvider.allCases.filter {
+            switch $0 {
+            case .linkedin: return linkedinVisible
+            case .twitter: return twitterVisible
+            default: return true
+            }
+        }
+    }
+
+    private func refreshOAuthVisibility() async {
+        async let li = APIClient.shared.linkedinStatus()
+        async let tw = APIClient.shared.twitterStatus()
+        if let liStatus = try? await li { linkedinVisible = liStatus.configured } else { linkedinVisible = false }
+        if let twStatus = try? await tw { twitterVisible = twStatus.configured } else { twitterVisible = false }
+    }
+
+    private func handleOAuthTap(provider: OAuthProvider) {
+        if provider == .mastodon {
+            mastodonInstance = ""
+            showMastodonPrompt = true
+            return
+        }
+        Task { await runOAuth(provider: provider, instance: nil) }
+    }
+
+    private func runOAuth(provider: OAuthProvider, instance: String?) async {
+        errorMessage = nil
+        oauthInFlight = true
+        defer { oauthInFlight = false }
+        do {
+            let token = try await OAuthCoordinator.shared.authenticate(
+                provider: provider,
+                instance: instance,
+                link: false
+            )
+            try await authState.completeOAuthLogin(token: token)
+            dismiss()
+        } catch OAuthError.cancelled {
+            // No surfaced error.
+        } catch OAuthError.providerError(let message) {
+            errorMessage = message
+        } catch {
+            errorMessage = "Sign-up with \(provider.displayName) failed. Please try again."
+        }
     }
 
     private func register() async {

@@ -44,6 +44,10 @@ struct Message: Codable, Identifiable {
     let videoUrls: [String]?
     let linkMetadata: LinkMetadata?
     let parentId: String?
+    let scheduledAt: String?
+    let tags: [String]?
+    let digCount: Int?
+    let dugByMe: Bool?
 
     var authorDisplay: String {
         guard let user = user else { return "Unknown" }
@@ -52,9 +56,9 @@ struct Message: Codable, Identifiable {
     }
 
     var hasPreviews: Bool {
-        let hasLinks = (linkMetadata?.links.isEmpty == false) ?? false
-        let hasImages = (imageUrls?.isEmpty == false) ?? false
-        let hasVideos = (videoUrls?.isEmpty == false) ?? false
+        let hasLinks = linkMetadata?.links.isEmpty == false
+        let hasImages = imageUrls?.isEmpty == false
+        let hasVideos = videoUrls?.isEmpty == false
         return hasLinks || hasImages || hasVideos
     }
 }
@@ -75,6 +79,10 @@ struct CreateMessageBody: Encodable {
     let content: String
     let publiclyVisible: Bool?
     let parentId: String?
+    let tags: [String]?
+    let scheduledAt: String?
+    let imageUrls: [String]?
+    let videoUrls: [String]?
 }
 
 struct CreateMessageResponse: Codable {
