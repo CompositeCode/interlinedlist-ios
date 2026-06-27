@@ -142,4 +142,23 @@ final class APIClientDocumentsTests: XCTestCase {
         XCTAssertTrue(body.contains("\"parentId\""), "expected camelCase parentId, got: \(body)")
         XCTAssertFalse(body.contains("parent_id"))
     }
+
+    // MARK: deleteDocumentFolder()
+
+    func test_deleteDocumentFolder_sendsDeleteToCorrectPath() async throws {
+        session.stub(data: Data(), statusCode: 200)
+        try await sut.deleteDocumentFolder(id: "f1")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "DELETE")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents/folders/f1")
+    }
+
+    func test_deleteDocumentFolder_401_throws() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            try await sut.deleteDocumentFolder(id: "f1")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
 }

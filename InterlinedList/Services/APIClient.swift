@@ -535,6 +535,19 @@ final class APIClient {
         return folder
     }
 
+    /// Soft-deletes a document folder. The server cascades the delete to any
+    /// subfolders and documents inside it (`DELETE /api/documents/folders/{id}`).
+    func deleteDocumentFolder(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/documents/folders/\(encoded)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
     func searchDocuments(q: String, limit: Int = 20, offset: Int = 0) async throws -> ([Document], Pagination?) {
         let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
         struct Response: Decodable { let documents: [Document]; let pagination: Pagination? }

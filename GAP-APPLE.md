@@ -29,6 +29,85 @@ Legend for each step:
 
 Two Info.plist items to fix **before** the first upload — see §3.5.
 
+**Scope decisions baked into this doc (2026-06-27):** the first release
+targets **full web parity** and **includes push notifications (Phase 9)**,
+so the Push capability/entitlement and an APNs key are now part of the
+first ship (§2.3, §3.6, §0.1). The app also still needs the **UGC
+safety/moderation** work (report/block/terms gate) before it can pass
+review — that's tracked as **Phase 14** in `GAP-NEXT-STEPS.md` and called
+out in §5.4 / §11 below.
+
+---
+
+## 0.1 Open questions & info to gather before submission
+
+These are the unknowns that block a clean submission. Each line says **how
+to obtain it**. Resolve them before §7 (archive/upload); none require code.
+
+**Account & identity**
+- [ ] **Membership active + your role.** Confirm the Apple Developer
+      Program membership is paid/active and you are **Admin** or **App
+      Manager** on team `BJA9558E4B`.
+      *How:* <https://developer.apple.com/account> ▸ Membership details;
+      Users and Access shows your role.
+- [ ] **Team ID is correct.** This doc assumes `BJA9558E4B`.
+      *How:* `xcodebuild -showBuildSettings -scheme InterlinedList | grep DEVELOPMENT_TEAM`,
+      or the portal Membership page. Update every occurrence if it differs.
+- [ ] **App name is available.** "InterlinedList" must be globally unique on
+      the App Store.
+      *How:* App Store Connect ▸ Apps ▸ "+" ▸ New App — if the name is
+      taken you'll be told at reservation; have a fallback name ready.
+
+**Listing metadata (owner decisions needed)**
+- [ ] **Primary / secondary category.** Likely **Social Networking**;
+      confirm the pair.
+- [ ] **Age rating answers.** A UGC social app typically lands 17+. Answer
+      the questionnaire honestly **after Phase 14 lands** (the answers
+      depend on having reporting/blocking in place).
+- [ ] **Demo reviewer account.** A stable **production** email/password
+      login for App Review (OAuth is awkward for reviewers).
+      *How:* register one on `interlinedlist.com`; keep it active; put the
+      creds in the review notes (§9) — **never commit them to the repo**.
+
+**URLs to verify live (200 OK)**
+- [ ] **Privacy policy:** `https://interlinedlist.com/privacy` (mandatory).
+- [ ] **Support URL:** confirm the real one (`/help`?) resolves.
+- [ ] **Community Guidelines / EULA** for the Phase 14 terms gate: confirm a
+      published zero-tolerance guidelines page exists (e.g. `/terms`,
+      `/guidelines`, `/community`). If none exists, the app can present
+      **Apple's standard EULA** instead — decide which.
+      *How:* `curl -sI <url>` or open in a browser; coordinate with
+      `GAP-ENDPOINTS.md` §H.
+
+**App Privacy "nutrition label" inputs**
+- [ ] **Enumerate collected data → purpose.** From the API request bodies
+      the app sends: email, display name/bio, user content (posts, lists,
+      documents), avatar image, user identifier, linked-OAuth identities,
+      and — with Phase 9 — the **device push token**. Map each to a purpose
+      (App Functionality / Account Management; the app does no tracking/ads).
+      *How:* skim `APIClient` request bodies; fill App Store Connect ▸ App
+      Privacy. Must match what the app actually sends (§11).
+
+**Push (Phase 9 — now in v1)**
+- [ ] **APNs Auth Key (.p8).** The backend needs it to send pushes.
+      *How:* portal ▸ Certificates, IDs & Profiles ▸ **Keys** ▸ "+" ▸ enable
+      **Apple Push Notifications service (APNs)** ▸ download the `.p8`
+      **once** (non-recoverable). Hand the **Key ID + Team ID + .p8** to
+      the backend owner; enable **Push Notifications** on the App ID (§2.3).
+- [ ] **APNs environment.** Confirm whether the backend sends via sandbox
+      (TestFlight/dev) vs production and that it keys off the right
+      `aps-environment`.
+
+**Upload tooling (optional, for CLI/CI)**
+- [ ] **App Store Connect API key (.p8).** For scripted upload (§7.2).
+      *How:* App Store Connect ▸ Users and Access ▸ Integrations ▸ Keys ▸
+      generate; note Issuer ID + Key ID; store the `.p8` securely.
+
+**Assets**
+- [ ] **Screenshots** at 6.9" and 6.5" (§6).
+      *How:* boot the iPhone 16 Pro Max + a 6.5" simulator, then
+      `xcrun simctl io booted screenshot shot.png` per screen.
+
 ---
 
 ## 1. Prerequisites (one-time)
@@ -55,10 +134,15 @@ archive, but doing it explicitly avoids surprises:
 1. 🌐 Developer portal ▸ Certificates, IDs & Profiles ▸ **Identifiers** ▸ "+".
 2. Select **App IDs ▸ App**. Description: "InterlinedList". Bundle ID:
    **Explicit** = `com.interlinedlist.app`.
-3. **Capabilities**: leave everything off for v1 *unless* you ship Phase 9
-   (push) — then enable **Push Notifications** here (and in Xcode, §6 of
-   the roadmap). Nothing else is needed for the current feature set.
+3. **Capabilities**: enable **Push Notifications** here — Phase 9 (push) is
+   in v1, so the App ID needs the push capability (and the matching Xcode
+   entitlement, §3.6). Leave everything else off; nothing else is needed
+   for the v1 feature set.
 4. Save.
+
+   > **§2.3 APNs key.** Push also needs an **APNs Auth Key (.p8)** for the
+   > backend to send notifications — create it under Keys and hand the
+   > Key ID + Team ID + `.p8` to the backend owner (§0.1).
 
 > You do **not** need an Associated Domains entry for the current OAuth /
 > deep-link flow — it uses the custom `interlinedlist://` URL scheme, which
@@ -131,11 +215,14 @@ archive, but doing it explicitly avoids surprises:
    rejected.
 
 ### 3.6 Capabilities currently needed 🖥️
-- **None** for the shipped feature set. Do **not** add entitlements you
-  don't use — unused entitlements (push, associated domains, etc.) can
-  trigger provisioning failures or review questions.
-- Phase 9 (APNs) is the only thing that would add a capability later
-  (Push Notifications + the `aps-environment` entitlement).
+- **Push Notifications** — required for v1 because Phase 9 (APNs) ships in
+  the first release. Target ▸ Signing & Capabilities ▸ "+ Capability" ▸
+  **Push Notifications**; Xcode adds the `aps-environment` entitlement and
+  Push to the provisioning profile. Pair with enabling Push on the App ID
+  (§2.3) and creating the APNs key (§0.1).
+- Do **not** add any *other* entitlement you don't use — unused
+  entitlements (associated domains, iCloud, etc.) can trigger provisioning
+  failures or review questions.
 
 ---
 
@@ -184,8 +271,10 @@ archive, but doing it explicitly avoids surprises:
 - Complete the questionnaire honestly. A social app with user-generated
   content typically lands 12+/17+. **UGC apps must also** provide: a way to
   report objectionable content, block users, and a posted EULA/agreement —
-  Apple checks for these on social apps (Guideline 1.2). Confirm the app
-  exposes content reporting/blocking, or add it before review.
+  Apple checks for these on social apps (Guideline 1.2). **The app does not
+  have these yet** — they are tracked as **Phase 14 (UGC safety &
+  moderation)** in `GAP-NEXT-STEPS.md` and **must ship before this app can
+  pass review.** Treat Phase 14 as a hard gate on submission.
 
 ### 5.5 Export compliance ✅ handled by §3.5.1
 - With `ITSAppUsesNonExemptEncryption=false`, no annual self-classification
@@ -299,7 +388,8 @@ xcodebuild -exportArchive \
 - **Anti-steering**: any hint of an external subscription/purchase. Keep
   the build silent on billing (§5.1).
 - **UGC safety (1.2)**: missing content reporting / user blocking / EULA on
-  a social app. Verify these exist before review.
+  a social app. **Currently missing — see Phase 14 in `GAP-NEXT-STEPS.md`;
+  it must ship before submission.**
 - **Broken demo login**: give reviewers working email/password creds.
 - **Privacy label mismatch**: the declared data must match what the app
   actually sends (email, posts, identifiers).
@@ -309,16 +399,21 @@ xcodebuild -exportArchive \
 ---
 
 ## 12. Quick pre-flight checklist
+- [ ] §0.1 open questions resolved (team ID, app-name availability, demo
+      account, category, age-rating, guidelines/EULA URL, privacy inputs)
 - [ ] Apple Developer membership active; agreements accepted (§1)
-- [ ] App ID `com.interlinedlist.app` registered (§2)
+- [ ] App ID `com.interlinedlist.app` registered, **Push enabled** (§2)
 - [ ] Automatic signing, team set, archive signs cleanly (§3.1)
 - [ ] Build number incremented (§3.2)
 - [ ] App icon has no warnings / no alpha (§3.3)
 - [ ] `ITSAppUsesNonExemptEncryption=false` added (§3.5.1)
 - [ ] `armv7` device capability replaced with `arm64` (§3.5.2)
-- [ ] No unused entitlements/capabilities (§3.6)
+- [ ] **Push Notifications capability + `aps-environment` entitlement** set;
+      APNs `.p8` key created and handed to backend (§2.3 / §3.6 / §0.1)
+- [ ] No *other* unused entitlements/capabilities (§3.6)
 - [ ] App Store Connect record + Free pricing + privacy/support URLs (§4)
-- [ ] Content reporting / blocking present for UGC (§5.4)
+- [ ] **Phase 14 UGC safety shipped** — report/block/mute + terms gate
+      (§5.4; `GAP-NEXT-STEPS.md` Phase 14) — **hard gate**
 - [ ] iPhone 6.9"/6.5" screenshots + description (§6)
 - [ ] Archive uploaded; build processed (§7)
 - [ ] TestFlight smoke test on device + demo login (§8)
