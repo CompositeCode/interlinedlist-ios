@@ -157,16 +157,24 @@ struct MessageThreadView: View {
     }
 
     private func formatDate(_ iso: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
-            let f = RelativeDateTimeFormatter()
-            f.unitsStyle = .abbreviated
-            return f.localizedString(for: date, relativeTo: Date())
+        if let date = threadISOFullFormatter.date(from: iso) ?? threadISOBasicFormatter.date(from: iso) {
+            return threadRelativeDateFormatter.localizedString(for: date, relativeTo: Date())
         }
         return iso
     }
 }
+
+private let threadISOFullFormatter: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+private let threadISOBasicFormatter = ISO8601DateFormatter()
+private let threadRelativeDateFormatter: RelativeDateTimeFormatter = {
+    let f = RelativeDateTimeFormatter()
+    f.unitsStyle = .abbreviated
+    return f
+}()
 
 #Preview {
     MessageThreadView(
@@ -185,7 +193,8 @@ struct MessageThreadView: View {
             scheduledAt: nil,
             tags: ["swift", "ios"],
             digCount: 3,
-            dugByMe: false
+            dugByMe: false,
+            crossPostUrls: nil
         ),
         currentUserId: "user1"
     )

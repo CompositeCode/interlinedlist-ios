@@ -74,7 +74,8 @@
       "Bash(gh auth *)",
       "Bash(git ls-remote *)",
       "Bash(gh pr *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(echo \"---exit $?\")"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

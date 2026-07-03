@@ -23,6 +23,7 @@ struct FeedView: View {
     @State private var messageToRepost: Message?
     @State private var threadMessage: Message?
     @State private var digStates: [String: (count: Int, dugByMe: Bool)] = [:]
+    @State private var locallyToggled: Set<String> = []
     @State private var profileUsername: String? = nil
     @State private var showScheduled = false
     @State private var searchText = ""
@@ -166,6 +167,7 @@ struct FeedView: View {
             .sheet(item: $messageToRepost) { message in
                 ComposeView(repostOf: message)
                     .environmentObject(authState)
+                    .environmentObject(store)
             }
             .sheet(item: $messageToEdit) { message in
                 EditMessageView(message: message) { updated in
@@ -205,7 +207,9 @@ struct FeedView: View {
                 .toolbar { feedToolbar }
         }
         .sheet(isPresented: $showCompose) {
-            ComposeView().environmentObject(authState)
+            ComposeView()
+                .environmentObject(authState)
+                .environmentObject(store)
         }
         .task { await applyInitialState() }
         .onChange(of: authState.user?.id) { _, _ in
@@ -277,6 +281,7 @@ struct FeedView: View {
                 result = try await APIClient.shared.dig(messageId: message.id)
             }
             digStates[message.id] = (count: result.digCount, dugByMe: result.dugByMe)
+            locallyToggled.insert(message.id)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch {
@@ -352,9 +357,8 @@ struct FeedView: View {
 
     private func initDigStates(from list: [Message]) {
         for message in list {
-            if digStates[message.id] == nil {
-                digStates[message.id] = (count: message.digCount ?? 0, dugByMe: message.dugByMe ?? false)
-            }
+            guard !locallyToggled.contains(message.id) else { continue }
+            digStates[message.id] = (count: message.digCount ?? 0, dugByMe: message.dugByMe ?? false)
         }
     }
 }
@@ -542,12 +546,8 @@ struct MessageRow: View {
     }
 
     private func formatDate(_ iso: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
-            let f = RelativeDateTimeFormatter()
-            f.unitsStyle = .abbreviated
-            return f.localizedString(for: date, relativeTo: Date())
+        if let date = isoFullFormatter.date(from: iso) ?? isoBasicFormatter.date(from: iso) {
+            return relativeDateFormatter.localizedString(for: date, relativeTo: Date())
         }
         return iso
     }
@@ -596,3 +596,18 @@ private struct LinkPreviewBlock: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
+
+// Shared across all MessageRow and LinkPreviewBlock instances — allocated once,
+// reused per render. ISO8601DateFormatter and RelativeDateTimeFormatter are
+// expensive to construct; creating them per-cell causes scroll jitter.
+private let isoFullFormatter: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+private let isoBasicFormatter = ISO8601DateFormatter()
+private let relativeDateFormatter: RelativeDateTimeFormatter = {
+    let f = RelativeDateTimeFormatter()
+    f.unitsStyle = .abbreviated
+    return f
+}()

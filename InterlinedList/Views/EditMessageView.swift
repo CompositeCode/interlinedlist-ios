@@ -133,7 +133,8 @@ struct EditMessageView: View {
             scheduledAt: nil,
             tags: nil,
             digCount: nil,
-            dugByMe: nil
+            dugByMe: nil,
+            crossPostUrls: nil
         ),
         onSave: { _ in }
     )

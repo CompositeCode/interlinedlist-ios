@@ -42,6 +42,30 @@ struct MessageLinkPreview: Codable, Identifiable {
     var id: String { url }
 }
 
+/// One destination a message was actually cross-posted to, echoed back on the
+/// Message after it publishes (server field: `crossPostUrls`). The shape differs
+/// per platform — Mastodon carries `statusId`/`instanceUrl`, Bluesky carries
+/// `cid`/`uri` — so everything past `platform` is optional. This is the API's
+/// source of truth for "where did this go", distinct from the compose-time
+/// `crossPostResults` toast shape (which not every deployment returns).
+struct CrossPostUrl: Codable, Identifiable, Equatable {
+    let platform: String
+    let url: String?
+    let instanceName: String?
+    let instanceUrl: String?
+    let statusId: String?
+    let cid: String?
+    let uri: String?
+
+    var id: String { url ?? uri ?? statusId ?? cid ?? platform }
+
+    /// Human label for the destination, e.g. "techhub.social" or "Bluesky".
+    var destinationName: String {
+        if let instanceName, !instanceName.isEmpty { return instanceName }
+        return platform.capitalized
+    }
+}
+
 struct Message: Codable, Identifiable {
     let id: String
     let content: String
@@ -58,6 +82,7 @@ struct Message: Codable, Identifiable {
     let tags: [String]?
     let digCount: Int?
     let dugByMe: Bool?
+    let crossPostUrls: [CrossPostUrl]?
 
     var authorDisplay: String {
         guard let user = user else { return "Unknown" }

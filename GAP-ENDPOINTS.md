@@ -120,12 +120,44 @@ prevent the trap.
 
 ## D. Cross-posting & link metadata (Phase 4) — undocumented response detail
 
-### D1. `POST /api/messages` cross-post result shape
+### D0. `GET /api/user/identities` rejects Bearer tokens (401) — **confirmed 2026-07-02**
 
-The create response is documented as no body, but the message-compose UI
-wants to tell the user "Posted to Bluesky ✓ · Mastodon ✗". iOS decodes an
-**optional** `crossPostResults: [{ platform, success, error }]` and simply
-shows nothing if it's absent. Please confirm whether the endpoint returns
+Live probe with a valid Bearer token (the same token that returns 200 from
+`GET /api/user`): `GET /api/user/identities` → **HTTP 401 `{"error":"Unauthorized"}`**.
+The route exists but is **session-cookie-only**, like `/api/github/*` (§F/B4).
+Because this is the *only* endpoint that reports a user's connected accounts
+(every guessed alternative — `/api/user/connections`, `/api/social/accounts`,
+`/api/crosspost/*`, `/api/user/providers`, `/api/user/settings` — returns 404,
+and `GET /api/user` carries no identities/connected-providers field), a
+Bearer-only native client **cannot discover which cross-post accounts the user
+has linked.** Direct consequence in iOS: the compose Mastodon picker (gated on
+`linkedIdentities()`) is always empty and Mastodon never appears, even when the
+account has a working Mastodon connection. **Ask:** make `/api/user/identities`
+accept Bearer (like `/api/user`), or add a Bearer-readable connected-providers
+list to `GET /api/user`.
+
+### D1. `POST /api/messages` cross-post result shape — **partially confirmed 2026-07-02**
+
+A published message echoes its *successful* destinations under
+**`crossPostUrls: [...]`** on the message object (confirmed live), e.g.:
+
+```json
+"crossPostUrls": [
+  {"platform":"mastodon","url":"…","statusId":"…","statusIds":["…"],"instanceUrl":"https://techhub.social","instanceName":"techhub.social"},
+  {"platform":"bluesky","url":"https://bsky.app/…","cid":"…","uri":"at://…","uris":["…"],"instanceName":"Bluesky"}
+]
+```
+
+Keys are **camelCase** and the shape is **per-platform** (Mastodon → `statusId`/
+`instanceUrl`; Bluesky → `cid`/`uri`). iOS now models this as `CrossPostUrl` and
+reads it for the post-publish confirmation. The separately-hypothesised
+`crossPostResults: [{ platform, success, error }]` array (used for a ✓/✗ toast)
+was **not observed** on real messages — treat it as best-effort/unconfirmed and
+prefer `crossPostUrls`. Still open: how the API reports a *failed* cross-post
+(does a failed platform appear in `crossPostUrls` with an error, get omitted, or
+surface elsewhere?). The old note below is retained for context.
+
+Please confirm whether the endpoint returns
 per-platform results and, if so, the exact field names.
 
 ### D2. `linkedInTargets` value vocabulary

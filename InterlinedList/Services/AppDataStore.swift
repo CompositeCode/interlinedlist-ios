@@ -117,6 +117,11 @@ final class AppDataStore: ObservableObject {
 
     // MARK: - Optimistic mutations
 
+    func insertFeedMessage(_ message: Message) {
+        feedMessages.insert(message, at: 0)
+        saveToCache()
+    }
+
     func removeList(id: String) { userLists.removeAll { $0.id == id }; saveToCache() }
     func removeListFolder(id: String) { listFolders.removeAll { $0.id == id }; saveToCache() }
 

@@ -11,6 +11,7 @@ private let defaultMaxMessageLength = 666
 
 struct ComposeView: View {
     @EnvironmentObject var authState: AuthState
+    @EnvironmentObject var store: AppDataStore
     @Environment(\.dismiss) private var dismiss
     /// When set, this view posts a reply to the given message.
     var replyTo: Message? = nil
@@ -35,10 +36,14 @@ struct ComposeView: View {
     @State private var crossPostBluesky = false
     @State private var crossPostLinkedIn = false
     @State private var crossPostTwitter = false
-    @State private var mastodonIdentities: [APIClient.LinkedIdentity] = []
+    @State private var allIdentities: [APIClient.LinkedIdentity] = []
     @State private var selectedMastodonIds: Set<String> = []
     @State private var identitiesLoaded = false
     @State private var lastCrossPostResults: [CrossPostResult] = []
+    /// Destinations the server reported the message actually reached (`crossPostUrls`).
+    /// Used for the post-publish confirmation when the deployment doesn't return the
+    /// per-platform `crossPostResults` shape (which, in practice, it usually doesn't).
+    @State private var lastCrossPostUrls: [CrossPostUrl] = []
 
     private var isReply: Bool { replyTo != nil }
     private var isRepost: Bool { repostOf != nil }
@@ -139,7 +144,7 @@ struct ComposeView: View {
                 applyUserDefaults()
             }
             .task {
-                await loadMastodonIdentitiesIfNeeded()
+                await loadIdentitiesIfNeeded()
             }
             .alert(successTitle, isPresented: $showSuccess) {
                 Button("OK") {
@@ -151,6 +156,11 @@ struct ComposeView: View {
                     scheduledDate = nil
                     showSchedulePicker = false
                     lastCrossPostResults = []
+                    lastCrossPostUrls = []
+                    crossPostBluesky = false
+                    crossPostLinkedIn = false
+                    crossPostTwitter = false
+                    selectedMastodonIds = []
                     applyUserDefaults()
                 }
             } message: {
@@ -200,11 +210,20 @@ struct ComposeView: View {
         else if isRepost { base = "You reposted this." }
         else if scheduledDate != nil { base = "Your message has been scheduled." }
         else { base = "Your message was posted." }
-        guard !lastCrossPostResults.isEmpty else { return base }
-        let summary = lastCrossPostResults.map { r in
-            "\(r.platform.capitalized) \(r.success ? "✓" : "✗")"
-        }.joined(separator: " · ")
-        return base + "\n" + summary
+        if !lastCrossPostResults.isEmpty {
+            let summary = lastCrossPostResults.map { r in
+                "\(r.platform.capitalized) \(r.success ? "✓" : "✗")"
+            }.joined(separator: " · ")
+            return base + "\n" + summary
+        }
+        // Fall back to the destinations the server actually reached.
+        if !lastCrossPostUrls.isEmpty {
+            let summary = lastCrossPostUrls
+                .map { "\($0.destinationName) ✓" }
+                .joined(separator: " · ")
+            return base + "\n" + summary
+        }
+        return base
     }
 
     @ViewBuilder
@@ -354,19 +373,35 @@ struct ComposeView: View {
 
     // MARK: - Cross-post controls
 
+    private var mastodonIdentities: [APIClient.LinkedIdentity] { allIdentities.filter { $0.provider == "mastodon" } }
+    private var hasBluesky: Bool { allIdentities.contains { $0.provider == "bluesky" } }
+    private var hasLinkedIn: Bool { allIdentities.contains { $0.provider == "linkedin" } }
+    private var hasTwitter: Bool { allIdentities.contains { $0.provider == "twitter" } }
     private var hasMastodon: Bool { !mastodonIdentities.isEmpty }
+    private var hasCrossPostTargets: Bool { hasBluesky || hasLinkedIn || hasTwitter || hasMastodon }
 
     @ViewBuilder
     private var crossPostSection: some View {
         Section {
-            Toggle(isOn: $crossPostBluesky) {
-                Label("Bluesky", systemImage: "cloud")
+            if identitiesLoaded && !hasCrossPostTargets {
+                Text("Connect social accounts at interlinedlist.com to cross-post.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            Toggle(isOn: $crossPostLinkedIn) {
-                Label("LinkedIn", systemImage: "briefcase")
+            if hasBluesky {
+                Toggle(isOn: $crossPostBluesky) {
+                    Label("Bluesky", systemImage: "cloud")
+                }
             }
-            Toggle(isOn: $crossPostTwitter) {
-                Label("X", systemImage: "xmark")
+            if hasLinkedIn {
+                Toggle(isOn: $crossPostLinkedIn) {
+                    Label("LinkedIn", systemImage: "briefcase")
+                }
+            }
+            if hasTwitter {
+                Toggle(isOn: $crossPostTwitter) {
+                    Label("X", systemImage: "xmark")
+                }
             }
             if hasMastodon {
                 Menu {
@@ -394,8 +429,10 @@ struct ComposeView: View {
         } header: {
             Text("Cross-post")
         } footer: {
-            Text("Cross-posts are sent when this message publishes.")
-                .font(.caption)
+            if hasCrossPostTargets {
+                Text("Cross-posts are sent when this message publishes.")
+                    .font(.caption)
+            }
         }
     }
 
@@ -411,14 +448,13 @@ struct ComposeView: View {
         }
     }
 
-    private func loadMastodonIdentitiesIfNeeded() async {
+    private func loadIdentitiesIfNeeded() async {
         guard !identitiesLoaded, canUseSubscriberFeatures, !isReply else { return }
         identitiesLoaded = true
         do {
-            let identities = try await APIClient.shared.linkedIdentities()
-            mastodonIdentities = identities.filter { $0.provider == "mastodon" }
+            allIdentities = try await APIClient.shared.linkedIdentities()
         } catch {
-            mastodonIdentities = []
+            allIdentities = []
         }
     }
 
@@ -508,6 +544,10 @@ struct ComposeView: View {
                 crossPostToTwitter: crossPostEnabled && crossPostTwitter ? true : nil
             )
             lastCrossPostResults = result.crossPostResults
+            lastCrossPostUrls = result.message.crossPostUrls ?? []
+            if !isReply && !isRepost {
+                store.insertFeedMessage(result.message)
+            }
             showSuccess = true
             if isReply || isRepost {
                 dismiss()

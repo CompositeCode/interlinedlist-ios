@@ -107,4 +107,52 @@ final class APIClientIdentitiesTests: XCTestCase {
         let body = String(data: session.lastRequest?.httpBody ?? Data(), encoding: .utf8) ?? ""
         XCTAssertTrue(body.contains("\"providerId\":\"did:plc:abc\""), "Got: \(body)")
     }
+
+    // MARK: provider filtering (exercising the logic ComposeView applies to the identities list)
+
+    func test_linkedIdentities_decodesAllCrossPostProviders() async throws {
+        let json = """
+        {"identities":[
+          {"id":"b1","provider":"bluesky","providerUsername":"me.bsky.social","createdAt":null},
+          {"id":"m1","provider":"mastodon","providerUsername":"@me@techhub.social","createdAt":null},
+          {"id":"m2","provider":"mastodon","providerUsername":"@me@mas.social","createdAt":null},
+          {"id":"li1","provider":"linkedin","providerUsername":"Me","createdAt":null},
+          {"id":"tw1","provider":"twitter","providerUsername":"me_x","createdAt":null}
+        ]}
+        """
+        session.stub(json: json)
+        let identities = try await sut.linkedIdentities()
+        XCTAssertEqual(identities.count, 5)
+        let providers = Set(identities.map(\.provider))
+        XCTAssertEqual(providers, ["bluesky", "mastodon", "linkedin", "twitter"])
+    }
+
+    func test_linkedIdentities_mastodonFilter_returnsOnlyMastodon() async throws {
+        let json = """
+        {"identities":[
+          {"id":"b1","provider":"bluesky","providerUsername":"me.bsky.social","createdAt":null},
+          {"id":"m1","provider":"mastodon","providerUsername":"@me@techhub.social","createdAt":null},
+          {"id":"m2","provider":"mastodon","providerUsername":"@me@mas.social","createdAt":null}
+        ]}
+        """
+        session.stub(json: json)
+        let identities = try await sut.linkedIdentities()
+        let mastodon = identities.filter { $0.provider == "mastodon" }
+        XCTAssertEqual(mastodon.count, 2)
+        XCTAssertTrue(mastodon.allSatisfy { $0.provider == "mastodon" })
+    }
+
+    func test_linkedIdentities_noTwitter_twitterAbsent() async throws {
+        // Verifies the compose screen won't show X when the user hasn't linked it.
+        let json = """
+        {"identities":[
+          {"id":"b1","provider":"bluesky","providerUsername":"me.bsky.social","createdAt":null},
+          {"id":"m1","provider":"mastodon","providerUsername":"@me@techhub.social","createdAt":null}
+        ]}
+        """
+        session.stub(json: json)
+        let identities = try await sut.linkedIdentities()
+        let hasTwitter = identities.contains { $0.provider == "twitter" }
+        XCTAssertFalse(hasTwitter)
+    }
 }

@@ -92,6 +92,56 @@ final class APIClientMessagesTests: XCTestCase {
         XCTAssertNil(json["publicly_visible"], "Body must NOT use snake_case key")
     }
 
+    func test_postMessage_crossPostBody_allProvidersCamelCase() async throws {
+        let wrapped = #"{"data":\#(messageJSON)}"#
+        session.stub(json: wrapped)
+        _ = try await sut.postMessage(
+            content: "Hi",
+            mastodonProviderIds: ["ident-1", "ident-2"],
+            crossPostToBluesky: true,
+            crossPostToLinkedIn: true,
+            crossPostToTwitter: true
+        )
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        // All cross-post targets must ride as camelCase keys or the server drops them silently.
+        XCTAssertEqual(json["crossPostToBluesky"] as? Bool, true)
+        XCTAssertEqual(json["crossPostToLinkedIn"] as? Bool, true)
+        XCTAssertEqual(json["crossPostToTwitter"] as? Bool, true)
+        XCTAssertEqual(json["mastodonProviderIds"] as? [String], ["ident-1", "ident-2"])
+        XCTAssertNil(json["cross_post_to_bluesky"], "Must not snake_case cross-post keys")
+    }
+
+    func test_postMessage_omitsCrossPostFields_whenNotRequested() async throws {
+        let wrapped = #"{"data":\#(messageJSON)}"#
+        session.stub(json: wrapped)
+        _ = try await sut.postMessage(content: "plain post")
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        // Free users / no toggles → no cross-post keys leak into the request.
+        XCTAssertNil(json["crossPostToBluesky"])
+        XCTAssertNil(json["crossPostToLinkedIn"])
+        XCTAssertNil(json["crossPostToTwitter"])
+        XCTAssertNil(json["mastodonProviderIds"])
+    }
+
+    func test_postMessage_surfacesCrossPostUrlsFromCreatedMessage() async throws {
+        // Real deployments echo destinations on the created message's `crossPostUrls`,
+        // not the optional `crossPostResults` toast array.
+        let response = """
+        {"data":{"id":"m1","content":"hi","userId":"u1","createdAt":"t",
+          "crossPostUrls":[
+            {"platform":"mastodon","url":"https://techhub.social/@m/1","statusId":"1","instanceName":"techhub.social"},
+            {"platform":"bluesky","url":"https://bsky.app/x","cid":"c1","uri":"at://u","instanceName":"Bluesky"}
+          ]}}
+        """
+        session.stub(json: response, statusCode: 201)
+        let result = try await sut.postMessage(content: "hi", crossPostToBluesky: true)
+        let urls = try XCTUnwrap(result.message.crossPostUrls)
+        XCTAssertEqual(urls.map(\.platform), ["mastodon", "bluesky"])
+        XCTAssertEqual(urls.first?.destinationName, "techhub.social")
+    }
+
     func test_postMessage_401_throwsStatusError() async throws {
         session.stub(data: Data(), statusCode: 401)
         do {
