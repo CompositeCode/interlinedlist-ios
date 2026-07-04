@@ -31,7 +31,7 @@ struct LinkedIdentitiesView: View {
             if let errorMessage {
                 Section {
                     Text(errorMessage)
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.red)
                 }
             }
@@ -73,7 +73,7 @@ struct LinkedIdentitiesView: View {
             } else {
                 Section {
                     Text("To connect another account, sign in at interlinedlist.com. In-app linking will return once it's supported for app sign-ins.")
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                 }
             }
@@ -113,10 +113,10 @@ struct LinkedIdentitiesView: View {
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayName(for: identity.provider))
-                    .font(.body)
+                    .font(.ilBody())
                 if let username = identity.providerUsername, !username.isEmpty {
                     Text("@\(username)")
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                 }
             }
@@ -125,7 +125,7 @@ struct LinkedIdentitiesView: View {
                 pendingUnlink = identity
             }
             .buttonStyle(.borderless)
-            .font(.subheadline)
+            .font(.ilBody(15))
             .accessibilityLabel("Disconnect \(displayName(for: identity.provider))")
         }
     }

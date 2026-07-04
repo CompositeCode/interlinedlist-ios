@@ -93,7 +93,7 @@ struct ListSchemaEditorView: View {
                         .accessibilityLabel("List title")
                     if !isTitleValid {
                         Text("Title must be 1–120 characters.")
-                            .font(.caption)
+                            .font(.ilMono())
                             .foregroundStyle(.red)
                     }
                 }
@@ -113,7 +113,7 @@ struct ListSchemaEditorView: View {
                     if properties.isEmpty {
                         Text("No properties defined.")
                             .foregroundStyle(.secondary)
-                            .font(.subheadline)
+                            .font(.ilBody(15))
                     } else {
                         ForEach($properties) { $prop in
                             PropertyRow(property: $prop, onDelete: {
@@ -136,7 +136,7 @@ struct ListSchemaEditorView: View {
                         Spacer()
                         if !properties.isEmpty {
                             EditButton()
-                                .font(.caption)
+                                .font(.ilMono())
                         }
                     }
                 }
@@ -145,7 +145,7 @@ struct ListSchemaEditorView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                 }
             }
@@ -273,11 +273,11 @@ private struct PropertyRow: View {
             HStack {
                 Toggle("Visible", isOn: $property.isVisible)
                     .toggleStyle(.switch)
-                    .font(.caption)
+                    .font(.ilMono())
                 Spacer()
                 Toggle("Required", isOn: $property.isRequired)
                     .toggleStyle(.switch)
-                    .font(.caption)
+                    .font(.ilMono())
             }
         }
         .padding(.vertical, 4)

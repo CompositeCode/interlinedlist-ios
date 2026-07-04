@@ -97,10 +97,10 @@ struct FeedView: View {
                                     tagFilter = isActive ? nil : tag
                                 } label: {
                                     Text(tag)
-                                        .font(.caption)
+                                        .font(.ilMono())
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 5)
-                                        .background(isActive ? Color.accentColor : Color(.secondarySystemFill))
+                                        .background(isActive ? ILColor.primary : ILColor.surface2)
                                         .foregroundStyle(isActive ? Color.white : Color.secondary)
                                         .clipShape(Capsule())
                                 }
@@ -242,7 +242,7 @@ struct FeedView: View {
         ToolbarItem(placement: .principal) {
             HStack(spacing: 8) {
                 Image("Logo").resizable().frame(width: 28, height: 28).clipped()
-                Text("InterlinedList").font(.headline)
+                Text("InterlinedList").font(.ilTitle()).foregroundStyle(.white)
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
@@ -400,37 +400,37 @@ struct MessageRow: View {
                         onTapAuthor(username)
                     } label: {
                         Text(message.authorDisplay)
-                            .font(.subheadline)
+                            .font(.ilBody(15))
                             .fontWeight(.medium)
                             .foregroundStyle(.primary)
                     }
                     .buttonStyle(.plain)
                 } else {
                     Text(message.authorDisplay)
-                        .font(.subheadline)
+                        .font(.ilBody(15))
                         .fontWeight(.medium)
                 }
                 if isPrivate {
                     Image(systemName: "lock.fill")
-                        .font(.caption2)
+                        .font(.ilMono(10))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(formatDate(message.createdAt))
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
             }
             Text(message.content)
-                .font(.body)
+                .font(.ilBody())
             if let tags = message.tags, !tags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(tags, id: \.self) { tag in
                             Text(tag)
-                                .font(.caption2)
+                                .font(.ilMono(10))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(Color(.secondarySystemFill))
+                                .background(ILColor.surface2)
                                 .clipShape(Capsule())
                                 .foregroundStyle(.secondary)
                         }
@@ -445,19 +445,19 @@ struct MessageRow: View {
                     onReply()
                 } label: {
                     Label("Reply", systemImage: "arrowshape.turn.up.left")
-                        .font(.caption)
+                        .font(.ilMono())
                 }
                 .buttonStyle(.borderless)
                 Button {
                     onDig()
                 } label: {
                     Label(effectiveDugByMe ? "Dug" : "Dig", systemImage: effectiveDugByMe ? "hand.thumbsup.fill" : "hand.thumbsup")
-                        .font(.caption)
+                        .font(.ilMono())
                 }
                 .buttonStyle(.borderless)
                 if effectiveDigCount > 0 {
                     Text("\(effectiveDigCount)")
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                 }
                 if let onRepost {
@@ -465,7 +465,7 @@ struct MessageRow: View {
                         onRepost()
                     } label: {
                         Label("Repost", systemImage: "arrow.2.squarepath")
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                     .buttonStyle(.borderless)
                 }
@@ -474,14 +474,14 @@ struct MessageRow: View {
                         onEdit()
                     } label: {
                         Label("Edit", systemImage: "pencil")
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                     .buttonStyle(.borderless)
                     Button(role: .destructive) {
                         onDelete()
                     } label: {
                         Label("Delete", systemImage: "trash")
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                     .buttonStyle(.borderless)
                 }
@@ -531,11 +531,11 @@ struct MessageRow: View {
             if let urls = message.videoUrls, !urls.isEmpty, let first = urls.first, let url = URL(string: first) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Video")
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                     Link(destination: url) {
                         Label(first, systemImage: "play.rectangle")
-                            .font(.caption)
+                            .font(.ilMono())
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
@@ -580,19 +580,19 @@ private struct LinkPreviewBlock: View {
             }
             if let title = meta.title, !title.isEmpty {
                 Text(title)
-                    .font(.subheadline)
+                    .font(.ilBody(15))
                     .fontWeight(.medium)
                     .lineLimit(2)
             }
             if let desc = meta.description, !desc.isEmpty {
                 Text(desc)
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
         }
         .padding(8)
-        .background(Color(.secondarySystemBackground))
+        .background(ILColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }

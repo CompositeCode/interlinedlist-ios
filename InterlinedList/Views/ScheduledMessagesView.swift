@@ -101,17 +101,17 @@ private struct ScheduledMessageRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(message.content)
-                .font(.body)
+                .font(.ilBody())
             HStack {
                 if message.publiclyVisible == false {
                     Label("Private", systemImage: "lock.fill")
-                        .font(.caption2)
+                        .font(.ilMono(10))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 if let scheduledAt = message.scheduledAt {
                     Text(formatScheduledDate(scheduledAt))
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                 }
             }
@@ -119,10 +119,10 @@ private struct ScheduledMessageRow: View {
                 HStack(spacing: 6) {
                     ForEach(tags, id: \.self) { tag in
                         Text(tag)
-                            .font(.caption2)
+                            .font(.ilMono(10))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Color(.secondarySystemFill))
+                            .background(ILColor.surface2)
                             .clipShape(Capsule())
                             .foregroundStyle(.secondary)
                     }

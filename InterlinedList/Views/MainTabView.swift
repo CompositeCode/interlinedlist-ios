@@ -26,7 +26,7 @@ struct MainTabView: View {
                 .environmentObject(authState)
             sectionContent
         }
-        .background(Color(.systemGroupedBackground))
+        .background(ILColor.background)
         .task {
             await store.prefetchAll(userId: authState.user?.id)
         }
@@ -44,7 +44,7 @@ struct MainTabView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 10)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(ILColor.surface)
     }
 
     @ViewBuilder
@@ -64,8 +64,8 @@ struct MainTabView: View {
                     profileAvatar
                 }
             }
-            .font(.title3)
-            .foregroundStyle(selectedSection == section ? Color.accentColor : Color.secondary)
+            .font(.ilTitle(20))
+            .foregroundStyle(selectedSection == section ? ILColor.primary : Color.secondary)
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
@@ -77,7 +77,7 @@ struct MainTabView: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell")
-                    .font(.title3)
+                    .font(.ilTitle(20))
                     .foregroundStyle(Color.secondary)
                     .frame(maxWidth: .infinity)
                 let total = store.unreadCount + store.pendingRequestCount
@@ -127,7 +127,7 @@ struct MainTabView: View {
             }
             if store.pendingRequestCount > 0 {
                 Circle()
-                    .fill(Color.orange)
+                    .fill(ILColor.amber)
                     .frame(width: 8, height: 8)
                     .offset(x: 2, y: -2)
             }
@@ -230,16 +230,16 @@ private struct ProfileView: View {
                 avatarView(url: user.avatar.flatMap { URL(string: $0) }, size: 64)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(user.displayNameOrUsername)
-                        .font(.headline)
+                        .font(.ilTitle())
                     Text("@\(user.username)")
-                        .font(.subheadline)
+                        .font(.ilBody(15))
                         .foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 6)
             if let bio = user.bio, !bio.isEmpty {
                 Text(bio)
-                    .font(.subheadline)
+                    .font(.ilBody(15))
                     .foregroundStyle(.secondary)
             }
         }
@@ -254,7 +254,7 @@ private struct ProfileView: View {
                         .foregroundStyle(.primary)
                     if user.emailVerified == true {
                         Image(systemName: "checkmark.seal.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(ILColor.primary)
                             .imageScale(.small)
                     }
                 }

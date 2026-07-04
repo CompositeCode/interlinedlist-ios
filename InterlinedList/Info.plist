@@ -48,6 +48,12 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<!-- Optional: set to your backend URL (e.g. http://localhost:3000) to test Bearer auth against a different host -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>SpaceGrotesk.ttf</string>
+		<string>Manrope.ttf</string>
+		<string>JetBrainsMono.ttf</string>
+	</array>
 	<key>ILAPIBaseURL</key>
 	<string></string>
 	<key>CFBundleURLTypes</key>

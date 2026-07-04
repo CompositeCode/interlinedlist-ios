@@ -17,7 +17,7 @@ struct ForgotPasswordView: View {
             Form {
                 Section {
                     Text("Enter your email and we'll send you a link to reset your password.")
-                        .font(.subheadline)
+                        .font(.ilBody(15))
                         .foregroundStyle(.secondary)
                 }
                 Section {
@@ -31,14 +31,14 @@ struct ForgotPasswordView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                 }
                 if didRequest {
                     Section {
                         Label("If an account exists for that email, a reset link has been sent.", systemImage: "envelope.badge")
                             .foregroundStyle(.secondary)
-                            .font(.subheadline)
+                            .font(.ilBody(15))
                     }
                 } else {
                     Section {

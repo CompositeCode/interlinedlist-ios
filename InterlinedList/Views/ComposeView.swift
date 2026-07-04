@@ -85,7 +85,7 @@ struct ComposeView: View {
                         .lineLimit(5...15)
                     if !isReply {
                         TextField("Tags (comma-separated)", text: $tags)
-                            .font(.subheadline)
+                            .font(.ilBody(15))
                             .foregroundStyle(.secondary)
                     }
                     if !isReply {
@@ -111,7 +111,7 @@ struct ComposeView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                 }
 
@@ -132,8 +132,8 @@ struct ComposeView: View {
                 } footer: {
                     if !isEmailVerified {
                         Text("Verify your email to enable posting.")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
+                            .font(.ilMono())
+                            .foregroundStyle(ILColor.amber)
                     }
                 }
             }
@@ -230,7 +230,7 @@ struct ComposeView: View {
     private var advancedToolbar: some View {
         HStack(alignment: .center, spacing: 8) {
             Text("\(remainingCharacters) characters remaining")
-                .font(.caption)
+                .font(.ilMono())
                 .foregroundStyle(.secondary)
             if canUseSubscriberFeatures {
                 Button {
@@ -239,7 +239,7 @@ struct ComposeView: View {
                     }
                 } label: {
                     Image(systemName: "gearshape.fill")
-                        .font(.body)
+                        .font(.ilBody())
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(showAdvancedBar ? 90 : 0))
                 }
@@ -253,8 +253,8 @@ struct ComposeView: View {
                                 .frame(width: 20, height: 20)
                         } else {
                             Image(systemName: uploadedImageURL != nil ? "photo.fill.on.rectangle.fill" : "photo")
-                                .font(.body)
-                                .foregroundStyle(uploadedImageURL != nil ? Color.accentColor : Color.secondary)
+                                .font(.ilBody())
+                                .foregroundStyle(uploadedImageURL != nil ? ILColor.primary : Color.secondary)
                         }
                     }
                     .buttonStyle(.borderless)
@@ -266,8 +266,8 @@ struct ComposeView: View {
                                 .frame(width: 20, height: 20)
                         } else {
                             Image(systemName: uploadedVideoURL != nil ? "video.fill" : "video")
-                                .font(.body)
-                                .foregroundStyle(uploadedVideoURL != nil ? Color.accentColor : Color.secondary)
+                                .font(.ilBody())
+                                .foregroundStyle(uploadedVideoURL != nil ? ILColor.primary : Color.secondary)
                         }
                     }
                     .buttonStyle(.borderless)
@@ -284,8 +284,8 @@ struct ComposeView: View {
                         }
                     } label: {
                         Image(systemName: scheduledDate != nil ? "calendar.badge.clock" : "calendar")
-                            .font(.body)
-                            .foregroundStyle(scheduledDate != nil ? Color.accentColor : Color.secondary)
+                            .font(.ilBody())
+                            .foregroundStyle(scheduledDate != nil ? ILColor.primary : Color.secondary)
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel(scheduledDate != nil ? "Clear schedule" : "Schedule post")
@@ -316,7 +316,7 @@ struct ComposeView: View {
             scheduledDate = nil
             showSchedulePicker = false
         }
-        .font(.caption)
+        .font(.ilMono())
         .foregroundStyle(.red)
         .buttonStyle(.borderless)
     }
@@ -336,7 +336,7 @@ struct ComposeView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             Text("Image attached")
-                .font(.caption)
+                .font(.ilMono())
                 .foregroundStyle(.secondary)
             Spacer()
             Button {
@@ -357,7 +357,7 @@ struct ComposeView: View {
             Image(systemName: "video.fill")
                 .foregroundStyle(.secondary)
             Text("Video attached")
-                .font(.caption)
+                .font(.ilMono())
                 .foregroundStyle(.secondary)
             Spacer()
             Button {
@@ -385,7 +385,7 @@ struct ComposeView: View {
         Section {
             if identitiesLoaded && !hasCrossPostTargets {
                 Text("Connect social accounts at interlinedlist.com to cross-post.")
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
             }
             if hasBluesky {
@@ -421,7 +421,7 @@ struct ComposeView: View {
                         Label("Mastodon", systemImage: "number")
                         Spacer()
                         Text(selectedMastodonIds.isEmpty ? "Off" : "\(selectedMastodonIds.count) selected")
-                            .font(.caption)
+                            .font(.ilMono())
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -431,7 +431,7 @@ struct ComposeView: View {
         } footer: {
             if hasCrossPostTargets {
                 Text("Cross-posts are sent when this message publishes.")
-                    .font(.caption)
+                    .font(.ilMono())
             }
         }
     }
@@ -463,15 +463,15 @@ struct ComposeView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.2.squarepath")
-                    .font(.caption2)
+                    .font(.ilMono(10))
                     .foregroundStyle(.secondary)
                 Text(original.authorDisplay)
-                    .font(.caption)
+                    .font(.ilMono())
                     .fontWeight(.medium)
                     .foregroundStyle(.secondary)
             }
             Text(original.content)
-                .font(.subheadline)
+                .font(.ilBody(15))
                 .lineLimit(4)
                 .foregroundStyle(.primary)
         }

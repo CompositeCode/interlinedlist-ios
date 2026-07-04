@@ -39,9 +39,9 @@ struct PublicDocumentsView: View {
                             .environmentObject(authState)
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(doc.title).font(.body)
+                            Text(doc.title).font(.ilBody())
                             if let path = doc.relativePath, !path.isEmpty {
-                                Text(path).font(.caption).foregroundStyle(.secondary)
+                                Text(path).font(.ilMono()).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -92,10 +92,10 @@ struct PublicDocumentReader: View {
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(document?.title ?? title)
-                        .font(.title2.bold())
+                        .font(.ilDisplay(20))
                     if let content = document?.content, !content.isEmpty {
                         Text(content)
-                            .font(.body)
+                            .font(.ilBody())
                             .textSelection(.enabled)
                     } else {
                         Text("This document is empty.")

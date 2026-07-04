@@ -74,7 +74,7 @@ struct ListItemFormView: View {
                             let val = fieldValues[prop.propertyKey] ?? ""
                             if val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                 Text("\(prop.propertyName) is required")
-                                    .font(.caption)
+                                    .font(.ilMono())
                                     .foregroundStyle(.red)
                             }
                         }

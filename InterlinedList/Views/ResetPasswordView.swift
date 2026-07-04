@@ -23,7 +23,7 @@ struct ResetPasswordView: View {
             Form {
                 Section {
                     Text("Paste the reset token from your email or open the link in this app to fill it in automatically.")
-                        .font(.subheadline)
+                        .font(.ilBody(15))
                         .foregroundStyle(.secondary)
                 }
                 Section("Reset token") {
@@ -48,13 +48,13 @@ struct ResetPasswordView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                 }
                 if didReset {
                     Section {
                         Label("Password reset. You can now log in.", systemImage: "checkmark.seal.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(ILColor.primary)
                     }
                 } else {
                     Section {

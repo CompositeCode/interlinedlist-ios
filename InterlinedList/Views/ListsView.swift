@@ -192,7 +192,7 @@ private struct CreateListFolderView: View {
                 }
                 if let error = errorMessage {
                     Section {
-                        Text(error).foregroundStyle(.red).font(.caption)
+                        Text(error).foregroundStyle(.red).font(.ilMono())
                     }
                 }
             }
@@ -263,7 +263,7 @@ private struct RenameListView: View {
                 }
                 if let error = errorMessage {
                     Section {
-                        Text(error).foregroundStyle(.red).font(.caption)
+                        Text(error).foregroundStyle(.red).font(.ilMono())
                     }
                 }
             }
@@ -383,7 +383,7 @@ struct ListTreeNodeRow: View {
                 } label: {
                     Label("Schema", systemImage: "rectangle.3.group")
                 }
-                .tint(.indigo)
+                .tint(ILColor.primary)
             }
             .sheet(isPresented: $showRename) {
                 RenameListView(list: list) { _ in onUpdateList(list) }
@@ -418,12 +418,12 @@ private struct ListNameWithVisibility: View {
             Text(name)
             if isPublic == true {
                 Image(systemName: "globe")
-                    .font(.caption)
-                    .foregroundStyle(Color.green)
+                    .font(.ilMono())
+                    .foregroundStyle(ILColor.primary)
                     .accessibilityLabel("Public")
             } else {
                 Image(systemName: "lock.fill")
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(Color.secondary)
                     .accessibilityLabel("Private")
             }
@@ -506,7 +506,7 @@ struct ListDetailView: View {
                         if connections.isEmpty {
                             Text("No connections yet")
                                 .foregroundStyle(.secondary)
-                                .font(.subheadline)
+                                .font(.ilBody(15))
                         } else {
                             ForEach(connections) { conn in
                                 let otherListId = conn.sourceListId == list.id ? conn.targetListId : conn.sourceListId
@@ -737,7 +737,7 @@ struct DynamicItemRow: View {
                         withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
                     } label: {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption)
+                            .font(.ilMono())
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
@@ -775,7 +775,7 @@ struct DynamicItemRow: View {
             } label: {
                 Label("Edit", systemImage: "pencil")
             }
-            .tint(.blue)
+            .tint(ILColor.link)
         }
         .contextMenu {
             Button("Edit") { onEdit() }
@@ -814,7 +814,7 @@ struct FieldValueView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: isBool ? "checkmark.square.fill" : "square")
-                        .foregroundStyle(isBool ? Color.accentColor : Color.secondary)
+                        .foregroundStyle(isBool ? ILColor.primary : Color.secondary)
                     if !showLabel {
                         Text(label)
                             .foregroundStyle(.primary)

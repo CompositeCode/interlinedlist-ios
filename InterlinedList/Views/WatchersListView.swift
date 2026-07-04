@@ -59,7 +59,7 @@ struct WatchersListView: View {
     private var watchersList: some View {
         List {
             if let actionError {
-                Section { Text(actionError).font(.caption).foregroundStyle(.red) }
+                Section { Text(actionError).font(.ilMono()).foregroundStyle(.red) }
             }
             if watchers.isEmpty {
                 ContentUnavailableView {
@@ -133,9 +133,9 @@ private struct WatcherRow: View {
             avatar
             VStack(alignment: .leading, spacing: 2) {
                 Text(watcher.user?.displayNameOrUsername ?? "User")
-                    .font(.body)
+                    .font(.ilBody())
                 if let username = watcher.user?.username {
-                    Text("@\(username)").font(.caption).foregroundStyle(.secondary)
+                    Text("@\(username)").font(.ilMono()).foregroundStyle(.secondary)
                 }
             }
             Spacer()
@@ -153,10 +153,10 @@ private struct WatcherRow: View {
                 }
             } label: {
                 Text((watcher.watcherRole ?? .watcher).label)
-                    .font(.caption)
+                    .font(.ilMono())
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(Color(.secondarySystemFill))
+                    .background(ILColor.surface2)
                     .clipShape(Capsule())
             }
         }
@@ -202,17 +202,17 @@ private struct AddWatcherView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    Text(role.detail).font(.caption).foregroundStyle(.secondary)
+                    Text(role.detail).font(.ilMono()).foregroundStyle(.secondary)
                 }
 
                 Section("People") {
                     if isLoading {
                         ProgressView()
                     } else if let error {
-                        Text(error).font(.caption).foregroundStyle(.red)
+                        Text(error).font(.ilMono()).foregroundStyle(.red)
                     } else if candidates.isEmpty {
                         Text("No people available to add.")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                            .font(.ilBody(15)).foregroundStyle(.secondary)
                     } else {
                         ForEach(candidates) { candidate in
                             Button {
@@ -221,13 +221,13 @@ private struct AddWatcherView: View {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(candidate.displayNameOrUsername).foregroundStyle(.primary)
-                                        Text("@\(candidate.username)").font(.caption).foregroundStyle(.secondary)
+                                        Text("@\(candidate.username)").font(.ilMono()).foregroundStyle(.secondary)
                                     }
                                     Spacer()
                                     if addingId == candidate.id {
                                         ProgressView()
                                     } else {
-                                        Image(systemName: "plus.circle").foregroundStyle(Color.accentColor)
+                                        Image(systemName: "plus.circle").foregroundStyle(ILColor.primary)
                                     }
                                 }
                             }

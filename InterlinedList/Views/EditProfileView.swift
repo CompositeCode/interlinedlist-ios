@@ -66,13 +66,13 @@ struct EditProfileView: View {
                                 Text("Email")
                                     .foregroundStyle(.primary)
                                 Text(authState.user?.email ?? "")
-                                    .font(.subheadline)
+                                    .font(.ilBody(15))
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
                             Text("Change")
-                                .font(.subheadline)
-                                .foregroundStyle(Color.accentColor)
+                                .font(.ilBody(15))
+                                .foregroundStyle(ILColor.primary)
                         }
                         .contentShape(Rectangle())
                     }
@@ -86,7 +86,7 @@ struct EditProfileView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                 }
                 Section {
@@ -239,7 +239,7 @@ struct EditProfileView: View {
 
     private var placeholderAvatar: some View {
         ZStack {
-            Color(.secondarySystemFill)
+            ILColor.surface2
             Image(systemName: "person.crop.circle.fill")
                 .resizable()
                 .scaledToFit()

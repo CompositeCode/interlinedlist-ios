@@ -22,17 +22,17 @@ struct EmailVerificationBanner: View {
         if isUnverified {
             HStack(spacing: 10) {
                 Image(systemName: "envelope.badge.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(ILColor.amber)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(didSend ? "Verification email sent" : "Verify your email address")
-                        .font(.subheadline.weight(.medium))
+                        .font(.ilBody(15).weight(.medium))
                     if let errorMessage {
                         Text(errorMessage)
-                            .font(.caption)
+                            .font(.ilMono())
                             .foregroundStyle(.red)
                     } else if didSend {
                         Text("Check your inbox for the confirmation link.")
-                            .font(.caption)
+                            .font(.ilMono())
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -44,7 +44,7 @@ struct EmailVerificationBanner: View {
                         if isSending {
                             ProgressView().frame(width: 18, height: 18)
                         } else {
-                            Text("Resend").font(.subheadline.weight(.semibold))
+                            Text("Resend").font(.ilBody(15).weight(.semibold))
                         }
                     }
                     .buttonStyle(.borderless)
@@ -55,7 +55,7 @@ struct EmailVerificationBanner: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.orange.opacity(0.12))
+            .background(ILColor.amber.opacity(0.12))
         }
     }
 

@@ -46,7 +46,7 @@ struct LoginView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                 }
 
@@ -68,7 +68,7 @@ struct LoginView: View {
                     Button("Forgot password?") {
                         showForgotPassword = true
                     }
-                    .font(.subheadline)
+                    .font(.ilBody(15))
                     .frame(maxWidth: .infinity)
                     .accessibilityLabel("Forgot password")
 

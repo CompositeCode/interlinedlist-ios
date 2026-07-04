@@ -53,11 +53,11 @@ struct PublicListDetailView: View {
         List {
             if let desc = detail?.description, !desc.isEmpty {
                 Section {
-                    Text(desc).font(.subheadline).foregroundStyle(.secondary)
+                    Text(desc).font(.ilBody(15)).foregroundStyle(.secondary)
                 }
             }
             if let watchError {
-                Section { Text(watchError).font(.caption).foregroundStyle(.red) }
+                Section { Text(watchError).font(.ilMono()).foregroundStyle(.red) }
             }
             if let children = detail?.children, !children.isEmpty {
                 Section("Sub-lists") {
@@ -75,7 +75,7 @@ struct PublicListDetailView: View {
                 if rows.isEmpty {
                     Text("This list has no items.")
                         .foregroundStyle(.secondary)
-                        .font(.subheadline)
+                        .font(.ilBody(15))
                 } else {
                     ForEach(rows) { row in
                         PublicListRow(row: row, properties: orderedProperties)
@@ -160,11 +160,11 @@ private struct PublicListRow: View {
             ForEach(pairs, id: \.label) { pair in
                 HStack(alignment: .top, spacing: 8) {
                     Text(pair.label)
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                         .frame(width: 110, alignment: .leading)
                     Text(pair.value)
-                        .font(.subheadline)
+                        .font(.ilBody(15))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }

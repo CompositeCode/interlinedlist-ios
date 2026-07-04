@@ -36,7 +36,7 @@ struct SettingsView: View {
                 notificationsSection
                 aboutSection
                 if let settingsError {
-                    Section { Text(settingsError).font(.caption).foregroundStyle(.red) }
+                    Section { Text(settingsError).font(.ilMono()).foregroundStyle(.red) }
                 }
                 Section {
                     Button(role: .destructive) {
@@ -200,7 +200,7 @@ struct NotificationPreferencesView: View {
             } else {
                 List {
                     if let actionError {
-                        Section { Text(actionError).font(.caption).foregroundStyle(.red) }
+                        Section { Text(actionError).font(.ilMono()).foregroundStyle(.red) }
                     }
                     ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
                         Section {

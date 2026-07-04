@@ -39,7 +39,7 @@ struct ChangeEmailView: View {
                     Section {
                         Text(error)
                             .foregroundStyle(.red)
-                            .font(.caption)
+                            .font(.ilMono())
                     }
                 }
                 if didRequest {

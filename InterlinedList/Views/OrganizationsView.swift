@@ -82,15 +82,15 @@ private struct OrganizationRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
-                Text(org.name).font(.body)
+                Text(org.name).font(.ilBody())
                 if let role = org.role {
-                    Text(role.label).font(.caption).foregroundStyle(.secondary)
+                    Text(role.label).font(.ilMono()).foregroundStyle(.secondary)
                 }
             }
             Spacer()
             if let count = org.memberCount {
                 Text("\(count)")
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
             }
         }
@@ -119,7 +119,7 @@ struct OrganizationDetailView: View {
     var body: some View {
         List {
             if let actionError {
-                Section { Text(actionError).font(.caption).foregroundStyle(.red) }
+                Section { Text(actionError).font(.ilMono()).foregroundStyle(.red) }
             }
             if let org {
                 Section {
@@ -249,7 +249,7 @@ struct OrganizationMembersView: View {
             } else {
                 List {
                     if let actionError {
-                        Section { Text(actionError).font(.caption).foregroundStyle(.red) }
+                        Section { Text(actionError).font(.ilMono()).foregroundStyle(.red) }
                     }
                     ForEach(members) { member in
                         MemberRow(
@@ -324,8 +324,8 @@ private struct MemberRow: View {
         HStack(spacing: 12) {
             avatar
             VStack(alignment: .leading, spacing: 2) {
-                Text(member.displayNameOrUsername).font(.body)
-                Text("@\(member.username)").font(.caption).foregroundStyle(.secondary)
+                Text(member.displayNameOrUsername).font(.ilBody())
+                Text("@\(member.username)").font(.ilMono()).foregroundStyle(.secondary)
             }
             Spacer()
             if canManage {
@@ -353,10 +353,10 @@ private struct MemberRow: View {
 
     private var roleBadge: some View {
         Text((member.orgRole ?? .member).label)
-            .font(.caption)
+            .font(.ilMono())
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(Color(.secondarySystemFill))
+            .background(ILColor.surface2)
             .clipShape(Capsule())
     }
 
@@ -402,7 +402,7 @@ struct CreateOrganizationView: View {
                     Toggle("Public", isOn: $isPublic)
                 }
                 if let error {
-                    Section { Text(error).foregroundStyle(.red).font(.caption) }
+                    Section { Text(error).foregroundStyle(.red).font(.ilMono()) }
                 }
             }
             .navigationTitle("New Organization")
@@ -468,7 +468,7 @@ struct EditOrganizationView: View {
                     Toggle("Public", isOn: $isPublic)
                 }
                 if let error {
-                    Section { Text(error).foregroundStyle(.red).font(.caption) }
+                    Section { Text(error).foregroundStyle(.red).font(.ilMono()) }
                 }
             }
             .navigationTitle("Edit Organization")

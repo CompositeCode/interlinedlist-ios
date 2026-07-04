@@ -4,12 +4,17 @@
 //
 
 import SwiftUI
+import UIKit
 
 @main
 struct InterlinedListApp: App {
     @StateObject private var authState = AuthState()
     @StateObject private var store = AppDataStore()
     @StateObject private var router = AppRouter()
+
+    init() {
+        configureNavigationBarAppearance()
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -89,6 +94,24 @@ struct InterlinedListApp: App {
         } catch {
             // Same rationale as verifyEmail above.
         }
+    }
+
+    private func configureNavigationBarAppearance() {
+        let teal = UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(red: 0.047, green: 0.173, blue: 0.227, alpha: 1)
+            : UIColor(red: 0.094, green: 0.282, blue: 0.376, alpha: 1) }
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = teal
+        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        let back = UIBarButtonItemAppearance()
+        back.normal.titleTextAttributes = [.foregroundColor: UIColor.white]
+        appearance.backButtonAppearance = back
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
+        UINavigationBar.appearance().tintColor = .white
     }
 }
 

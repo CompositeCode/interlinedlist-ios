@@ -409,7 +409,7 @@ private struct DocumentFolderView: View {
                 if documents.isEmpty && !isLoading {
                     Text("No documents in this folder.")
                         .foregroundStyle(.secondary)
-                        .font(.subheadline)
+                        .font(.ilBody(15))
                 }
             }
         }
@@ -456,10 +456,10 @@ private struct DocumentRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(document.title)
-                .font(.body)
+                .font(.ilBody())
             if let updatedAt = document.updatedAt, let date = parseISODate(updatedAt) {
                 Text(date, style: .relative)
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
             }
         }
@@ -474,18 +474,18 @@ private struct DocumentSearchResultRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(document.title)
-                .font(.body)
+                .font(.ilBody())
             HStack(spacing: 6) {
                 if let folderName, !folderName.isEmpty {
                     Label(folderName, systemImage: "folder")
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                         .labelStyle(.titleAndIcon)
                 }
                 if let updatedAt = document.updatedAt, let date = parseISODate(updatedAt) {
-                    if folderName != nil { Text("·").font(.caption).foregroundStyle(.secondary) }
+                    if folderName != nil { Text("·").font(.ilMono()).foregroundStyle(.secondary) }
                     Text(date, style: .relative)
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                 }
             }
@@ -589,7 +589,7 @@ private struct CreateDocumentView: View {
                 }
                 if let error = errorMessage {
                     Section {
-                        Text(error).foregroundStyle(.red).font(.caption)
+                        Text(error).foregroundStyle(.red).font(.ilMono())
                     }
                 }
             }
@@ -678,7 +678,7 @@ private struct EditDocumentView: View {
                 }
                 if let error = errorMessage {
                     Section {
-                        Text(error).foregroundStyle(.red).font(.caption)
+                        Text(error).foregroundStyle(.red).font(.ilMono())
                     }
                 }
             }
@@ -743,7 +743,7 @@ private struct CreateDocumentFolderView: View {
                 }
                 if let error = errorMessage {
                     Section {
-                        Text(error).foregroundStyle(.red).font(.caption)
+                        Text(error).foregroundStyle(.red).font(.ilMono())
                     }
                 }
             }

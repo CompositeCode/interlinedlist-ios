@@ -121,7 +121,7 @@ struct UserProfileView: View {
 
             if let mutual = mutualCounts, mutual.mutualFollowers > 0 || mutual.mutualFollowing > 0 {
                 Text(mutualSummary(mutual))
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
@@ -129,7 +129,7 @@ struct UserProfileView: View {
 
             if let error = followError {
                 Text(error)
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.red)
                     .padding(.horizontal)
             }
@@ -140,10 +140,10 @@ struct UserProfileView: View {
     private func countView(value: Int, label: String) -> some View {
         VStack(spacing: 2) {
             Text("\(value)")
-                .font(.headline)
+                .font(.ilTitle())
                 .foregroundStyle(.primary)
             Text(label)
-                .font(.caption)
+                .font(.ilMono())
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
@@ -242,15 +242,15 @@ struct UserProfileView: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(list.name)
-                            .font(.body)
+                            .font(.ilBody())
                         if let desc = list.description, !desc.isEmpty {
                             Text(desc)
-                                .font(.caption)
+                                .font(.ilMono())
                                 .foregroundStyle(.secondary)
                         }
                         if let count = list.itemCount {
                             Text("\(count) items")
-                                .font(.caption2)
+                                .font(.ilMono(10))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -288,9 +288,9 @@ struct UserProfileView: View {
                         .environmentObject(authState)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(doc.title).font(.body)
+                        Text(doc.title).font(.ilBody())
                         if let path = doc.relativePath, !path.isEmpty {
-                            Text(path).font(.caption).foregroundStyle(.secondary)
+                            Text(path).font(.ilMono()).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -372,7 +372,7 @@ struct UserProfileView: View {
             Divider()
             VStack(alignment: .leading, spacing: 0) {
                 Text("Organizations")
-                    .font(.footnote)
+                    .font(.ilBody(11))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)
                     .padding(.top, 16)
@@ -380,10 +380,10 @@ struct UserProfileView: View {
                 ForEach(organizations) { org in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(org.name)
-                            .font(.body)
+                            .font(.ilBody())
                         if let desc = org.description, !desc.isEmpty {
                             Text(desc)
-                                .font(.caption)
+                                .font(.ilMono())
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -418,7 +418,7 @@ struct UserProfileView: View {
         Divider()
         VStack(alignment: .leading, spacing: 0) {
             Text("Export Your Data")
-                .font(.footnote)
+                .font(.ilBody(11))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
                 .padding(.top, 16)
@@ -429,7 +429,7 @@ struct UserProfileView: View {
             if let err = exportError {
                 Text(err)
                     .foregroundStyle(.red)
-                    .font(.caption)
+                    .font(.ilMono())
                     .padding(.horizontal)
                     .padding(.top, 4)
             }
@@ -523,23 +523,23 @@ private struct PublicMessageRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(message.authorDisplay)
-                    .font(.subheadline)
+                    .font(.ilBody(15))
                     .fontWeight(.medium)
                 Spacer()
                 Text(formatDate(message.createdAt))
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
             }
             Text(message.content)
-                .font(.body)
+                .font(.ilBody())
             if let tags = message.tags, !tags.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(tags, id: \.self) { tag in
                         Text(tag)
-                            .font(.caption2)
+                            .font(.ilMono(10))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Color(.secondarySystemFill))
+                            .background(ILColor.surface2)
                             .clipShape(Capsule())
                             .foregroundStyle(.secondary)
                     }

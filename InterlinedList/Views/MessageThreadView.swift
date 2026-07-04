@@ -79,20 +79,20 @@ struct MessageThreadView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(rootMessage.authorDisplay)
-                    .font(.subheadline)
+                    .font(.ilBody(15))
                     .fontWeight(.medium)
                 if rootMessage.publiclyVisible == false {
                     Image(systemName: "lock.fill")
-                        .font(.caption2)
+                        .font(.ilMono(10))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(formatDate(rootMessage.createdAt))
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
             }
             Text(rootMessage.content)
-                .font(.body)
+                .font(.ilBody())
             if let tags = rootMessage.tags, !tags.isEmpty {
                 tagChips(tags)
             }
@@ -104,20 +104,20 @@ struct MessageThreadView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(reply.authorDisplay)
-                    .font(.subheadline)
+                    .font(.ilBody(15))
                     .fontWeight(.medium)
                 if reply.publiclyVisible == false {
                     Image(systemName: "lock.fill")
-                        .font(.caption2)
+                        .font(.ilMono(10))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Text(formatDate(reply.createdAt))
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
             }
             Text(reply.content)
-                .font(.body)
+                .font(.ilBody())
             if let tags = reply.tags, !tags.isEmpty {
                 tagChips(tags)
             }
@@ -130,10 +130,10 @@ struct MessageThreadView: View {
             HStack(spacing: 6) {
                 ForEach(tags, id: \.self) { tag in
                     Text(tag)
-                        .font(.caption2)
+                        .font(.ilMono(10))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Color(.secondarySystemFill))
+                        .background(ILColor.surface2)
                         .clipShape(Capsule())
                         .foregroundStyle(.secondary)
                 }

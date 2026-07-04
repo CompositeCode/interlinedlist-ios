@@ -13,7 +13,7 @@ struct SkeletonBlock: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(Color(.systemFill))
+            .fill(ILColor.surface2)
             .frame(height: height)
             .opacity(animate ? 0.4 : 1.0)
             .onAppear {

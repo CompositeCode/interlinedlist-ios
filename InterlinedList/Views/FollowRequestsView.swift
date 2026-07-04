@@ -83,16 +83,16 @@ private struct FollowRequestListRow: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(request.user?.displayName ?? request.user?.username ?? "Someone")
-                    .font(.subheadline)
+                    .font(.ilBody(15))
                     .fontWeight(.medium)
                 if let username = request.user?.username {
                     Text("@\(username)")
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                 }
                 if let createdAt = request.createdAt {
                     Text(formatDate(createdAt))
-                        .font(.caption2)
+                        .font(.ilMono(10))
                         .foregroundStyle(.secondary)
                 }
             }

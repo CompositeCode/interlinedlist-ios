@@ -150,16 +150,16 @@ private struct FollowUserRow: View {
             avatar
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayNameOrUsername)
-                    .font(.body)
+                    .font(.ilBody())
                     .foregroundStyle(.primary)
                 Text("@\(user.username)")
-                    .font(.caption)
+                    .font(.ilMono())
                     .foregroundStyle(.secondary)
             }
             Spacer()
             if user.status == "pending" {
                 Text("Pending")
-                    .font(.caption2)
+                    .font(.ilMono(10))
                     .foregroundStyle(.secondary)
             }
         }

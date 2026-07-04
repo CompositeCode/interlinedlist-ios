@@ -73,7 +73,7 @@ struct NotificationsView: View {
                         Button("Mark all read") {
                             Task { await markAllRead() }
                         }
-                        .font(.caption)
+                        .font(.ilMono())
                     }
                 }
             }
@@ -161,21 +161,21 @@ private struct NotificationRow: View {
         Button(action: onTap) {
             HStack(alignment: .top, spacing: 10) {
                 Circle()
-                    .fill(notification.read == true ? Color.clear : Color.accentColor)
+                    .fill(notification.read == true ? Color.clear : ILColor.primary)
                     .frame(width: 8, height: 8)
                     .padding(.top, 5)
                 VStack(alignment: .leading, spacing: 4) {
                     if let actor = notification.actorUsername {
                         Text("@\(actor)")
-                            .font(.caption)
+                            .font(.ilMono())
                             .foregroundStyle(.secondary)
                     }
                     Text(notification.message ?? "New notification")
-                        .font(.subheadline)
+                        .font(.ilBody(15))
                         .foregroundStyle(notification.read == true ? .secondary : .primary)
                     if let createdAt = notification.createdAt {
                         Text(formatDate(createdAt))
-                            .font(.caption2)
+                            .font(.ilMono(10))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -204,11 +204,11 @@ private struct FollowRequestRow: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(request.user?.displayName ?? request.user?.username ?? "Someone")
-                    .font(.subheadline)
+                    .font(.ilBody(15))
                     .fontWeight(.medium)
                 if let username = request.user?.username {
                     Text("@\(username)")
-                        .font(.caption)
+                        .font(.ilMono())
                         .foregroundStyle(.secondary)
                 }
             }
@@ -236,24 +236,24 @@ private struct NotificationDetailView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     if let type = notification.type {
                         Text(typeLabel(type))
-                            .font(.caption)
+                            .font(.ilMono())
                             .fontWeight(.medium)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Color(.secondarySystemFill))
+                            .background(ILColor.surface2)
                             .clipShape(Capsule())
                     }
                     if let actor = notification.actorUsername {
                         Label("@\(actor)", systemImage: "person")
-                            .font(.subheadline)
+                            .font(.ilBody(15))
                             .foregroundStyle(.secondary)
                     }
                     Text(notification.message ?? "No message")
-                        .font(.body)
+                        .font(.ilBody())
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if let createdAt = notification.createdAt {
                         Text(formatFullDate(createdAt))
-                            .font(.caption)
+                            .font(.ilMono())
                             .foregroundStyle(.secondary)
                     }
                 }
