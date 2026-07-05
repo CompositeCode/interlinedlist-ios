@@ -130,6 +130,5 @@ xcrun simctl list devices --json | jq '.devices | to_entries[] | select(.value |
 
 ## Reference docs
 
-- `GAP-ENDPOINTS.md` — live but under-documented/ambiguous API contracts the client had to guess or decode defensively.
-- `GAP-NEXT-STEPS.md` — iOS-side implementation roadmap / punchlist.
-- `GAP-APPLE.md` — App Store signing & submission checklist tailored to this app.
+- `App-Store-Deployment.md` — feature completion status, required credentials/assets/costs, and the full App Store submission checklist.
+- `blocker-prompts.md` — backend/API work needed to unblock iOS App Store submission (moderation endpoints, Bearer auth fixes, push contract confirmation, and deferred API gaps).
