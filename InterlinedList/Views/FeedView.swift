@@ -30,6 +30,8 @@ struct FeedView: View {
     @State private var searchResults: [Message] = []
     @State private var isSearching = false
     @State private var searchPerformed = false
+    @State private var reportTarget: ReportTarget? = nil
+    @State private var blockedUserIds: Set<String> = []
 
     private var distinctTags: [String] {
         var seen = Set<String>()
@@ -64,7 +66,7 @@ struct FeedView: View {
             ContentUnavailableView.search(text: searchText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            List(searchResults) { message in
+            List(searchResults.filter { !blockedUserIds.contains($0.userId ?? "") }) { message in
                 MessageRow(
                     message: message,
                     currentUserId: authState.user?.id,
@@ -75,7 +77,9 @@ struct FeedView: View {
                     onEdit: { messageToEdit = message },
                     onDig: { Task { await toggleDig(for: message) } },
                     onRepost: { messageToRepost = message },
-                    onTapAuthor: { username in profileUsername = username }
+                    onTapAuthor: { username in profileUsername = username },
+                    onReport: { reportTarget = .message(id: message.id) },
+                    onBlock: { Task { await blockUser(userId: message.userId ?? "", username: message.user?.username ?? "") } }
                 )
             }
         }
@@ -111,7 +115,7 @@ struct FeedView: View {
                     }
                 }
             }
-            ForEach(messages) { message in
+            ForEach(messages.filter { !blockedUserIds.contains($0.userId ?? "") }) { message in
                 MessageRow(
                     message: message,
                     currentUserId: authState.user?.id,
@@ -128,7 +132,9 @@ struct FeedView: View {
                     onEdit: { messageToEdit = message },
                     onDig: { Task { await toggleDig(for: message) } },
                     onRepost: { messageToRepost = message },
-                    onTapAuthor: { username in profileUsername = username }
+                    onTapAuthor: { username in profileUsername = username },
+                    onReport: { reportTarget = .message(id: message.id) },
+                    onBlock: { Task { await blockUser(userId: message.userId ?? "", username: message.user?.username ?? "") } }
                 )
             }
             if let pagination = pagination, pagination.hasMore, !isLoading {
@@ -188,6 +194,10 @@ struct FeedView: View {
                 }
             } message: {
                 Text(deleteError ?? "This cannot be undone.")
+            }
+            .sheet(item: $reportTarget) { target in
+                ReportSheet(target: target, onDismiss: { reportTarget = nil })
+                    .environmentObject(authState)
             }
     }
 
@@ -322,6 +332,19 @@ struct FeedView: View {
         }
     }
 
+    private func blockUser(userId: String, username: String) async {
+        guard !userId.isEmpty else { return }
+        blockedUserIds.insert(userId)
+        do {
+            try await APIClient.shared.blockUser(id: userId)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+            blockedUserIds.remove(userId)
+        } catch {
+            blockedUserIds.remove(userId)
+        }
+    }
+
     private func loadMessages() async {
         errorMessage = nil
         isLoading = true
@@ -374,6 +397,8 @@ struct MessageRow: View {
     let onDig: () -> Void
     var onRepost: (() -> Void)? = nil
     var onTapAuthor: ((String) -> Void)? = nil
+    var onReport: (() -> Void)? = nil
+    var onBlock: (() -> Void)? = nil
 
     private var canDelete: Bool {
         guard let uid = currentUserId else { return false }
@@ -484,6 +509,28 @@ struct MessageRow: View {
                             .font(.ilMono())
                     }
                     .buttonStyle(.borderless)
+                } else if onReport != nil || onBlock != nil {
+                    Menu {
+                        if let onReport {
+                            Button(role: .destructive) {
+                                onReport()
+                            } label: {
+                                Label("Report…", systemImage: "flag")
+                            }
+                        }
+                        if let onBlock {
+                            Button(role: .destructive) {
+                                onBlock()
+                            } label: {
+                                Label("Block user", systemImage: "person.slash")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.ilMono())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("More options")
                 }
             }
         }

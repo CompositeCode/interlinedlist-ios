@@ -23,6 +23,7 @@ struct SettingsView: View {
         ("Blog", "/blog"),
         ("Pricing", "/pricing"),
         ("Terms of Service", "/terms"),
+        ("Community Guidelines", "/terms"),
         ("Privacy Policy", "/privacy"),
         ("Branding", "/help/branding"),
     ]
@@ -34,6 +35,7 @@ struct SettingsView: View {
                 postingSection
                 accountsSection
                 notificationsSection
+                moderationSection
                 aboutSection
                 if let settingsError {
                     Section { Text(settingsError).font(.ilMono()).foregroundStyle(.red) }
@@ -117,6 +119,16 @@ struct SettingsView: View {
                 NotificationPreferencesView().environmentObject(authState)
             } label: {
                 Label("Notification preferences", systemImage: "bell.badge")
+            }
+        }
+    }
+
+    private var moderationSection: some View {
+        Section("Safety") {
+            NavigationLink {
+                BlockedUsersView().environmentObject(authState)
+            } label: {
+                Label("Blocked users", systemImage: "person.slash")
             }
         }
     }

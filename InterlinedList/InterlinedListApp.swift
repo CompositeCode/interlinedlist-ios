@@ -5,9 +5,11 @@
 
 import SwiftUI
 import UIKit
+import UserNotifications
 
 @main
 struct InterlinedListApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var authState = AuthState()
     @StateObject private var store = AppDataStore()
     @StateObject private var router = AppRouter()
@@ -23,7 +25,12 @@ struct InterlinedListApp: App {
                 .environmentObject(store)
                 .environmentObject(router)
                 .onChange(of: authState.hasToken) { _, has in
-                    if !has { store.reset() }
+                    if has {
+                        PushService.shared.requestPermissionAndRegister()
+                    } else {
+                        PushService.shared.unregister()
+                        store.reset()
+                    }
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
@@ -128,4 +135,53 @@ enum AppDeepLink: Identifiable, Hashable {
 @MainActor
 final class AppRouter: ObservableObject {
     @Published var pendingDeepLink: AppDeepLink?
+}
+
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Task { @MainActor in
+            PushService.shared.didRegister(deviceToken: deviceToken)
+        }
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        Task { @MainActor in
+            PushService.shared.didFailToRegister(error: error)
+        }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        Task { @MainActor in
+            PushService.shared.handleForegroundNotification(notification, completionHandler: completionHandler)
+        }
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        Task { @MainActor in
+            PushService.shared.handleNotificationResponse(response)
+            completionHandler()
+        }
+    }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        Task { @MainActor in
+            PushService.shared.clearBadge()
+        }
+    }
 }

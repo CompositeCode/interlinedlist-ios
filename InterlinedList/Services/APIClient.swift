@@ -1052,6 +1052,87 @@ final class APIClient {
         return (response.messages, response.pagination)
     }
 
+    // MARK: - Moderation — report, block, mute
+
+    func reportMessage(id: String, reason: ReportReason, detail: String?) async throws {
+        struct Body: Encodable { let reason: String; let detail: String? }
+        struct Response: Decodable { let reported: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/messages/\(encoded)/report", body: Body(reason: reason.rawValue, detail: detail))
+    }
+
+    func reportUser(id: String, reason: ReportReason, detail: String?) async throws {
+        struct Body: Encodable { let reason: String; let detail: String? }
+        struct Response: Decodable { let reported: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/users/\(encoded)/report", body: Body(reason: reason.rawValue, detail: detail))
+    }
+
+    func blockUser(id: String) async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let blocked: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/users/\(encoded)/block", body: Empty())
+    }
+
+    func unblockUser(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/users/\(encoded)/block") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func blockedUsers(limit: Int = 50, offset: Int = 0) async throws -> BlockedUsersResponse {
+        return try await get("/api/user/blocks?limit=\(limit)&offset=\(offset)")
+    }
+
+    func muteUser(id: String) async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let muted: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/users/\(encoded)/mute", body: Empty())
+    }
+
+    func unmuteUser(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/users/\(encoded)/mute") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func mutedUsers(limit: Int = 50, offset: Int = 0) async throws -> MutedUsersResponse {
+        return try await get("/api/user/mutes?limit=\(limit)&offset=\(offset)")
+    }
+
+    // MARK: - Push notifications (Phase 9)
+
+    func registerPushDevice(token: String) async throws {
+        struct Body: Encodable { let token: String; let platform: String }
+        struct Response: Decodable { let registered: Bool? }
+        let _: Response = try await postCamel("/api/push/register", body: Body(token: token, platform: "ios"))
+    }
+
+    func unregisterPushDevice(token: String) async throws {
+        struct Body: Encodable { let token: String }
+        guard let url = URL(string: baseURL + "/api/push/unregister") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(Body(token: token))
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
     // MARK: - Private helpers
 
     private func getRawData(_ path: String) async throws -> Data {
