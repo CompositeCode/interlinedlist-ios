@@ -465,50 +465,57 @@ struct MessageRow: View {
             if showPreviews && message.hasPreviews {
                 previewSection
             }
-            HStack(spacing: 12) {
+            HStack(spacing: 16) {
                 Button {
                     onReply()
                 } label: {
-                    Label("Reply", systemImage: "arrowshape.turn.up.left")
+                    Image(systemName: "arrowshape.turn.up.left")
                         .font(.ilMono())
                 }
                 .buttonStyle(.borderless)
-                Button {
-                    onDig()
-                } label: {
-                    Label(effectiveDugByMe ? "Dug" : "Dig", systemImage: effectiveDugByMe ? "hand.thumbsup.fill" : "hand.thumbsup")
-                        .font(.ilMono())
-                }
-                .buttonStyle(.borderless)
-                if effectiveDigCount > 0 {
-                    Text("\(effectiveDigCount)")
-                        .font(.ilMono())
-                        .foregroundStyle(.secondary)
+                .accessibilityLabel("Reply")
+                HStack(spacing: 4) {
+                    Button {
+                        onDig()
+                    } label: {
+                        Image(systemName: effectiveDugByMe ? "hand.thumbsup.fill" : "hand.thumbsup")
+                            .font(.ilMono())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(effectiveDugByMe ? "Dug" : "Dig")
+                    if effectiveDigCount > 0 {
+                        Text("\(effectiveDigCount)")
+                            .font(.ilMono())
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 if let onRepost {
                     Button {
                         onRepost()
                     } label: {
-                        Label("Repost", systemImage: "arrow.2.squarepath")
+                        Image(systemName: "arrow.2.squarepath")
                             .font(.ilMono())
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel("Repost")
                 }
                 if canDelete {
                     Button {
                         onEdit()
                     } label: {
-                        Label("Edit", systemImage: "pencil")
+                        Image(systemName: "pencil")
                             .font(.ilMono())
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel("Edit")
                     Button(role: .destructive) {
                         onDelete()
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        Image(systemName: "trash")
                             .font(.ilMono())
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel("Delete")
                 } else if onReport != nil || onBlock != nil {
                     Menu {
                         if let onReport {
