@@ -44,6 +44,8 @@ struct ComposeView: View {
     /// Used for the post-publish confirmation when the deployment doesn't return the
     /// per-platform `crossPostResults` shape (which, in practice, it usually doesn't).
     @State private var lastCrossPostUrls: [CrossPostUrl] = []
+    @State private var postableOrgs: [Organization] = []
+    @State private var selectedOrgId: String? = nil
 
     private var isReply: Bool { replyTo != nil }
     private var isRepost: Bool { repostOf != nil }
@@ -103,6 +105,18 @@ struct ComposeView: View {
                     }
                 }
 
+                if !isReply && !isRepost && !postableOrgs.isEmpty {
+                    Section("Post as") {
+                        Picker("Author", selection: $selectedOrgId) {
+                            Text("Yourself").tag(String?.none)
+                            ForEach(postableOrgs) { org in
+                                Text(org.name).tag(Optional(org.id))
+                            }
+                        }
+                        .accessibilityLabel("Post author")
+                    }
+                }
+
                 if showAdvancedBar && !isReply && canUseSubscriberFeatures {
                     crossPostSection
                 }
@@ -145,6 +159,7 @@ struct ComposeView: View {
             }
             .task {
                 await loadIdentitiesIfNeeded()
+                await loadPostableOrgs()
             }
             .alert(successTitle, isPresented: $showSuccess) {
                 Button("OK") {
@@ -161,6 +176,7 @@ struct ComposeView: View {
                     crossPostLinkedIn = false
                     crossPostTwitter = false
                     selectedMastodonIds = []
+                    selectedOrgId = nil
                     applyUserDefaults()
                 }
             } message: {
@@ -458,6 +474,15 @@ struct ComposeView: View {
         }
     }
 
+    private func loadPostableOrgs() async {
+        guard !isReply && !isRepost else { return }
+        let orgs = (try? await APIClient.shared.userOrganizations()) ?? []
+        postableOrgs = orgs.filter { org in
+            guard let role = org.role else { return false }
+            return role == .owner || role == .admin
+        }
+    }
+
     @ViewBuilder
     private func repostPreview(_ original: Message) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -541,7 +566,8 @@ struct ComposeView: View {
                 mastodonProviderIds: mastodonIds,
                 crossPostToBluesky: crossPostEnabled && crossPostBluesky ? true : nil,
                 crossPostToLinkedIn: crossPostEnabled && crossPostLinkedIn ? true : nil,
-                crossPostToTwitter: crossPostEnabled && crossPostTwitter ? true : nil
+                crossPostToTwitter: crossPostEnabled && crossPostTwitter ? true : nil,
+                organizationId: selectedOrgId
             )
             lastCrossPostResults = result.crossPostResults
             lastCrossPostUrls = result.message.crossPostUrls ?? []

@@ -45,7 +45,9 @@ The following phases are complete and in the current build:
 
 **What works today:** auth (email + OAuth ×5), feed (infinite scroll, dig, reply, search, link previews), compose (text/image/video, cross-post, repost, scheduled), lists (CRUD, folders, schema editor, watchers), documents (CRUD, folders, search, public reader), public browse, notifications (tray, preferences), profile, follow, organizations, settings, exports.
 
-**Not yet built (remaining phases):** push notifications, inline document image upload, UGC moderation (report/block/mute/terms gate), post as org, offline document sync, realtime, GitHub integration, tag discovery.
+**Not yet built (remaining phases):** inline document image upload, post as org, offline document sync, realtime, GitHub integration, tag discovery.
+
+**Shipped since last update (2026-07-05):** Phase 0.5 (Info.plist: arm64, ITSAppUsesNonExemptEncryption), Phase 14 (UGC safety: report message/user, block/unblock user, mute, terms acceptance on register, blocked users in settings), Phase 9 (push notifications: PushService, APNs delegate, register/unregister device token).
 
 ---
 
@@ -75,17 +77,17 @@ If the endpoints don't exist, this is **blocked on backend** — escalate
 immediately, as it is the true critical-path blocker.
 
 iOS work (after backend is confirmed):
-- [ ] `Menu` overflow on every message row in `FeedView`, `MessageThreadView`, public views → "Report…" action → `ReportSheet` (reason picker + optional detail) → POST → toast
-- [ ] "Report @user" on `UserProfileView`
-- [ ] "Block @user" on message overflow and `UserProfileView`; optimistic local filter on feed
-- [ ] `BlockedUsersView` reachable from `SettingsView`; unblock action
-- [ ] Mute (local-only if no server endpoint)
-- [ ] Terms/community-guidelines acceptance checkbox on `RegisterView` (blocks submit until checked); link to a live URL (confirm below in §2)
-- [ ] Surface Terms + Guidelines links in `SettingsView` → About
-- [ ] New files: `Views/ReportSheet.swift`, `Views/BlockedUsersView.swift`, `Models/Moderation.swift`
-- [ ] New `APIClient` methods: `reportMessage`, `reportUser`, `blockUser`, `unblockUser`, `blockedUsers` (and mute variants if supported)
+- [x] `Menu` overflow on every message row in `FeedView`, `MessageThreadView` → "Report…" action → `ReportSheet` (reason picker + optional detail) → POST → toast
+- [x] "Report @user" on `UserProfileView`
+- [x] "Block @user" on message overflow and `UserProfileView`; optimistic local filter on feed
+- [x] `BlockedUsersView` reachable from `SettingsView`; unblock action
+- [x] Mute (server-backed via `/api/users/{id}/mute` — APIClient methods added)
+- [x] Terms/community-guidelines acceptance checkbox on `RegisterView` (blocks submit until checked); links to `/terms`
+- [x] Surface Terms + Community Guidelines links in `SettingsView` → About
+- [x] New files: `Views/ReportSheet.swift`, `Views/BlockedUsersView.swift`, `Models/Moderation.swift`, `Services/PushService.swift`
+- [x] New `APIClient` methods: `reportMessage`, `reportUser`, `blockUser`, `unblockUser`, `blockedUsers`, `muteUser`, `unmuteUser`, `mutedUsers`
 - [ ] Unit tests (MockURLSession) for all new API methods; decoding tests for new models
-- [ ] `#Preview` for all new views; `.accessibilityLabel` on all new controls
+- [x] `#Preview` for all new views; `.accessibilityLabel` on all new controls
 
 #### Phase 0.5 — Info.plist Hygiene  `Tiny` ⛔
 One-file PR; do this in parallel with Phase 14.
@@ -403,9 +405,9 @@ Smoke-test checklist on a real device before submitting for App Store review:
 Copy this and tick it off just before submitting.
 
 **Feature gates**
-- [ ] Phase 14 — UGC safety shipped (report, block, mute, terms gate)
-- [ ] Phase 0.5 — Info.plist hygiene done (`ITSAppUsesNonExemptEncryption`, `arm64`, icon)
-- [ ] Phase 9 — Push notifications wired (APNs capability, PushService, register/unregister)
+- [x] Phase 14 — UGC safety shipped (report, block, mute, terms gate)
+- [x] Phase 0.5 — Info.plist hygiene done (`ITSAppUsesNonExemptEncryption`, `arm64`, icon)
+- [x] Phase 9 — Push notifications wired (PushService, register/unregister); APNs capability still needs adding in Xcode
 
 **Accounts & credentials**
 - [ ] Apple Developer Program membership active; agreements accepted in ASC

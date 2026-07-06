@@ -151,6 +151,72 @@ final class MessageCrossPostUrlTests: XCTestCase {
     }
 }
 
+final class CreateMessageBodyEncodingTests: XCTestCase {
+    // camelCaseEncoder is the plain JSONEncoder (no key strategy); keys are
+    // already camelCase in the struct, so they survive encoding unchanged.
+    private let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.outputFormatting = .sortedKeys
+        return e
+    }()
+
+    private func encodedJSON(_ body: CreateMessageBody) throws -> [String: Any] {
+        let data = try encoder.encode(body)
+        return try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func makeBody(
+        content: String = "Test",
+        publiclyVisible: Bool? = nil,
+        parentId: String? = nil,
+        tags: [String]? = nil,
+        scheduledAt: String? = nil,
+        imageUrls: [String]? = nil,
+        videoUrls: [String]? = nil,
+        pushedMessageId: String? = nil,
+        mastodonProviderIds: [String]? = nil,
+        crossPostToBluesky: Bool? = nil,
+        crossPostToLinkedIn: Bool? = nil,
+        linkedInTargets: [LinkedInTarget]? = nil,
+        linkedInLinkAsFirstComment: Bool? = nil,
+        crossPostToTwitter: Bool? = nil,
+        scheduledCrossPostConfig: ScheduledCrossPostConfig? = nil,
+        organizationId: String? = nil
+    ) -> CreateMessageBody {
+        CreateMessageBody(
+            content: content, publiclyVisible: publiclyVisible, parentId: parentId,
+            tags: tags, scheduledAt: scheduledAt, imageUrls: imageUrls, videoUrls: videoUrls,
+            pushedMessageId: pushedMessageId, mastodonProviderIds: mastodonProviderIds,
+            crossPostToBluesky: crossPostToBluesky, crossPostToLinkedIn: crossPostToLinkedIn,
+            linkedInTargets: linkedInTargets, linkedInLinkAsFirstComment: linkedInLinkAsFirstComment,
+            crossPostToTwitter: crossPostToTwitter, scheduledCrossPostConfig: scheduledCrossPostConfig,
+            organizationId: organizationId
+        )
+    }
+
+    func test_encode_organizationId_presentWhenSet() throws {
+        let body = makeBody(content: "Org post", publiclyVisible: true, organizationId: "org-42")
+        let json = try encodedJSON(body)
+        XCTAssertEqual(json["organizationId"] as? String, "org-42")
+        XCTAssertNil(json["organization_id"])
+    }
+
+    func test_encode_organizationId_absentWhenNil() throws {
+        let body = makeBody(content: "Personal post")
+        let json = try encodedJSON(body)
+        XCTAssertNil(json["organizationId"])
+    }
+
+    func test_encode_organizationId_doesNotAffectOtherFields() throws {
+        let body = makeBody(content: "Hello", publiclyVisible: true, tags: ["swift"], organizationId: "org-99")
+        let json = try encodedJSON(body)
+        XCTAssertEqual(json["content"] as? String, "Hello")
+        XCTAssertEqual(json["publiclyVisible"] as? Bool, true)
+        XCTAssertEqual(json["tags"] as? [String], ["swift"])
+        XCTAssertEqual(json["organizationId"] as? String, "org-99")
+    }
+}
+
 final class PaginationCodableTests: XCTestCase {
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()

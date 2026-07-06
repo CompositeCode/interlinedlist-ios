@@ -36,6 +36,9 @@ struct UserProfileView: View {
     @State private var isLoadingDocuments = false
     @State private var documentsError: String?
     @State private var documentsLoaded = false
+    @State private var showReportSheet = false
+    @State private var isBlocked = false
+    @State private var blockError: String?
 
     var body: some View {
         NavigationStack {
@@ -68,6 +71,31 @@ struct UserProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
+                }
+                if authState.user?.username != username {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Button(role: .destructive) {
+                                showReportSheet = true
+                            } label: {
+                                Label("Report @\(username)…", systemImage: "flag")
+                            }
+                            Button(role: .destructive) {
+                                Task { await toggleBlock() }
+                            } label: {
+                                Label(isBlocked ? "Unblock @\(username)" : "Block @\(username)", systemImage: "person.slash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                        }
+                        .accessibilityLabel("More options")
+                    }
+                }
+            }
+            .sheet(isPresented: $showReportSheet) {
+                if let uid = targetUserId {
+                    ReportSheet(target: .user(id: uid, username: username), onDismiss: { showReportSheet = false })
+                        .environmentObject(authState)
                 }
             }
             .task {
@@ -499,6 +527,24 @@ struct UserProfileView: View {
             followError = msg
         } catch {
             followError = "Action failed. Please try again."
+        }
+    }
+
+    private func toggleBlock() async {
+        guard let uid = targetUserId else { return }
+        blockError = nil
+        do {
+            if isBlocked {
+                try await APIClient.shared.unblockUser(id: uid)
+                isBlocked = false
+            } else {
+                try await APIClient.shared.blockUser(id: uid)
+                isBlocked = true
+            }
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            blockError = isBlocked ? "Could not unblock user." : "Could not block user."
         }
     }
 }

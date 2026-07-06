@@ -13,6 +13,7 @@ struct MessageThreadView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showReplyCompose = false
+    @State private var reportTarget: ReportTarget? = nil
     @EnvironmentObject var authState: AuthState
 
     var body: some View {
@@ -72,6 +73,10 @@ struct MessageThreadView: View {
                 ComposeView(replyTo: rootMessage)
                     .environmentObject(authState)
             }
+            .sheet(item: $reportTarget) { target in
+                ReportSheet(target: target, onDismiss: { reportTarget = nil })
+                    .environmentObject(authState)
+            }
         }
     }
 
@@ -120,6 +125,24 @@ struct MessageThreadView: View {
                 .font(.ilBody())
             if let tags = reply.tags, !tags.isEmpty {
                 tagChips(tags)
+            }
+            if reply.userId != currentUserId {
+                HStack {
+                    Spacer()
+                    Menu {
+                        Button(role: .destructive) {
+                            reportTarget = .message(id: reply.id)
+                        } label: {
+                            Label("Report…", systemImage: "flag")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.ilMono())
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("More options")
+                }
             }
         }
         .padding(.vertical, 4)

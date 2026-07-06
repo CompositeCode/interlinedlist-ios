@@ -275,7 +275,8 @@ final class APIClient {
         crossPostToLinkedIn: Bool? = nil,
         linkedInTargets: [LinkedInTarget]? = nil,
         linkedInLinkAsFirstComment: Bool? = nil,
-        crossPostToTwitter: Bool? = nil
+        crossPostToTwitter: Bool? = nil,
+        organizationId: String? = nil
     ) async throws -> PostMessageResult {
         let body = CreateMessageBody(
             content: content, publiclyVisible: publiclyVisible, parentId: parentId,
@@ -283,7 +284,8 @@ final class APIClient {
             pushedMessageId: pushedMessageId, mastodonProviderIds: mastodonProviderIds,
             crossPostToBluesky: crossPostToBluesky, crossPostToLinkedIn: crossPostToLinkedIn,
             linkedInTargets: linkedInTargets, linkedInLinkAsFirstComment: linkedInLinkAsFirstComment,
-            crossPostToTwitter: crossPostToTwitter, scheduledCrossPostConfig: nil)
+            crossPostToTwitter: crossPostToTwitter, scheduledCrossPostConfig: nil,
+            organizationId: organizationId)
         // Backend expects camelCase (publiclyVisible, parentId); snake_case would send publicly_visible and be ignored.
         guard let url = URL(string: baseURL + "/api/messages") else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
@@ -620,6 +622,30 @@ final class APIClient {
         if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         var body = Data()
         let ext = mimeType == "image/png" ? "png" : "jpg"
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+        let (responseData, response) = try await session.data(for: request)
+        try checkResponse(data: responseData, response: response)
+        struct UploadResponse: Decodable { let url: String }
+        return try decoder.decode(UploadResponse.self, from: responseData).url
+    }
+
+    // MARK: - Document image upload
+
+    func uploadDocumentImage(documentId: String, data: Data, mimeType: String) async throws -> String {
+        let encoded = documentId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? documentId
+        guard let url = URL(string: baseURL + "/api/documents/\(encoded)/images/upload") else { throw APIError.invalidURL }
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let ext = mimeType == "image/png" ? "png" : "jpg"
+        var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"image\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
@@ -1050,6 +1076,87 @@ final class APIClient {
         let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
         let response: MessagesResponse = try await get("/api/messages/search?q=\(qEncoded)&limit=\(limit)&offset=\(offset)")
         return (response.messages, response.pagination)
+    }
+
+    // MARK: - Moderation — report, block, mute
+
+    func reportMessage(id: String, reason: ReportReason, detail: String?) async throws {
+        struct Body: Encodable { let reason: String; let detail: String? }
+        struct Response: Decodable { let reported: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/messages/\(encoded)/report", body: Body(reason: reason.rawValue, detail: detail))
+    }
+
+    func reportUser(id: String, reason: ReportReason, detail: String?) async throws {
+        struct Body: Encodable { let reason: String; let detail: String? }
+        struct Response: Decodable { let reported: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/users/\(encoded)/report", body: Body(reason: reason.rawValue, detail: detail))
+    }
+
+    func blockUser(id: String) async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let blocked: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/users/\(encoded)/block", body: Empty())
+    }
+
+    func unblockUser(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/users/\(encoded)/block") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func blockedUsers(limit: Int = 50, offset: Int = 0) async throws -> BlockedUsersResponse {
+        return try await get("/api/user/blocks?limit=\(limit)&offset=\(offset)")
+    }
+
+    func muteUser(id: String) async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let muted: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/users/\(encoded)/mute", body: Empty())
+    }
+
+    func unmuteUser(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/users/\(encoded)/mute") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func mutedUsers(limit: Int = 50, offset: Int = 0) async throws -> MutedUsersResponse {
+        return try await get("/api/user/mutes?limit=\(limit)&offset=\(offset)")
+    }
+
+    // MARK: - Push notifications (Phase 9)
+
+    func registerPushDevice(token: String) async throws {
+        struct Body: Encodable { let token: String; let platform: String }
+        struct Response: Decodable { let registered: Bool? }
+        let _: Response = try await postCamel("/api/push/register", body: Body(token: token, platform: "ios"))
+    }
+
+    func unregisterPushDevice(token: String) async throws {
+        struct Body: Encodable { let token: String }
+        guard let url = URL(string: baseURL + "/api/push/unregister") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(Body(token: token))
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
     }
 
     // MARK: - Private helpers

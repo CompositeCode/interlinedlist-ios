@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import SafariServices
 
 struct RegisterView: View {
     @EnvironmentObject var authState: AuthState
@@ -19,6 +20,8 @@ struct RegisterView: View {
     @State private var oauthInFlight = false
     @State private var linkedinVisible = false
     @State private var twitterVisible = false
+    @State private var agreedToTerms = false
+    @State private var showTerms = false
 
     var body: some View {
         NavigationStack {
@@ -50,6 +53,26 @@ struct RegisterView: View {
                 }
 
                 Section {
+                    HStack(alignment: .top, spacing: 12) {
+                        Toggle("", isOn: $agreedToTerms)
+                            .labelsHidden()
+                            .accessibilityLabel("Agree to Terms of Service")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("I agree to the ")
+                                .font(.ilBody())
+                            + Text("Terms of Service")
+                                .font(.ilBody())
+                                .underline()
+                                .foregroundStyle(ILColor.primary)
+                        }
+                        .onTapGesture { showTerms = true }
+                    }
+                } footer: {
+                    Text("You must agree to the Terms of Service to create an account.")
+                        .font(.ilMono(10))
+                }
+
+                Section {
                     Button {
                         Task { await register() }
                     } label: {
@@ -62,7 +85,7 @@ struct RegisterView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(isLoading || email.isEmpty || username.isEmpty || password.count < 8)
+                    .disabled(isLoading || email.isEmpty || username.isEmpty || password.count < 8 || !agreedToTerms)
                 }
 
                 Section("Or sign up with") {
@@ -98,6 +121,11 @@ struct RegisterView: View {
         }
         .task { await refreshOAuthVisibility() }
         .onAppear { errorMessage = nil }
+        .sheet(isPresented: $showTerms) {
+            if let url = URL(string: "https://interlinedlist.com/terms") {
+                SafariView(url: url).ignoresSafeArea()
+            }
+        }
     }
 
     private var visibleProviders: [OAuthProvider] {
