@@ -1,5 +1,11 @@
 # InterlinedList iOS
 
+[![iOS Build](https://github.com/CompositeCode/interlinedlist-ios/actions/workflows/ios.yml/badge.svg)](https://github.com/CompositeCode/interlinedlist-ios/actions/workflows/ios.yml)
+[![iOS 17+](https://img.shields.io/badge/iOS-17%2B-blue?logo=apple)](https://developer.apple.com/ios/)
+[![Swift 5.9+](https://img.shields.io/badge/Swift-5.9%2B-orange?logo=swift)](https://swift.org)
+[![Xcode 15+](https://img.shields.io/badge/Xcode-15%2B-147EFB?logo=xcode&logoColor=white)](https://developer.apple.com/xcode/)
+[![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](https://github.com/CompositeCode/interlinedlist-ios)
+
 Native iOS app for [InterlinedList](https://interlinedlist.com) — a social list-sharing service. Sign in, browse a message feed, post and reply, and manage nested lists, documents, organizations, and your social graph. Built in SwiftUI with no third-party dependencies.
 
 ## Requirements
