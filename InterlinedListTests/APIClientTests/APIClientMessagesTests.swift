@@ -152,6 +152,27 @@ final class APIClientMessagesTests: XCTestCase {
         }
     }
 
+    func test_postMessage_withOrganizationId_sendsCamelCaseKeyInBody() async throws {
+        let wrapped = #"{"data":\#(messageJSON)}"#
+        session.stub(json: wrapped)
+        _ = try await sut.postMessage(content: "Org post", organizationId: "org-42")
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["organizationId"] as? String, "org-42",
+                       "organizationId must appear as camelCase in the request body")
+        XCTAssertNil(json["organization_id"], "snake_case key must not be sent")
+    }
+
+    func test_postMessage_withoutOrganizationId_omitsFieldFromBody() async throws {
+        let wrapped = #"{"data":\#(messageJSON)}"#
+        session.stub(json: wrapped)
+        _ = try await sut.postMessage(content: "Plain post")
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNil(json["organizationId"], "organizationId must be absent when not provided")
+        XCTAssertNil(json["organization_id"])
+    }
+
     // MARK: editMessage()
 
     func test_editMessage_sendsPutToCorrectPath() async throws {

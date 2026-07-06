@@ -275,7 +275,8 @@ final class APIClient {
         crossPostToLinkedIn: Bool? = nil,
         linkedInTargets: [LinkedInTarget]? = nil,
         linkedInLinkAsFirstComment: Bool? = nil,
-        crossPostToTwitter: Bool? = nil
+        crossPostToTwitter: Bool? = nil,
+        organizationId: String? = nil
     ) async throws -> PostMessageResult {
         let body = CreateMessageBody(
             content: content, publiclyVisible: publiclyVisible, parentId: parentId,
@@ -283,7 +284,8 @@ final class APIClient {
             pushedMessageId: pushedMessageId, mastodonProviderIds: mastodonProviderIds,
             crossPostToBluesky: crossPostToBluesky, crossPostToLinkedIn: crossPostToLinkedIn,
             linkedInTargets: linkedInTargets, linkedInLinkAsFirstComment: linkedInLinkAsFirstComment,
-            crossPostToTwitter: crossPostToTwitter, scheduledCrossPostConfig: nil)
+            crossPostToTwitter: crossPostToTwitter, scheduledCrossPostConfig: nil,
+            organizationId: organizationId)
         // Backend expects camelCase (publiclyVisible, parentId); snake_case would send publicly_visible and be ignored.
         guard let url = URL(string: baseURL + "/api/messages") else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
@@ -620,6 +622,30 @@ final class APIClient {
         if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         var body = Data()
         let ext = mimeType == "image/png" ? "png" : "jpg"
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+        let (responseData, response) = try await session.data(for: request)
+        try checkResponse(data: responseData, response: response)
+        struct UploadResponse: Decodable { let url: String }
+        return try decoder.decode(UploadResponse.self, from: responseData).url
+    }
+
+    // MARK: - Document image upload
+
+    func uploadDocumentImage(documentId: String, data: Data, mimeType: String) async throws -> String {
+        let encoded = documentId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? documentId
+        guard let url = URL(string: baseURL + "/api/documents/\(encoded)/images/upload") else { throw APIError.invalidURL }
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let ext = mimeType == "image/png" ? "png" : "jpg"
+        var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"image\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)

@@ -156,6 +156,7 @@ struct CreateMessageBody: Encodable {
     var linkedInLinkAsFirstComment: Bool?
     var crossPostToTwitter: Bool?
     var scheduledCrossPostConfig: ScheduledCrossPostConfig?
+    var organizationId: String?
 }
 
 /// One platform's result after a cross-post attempt. Surfaced in a post-publish toast.

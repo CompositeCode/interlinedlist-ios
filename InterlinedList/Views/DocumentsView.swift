@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 struct DocumentsView: View {
     @EnvironmentObject var authState: AuthState
@@ -643,6 +644,9 @@ private struct EditDocumentView: View {
     @State private var availableFolders: [DocumentFolder] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isUploadingImage = false
+    @State private var imageUploadError: String?
 
     init(document: Document, onSave: @escaping (Document) -> Void) {
         self.document = document
@@ -664,6 +668,17 @@ private struct EditDocumentView: View {
                     TextField("Write in markdown…", text: $content, axis: .vertical)
                         .lineLimit(8...20)
                         .font(.system(.body, design: .monospaced))
+                }
+                Section {
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        Label(isUploadingImage ? "Uploading…" : "Insert image…", systemImage: "photo.badge.plus")
+                            .font(.ilBody())
+                    }
+                    .disabled(isUploadingImage)
+                    .accessibilityLabel("Insert image into document")
+                    if let imageUploadError {
+                        Text(imageUploadError).foregroundStyle(.red).font(.ilMono())
+                    }
                 }
                 Section {
                     Toggle("Public", isOn: $isPublic)
@@ -698,6 +713,10 @@ private struct EditDocumentView: View {
                     availableFolders = folders
                 }
             }
+            .onChange(of: selectedPhoto) { _, newItem in
+                guard let newItem else { return }
+                Task { await uploadPhoto(newItem) }
+            }
         }
     }
 
@@ -722,6 +741,30 @@ private struct EditDocumentView: View {
             errorMessage = msg
         } catch {
             errorMessage = "Failed to save changes."
+        }
+    }
+
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        imageUploadError = nil
+        isUploadingImage = true
+        defer { isUploadingImage = false; selectedPhoto = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            imageUploadError = "Failed to load image."
+            return
+        }
+        let mimeType = data.starts(with: [0x89, 0x50]) ? "image/png" : "image/jpeg"
+        do {
+            let url = try await APIClient.shared.uploadDocumentImage(
+                documentId: document.id,
+                data: data,
+                mimeType: mimeType
+            )
+            let altText = "image"
+            content += "\n![\(altText)](\(url))"
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            imageUploadError = "Image upload failed."
         }
     }
 }
