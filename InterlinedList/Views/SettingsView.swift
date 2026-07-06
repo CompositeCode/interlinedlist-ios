@@ -79,7 +79,12 @@ struct SettingsView: View {
                 Text("Dark").tag("dark")
             }
             .onChange(of: theme) { _, newValue in
-                Task { await save(theme: newValue) }
+                // Guard against spurious saves when syncFromUser sets the initial value on appear.
+                let serverTheme = authState.user?.theme ?? "system"
+                guard newValue != serverTheme else { return }
+                // "system" means no explicit preference — send nil so the server clears it.
+                // Sending the string "system" is rejected or treated as default (light) by the server.
+                Task { await save(theme: newValue == "system" ? nil : newValue) }
             }
         }
     }
@@ -88,10 +93,14 @@ struct SettingsView: View {
         Section("Posting") {
             Toggle("Default to public", isOn: $defaultPublic)
                 .onChange(of: defaultPublic) { _, newValue in
+                    let serverValue = authState.user?.defaultPubliclyVisible ?? true
+                    guard newValue != serverValue else { return }
                     Task { await save(defaultVisibility: newValue) }
                 }
             Toggle("Show advanced post settings", isOn: $showAdvanced)
                 .onChange(of: showAdvanced) { _, newValue in
+                    let serverValue = authState.user?.showAdvancedPostSettings ?? false
+                    guard newValue != serverValue else { return }
                     Task { await save(showAdvancedPostSettings: newValue) }
                 }
             if let maxLen = authState.user?.maxMessageLength {
@@ -166,6 +175,8 @@ struct SettingsView: View {
             authState.handleUnauthorized()
         } catch {
             settingsError = "Could not save settings."
+            // Revert local controls to match server state so they don't show a value that wasn't saved.
+            syncFromUser()
         }
     }
 }
