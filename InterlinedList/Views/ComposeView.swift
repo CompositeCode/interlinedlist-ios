@@ -106,7 +106,7 @@ struct ComposeView: View {
                 }
 
                 if !isReply && !isRepost && !postableOrgs.isEmpty {
-                    Section("Post as") {
+                    Section("Post Message As") {
                         Picker("Author", selection: $selectedOrgId) {
                             Text("Yourself").tag(String?.none)
                             ForEach(postableOrgs) { org in
@@ -200,13 +200,13 @@ struct ComposeView: View {
     private var navTitle: String {
         if isReply { return "Reply" }
         if isRepost { return "Repost" }
-        return "New post"
+        return "New Message"
     }
 
     private var postButtonLabel: String {
         if isRepost { return "Repost" }
         if scheduledDate != nil { return "Schedule" }
-        return isReply ? "Reply" : "Post"
+        return isReply ? "Reply" : "Post Message"
     }
 
     /// Reposts may have empty commentary; everything else requires content.
@@ -217,7 +217,7 @@ struct ComposeView: View {
     private var successTitle: String {
         if isReply { return "Replied" }
         if isRepost { return "Reposted" }
-        return scheduledDate != nil ? "Scheduled" : "Posted"
+        return scheduledDate != nil ? "Scheduled" : "Message Posted"
     }
 
     private var successMessage: String {
@@ -304,7 +304,7 @@ struct ComposeView: View {
                             .foregroundStyle(scheduledDate != nil ? ILColor.primary : Color.secondary)
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel(scheduledDate != nil ? "Clear schedule" : "Schedule post")
+                    .accessibilityLabel(scheduledDate != nil ? "Clear schedule" : "Schedule message")
                 }
             }
             Spacer(minLength: 0)
