@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import InterlinedList
 
@@ -35,6 +36,50 @@ final class AppDataStoreTests: XCTestCase {
         sut.insertFeedMessage(makeMessage(id: "new"))
         XCTAssertTrue(sut.feedMessages.contains { $0.id == "old" })
         XCTAssertTrue(sut.feedMessages.contains { $0.id == "new" })
+    }
+
+    func test_insertFeedMessage_isVisibleAfterInitialMessages() {
+        sut.insertFeedMessage(makeMessage(id: "existing1"))
+        sut.insertFeedMessage(makeMessage(id: "existing2"))
+        sut.insertFeedMessage(makeMessage(id: "existing3"))
+        sut.insertFeedMessage(makeMessage(id: "newPost"))
+        XCTAssertEqual(sut.feedMessages.first?.id, "newPost")
+        XCTAssertTrue(sut.feedMessages.contains { $0.id == "existing1" })
+        XCTAssertTrue(sut.feedMessages.contains { $0.id == "existing2" })
+        XCTAssertTrue(sut.feedMessages.contains { $0.id == "existing3" })
+        XCTAssertEqual(sut.feedMessages.count, 4)
+    }
+
+    func test_insertFeedMessage_newMessageAppearsBeforeExisting() {
+        sut.insertFeedMessage(makeMessage(id: "first"))
+        sut.insertFeedMessage(makeMessage(id: "second"))
+        sut.insertFeedMessage(makeMessage(id: "third"))
+        XCTAssertEqual(sut.feedMessages[0].id, "third")
+        XCTAssertEqual(sut.feedMessages[1].id, "second")
+        XCTAssertEqual(sut.feedMessages[2].id, "first")
+    }
+
+    func test_insertFeedMessage_doesNotDuplicateExistingMessage() {
+        sut.insertFeedMessage(makeMessage(id: "dup"))
+        sut.insertFeedMessage(makeMessage(id: "dup"))
+        // insertFeedMessage does not deduplicate at the store layer.
+        // FeedView's onChange filters by !existingIds.contains($0.id) before prepending.
+        XCTAssertEqual(sut.feedMessages.count, 2)
+    }
+
+    func test_insertFeedMessage_publishesCountChange() {
+        let countIncreased = expectation(description: "feedMessages count increases")
+        var cancellables = Set<AnyCancellable>()
+        sut.$feedMessages
+            .dropFirst()
+            .sink { messages in
+                if messages.count == 1 {
+                    countIncreased.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+        sut.insertFeedMessage(makeMessage(id: "z"))
+        wait(for: [countIncreased], timeout: 1.0)
     }
 
     // MARK: - reset

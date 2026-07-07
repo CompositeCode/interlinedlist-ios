@@ -77,7 +77,8 @@
       "Bash(git push *)",
       "Bash(echo \"---exit $?\")",
       "Bash(git remote *)",
-      "Bash(sort -t: -k1,1 -k2,2n)"
+      "Bash(sort -t: -k1,1 -k2,2n)",
+      "Bash(gh run *)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"
