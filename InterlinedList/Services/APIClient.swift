@@ -145,6 +145,9 @@ final class APIClient {
         let provider: String
         let providerUsername: String?
         let createdAt: String?
+
+        /// Base provider name without any instance suffix (e.g. "mastodon:techhub.social" → "mastodon").
+        var providerType: String { String(provider.prefix(while: { $0 != ":" })) }
     }
 
     func linkedIdentities() async throws -> [LinkedIdentity] {

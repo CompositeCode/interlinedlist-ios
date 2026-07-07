@@ -389,10 +389,10 @@ struct ComposeView: View {
 
     // MARK: - Cross-post controls
 
-    private var mastodonIdentities: [APIClient.LinkedIdentity] { allIdentities.filter { $0.provider == "mastodon" } }
-    private var hasBluesky: Bool { allIdentities.contains { $0.provider == "bluesky" } }
-    private var hasLinkedIn: Bool { allIdentities.contains { $0.provider == "linkedin" } }
-    private var hasTwitter: Bool { allIdentities.contains { $0.provider == "twitter" } }
+    private var mastodonIdentities: [APIClient.LinkedIdentity] { allIdentities.filter { $0.providerType == "mastodon" } }
+    private var hasBluesky: Bool { allIdentities.contains { $0.providerType == "bluesky" } }
+    private var hasLinkedIn: Bool { allIdentities.contains { $0.providerType == "linkedin" } }
+    private var hasTwitter: Bool { allIdentities.contains { $0.providerType == "twitter" } }
     private var hasMastodon: Bool { !mastodonIdentities.isEmpty }
     private var hasCrossPostTargets: Bool { hasBluesky || hasLinkedIn || hasTwitter || hasMastodon }
 

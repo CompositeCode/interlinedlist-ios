@@ -108,7 +108,7 @@ struct LinkedIdentitiesView: View {
     @ViewBuilder
     private func identityRow(_ identity: APIClient.LinkedIdentity) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: OAuthProvider(rawValue: identity.provider)?.systemImageName ?? "link")
+            Image(systemName: OAuthProvider(rawValue: identity.providerType)?.systemImageName ?? "link")
                 .frame(width: 24)
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
@@ -131,7 +131,7 @@ struct LinkedIdentitiesView: View {
     }
 
     private func displayName(for provider: String) -> String {
-        OAuthProvider(rawValue: provider)?.displayName ?? provider.capitalized
+        OAuthProvider(rawValue: String(provider.prefix(while: { $0 != ":" })))?.displayName ?? provider.capitalized
     }
 
     private func load() async {
