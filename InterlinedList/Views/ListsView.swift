@@ -14,12 +14,13 @@ struct ListsView: View {
     @State private var searchText = ""
     @State private var searchResults: [UserList] = []
     @State private var isSearching = false
+    @State private var treeNodes: [ListTreeNode] = []
 
     private var canCreateFolders: Bool {
         authState.user?.isSubscriber == true
     }
 
-    private var treeNodes: [ListTreeNode] {
+    private func rebuildTree() -> [ListTreeNode] {
         // Folders are a subscriber-only feature. For free users we pass an empty
         // folder array so any lists that were nested under folders (e.g. from when
         // the user was a subscriber) surface at root via buildTree's orphan rule.
@@ -29,43 +30,7 @@ struct ListsView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if !searchText.isEmpty {
-                    searchResultsList
-                } else if store.listsLoading && treeNodes.isEmpty {
-                    ListSkeletonView()
-                } else if let error = store.listsError, treeNodes.isEmpty {
-                    ContentUnavailableView {
-                        Label("Unable to load", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error)
-                    } actions: {
-                        Button("Retry") {
-                            Task { await store.refreshLists() }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if treeNodes.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Lists", systemImage: "list.bullet.rectangle")
-                    } description: {
-                        Text("No lists found.")
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    List {
-                        ForEach(treeNodes) { node in
-                            ListTreeNodeRow(
-                                node: node,
-                                onDeleteList: { list in Task { await deleteList(list) } },
-                                onDeleteFolder: { folder in Task { await deleteFolder(folder) } },
-                                onUpdateList: { list in Task { await store.refreshLists() } }
-                            )
-                        }
-                    }
-                    .listStyle(.sidebar)
-                }
-            }
+            listContent
             .navigationTitle("Lists")
             .navigationBarTitleDisplayMode(.large)
             .navigationDestination(for: UserList.self) { list in
@@ -82,25 +47,7 @@ struct ListsView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            showCreateList = true
-                        } label: {
-                            Label("New List", systemImage: "plus.rectangle")
-                        }
-                        if canCreateFolders {
-                            Button {
-                                showCreateFolder = true
-                            } label: {
-                                Label("New Folder", systemImage: "folder.badge.plus")
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("New item")
-                }
+                ToolbarItem(placement: .topBarTrailing) { addMenu }
             }
             .sheet(isPresented: $showCreateList) {
                 CreateListView { _ in
@@ -115,7 +62,64 @@ struct ListsView: View {
             .refreshable {
                 await store.refreshLists()
             }
+            .onAppear { treeNodes = rebuildTree() }
+            .onChange(of: store.userLists) { _, _ in treeNodes = rebuildTree() }
+            .onChange(of: store.listFolders) { _, _ in treeNodes = rebuildTree() }
         }
+    }
+
+    @ViewBuilder
+    private var listContent: some View {
+        if !searchText.isEmpty {
+            searchResultsList
+        } else if store.listsLoading && treeNodes.isEmpty {
+            ListSkeletonView()
+        } else if let error = store.listsError, treeNodes.isEmpty {
+            ContentUnavailableView {
+                Label("Unable to load", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Retry") { Task { await store.refreshLists() } }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if treeNodes.isEmpty {
+            ContentUnavailableView {
+                Label("No Lists", systemImage: "list.bullet.rectangle")
+            } description: {
+                Text("No lists found.")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List {
+                ForEach(treeNodes) { node in
+                    ListTreeNodeRow(
+                        node: node,
+                        onDeleteList: { list in Task { await deleteList(list) } },
+                        onDeleteFolder: { folder in Task { await deleteFolder(folder) } },
+                        onUpdateList: { _ in Task { await store.refreshLists() } }
+                    )
+                }
+            }
+            .listStyle(.sidebar)
+        }
+    }
+
+    @ViewBuilder
+    private var addMenu: some View {
+        Menu {
+            Button { showCreateList = true } label: {
+                Label("New List", systemImage: "plus.rectangle")
+            }
+            if canCreateFolders {
+                Button { showCreateFolder = true } label: {
+                    Label("New Folder", systemImage: "folder.badge.plus")
+                }
+            }
+        } label: {
+            Image(systemName: "plus")
+        }
+        .accessibilityLabel("New item")
     }
 
     @ViewBuilder

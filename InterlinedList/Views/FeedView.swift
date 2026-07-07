@@ -268,13 +268,29 @@ struct FeedView: View {
         // entirely for free users per the iOS-free-app direction.
         if authState.user?.isSubscriber == true {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { showScheduled = true } label: { Image(systemName: "calendar") }
-                    .accessibilityLabel("Scheduled posts")
+                Button { showScheduled = true } label: {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.white.opacity(0.15))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Scheduled posts")
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button { showCompose = true } label: { Image(systemName: "square.and.pencil") }
-                .accessibilityLabel("Compose")
+            Button { showCompose = true } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(.white.opacity(0.15))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Compose")
         }
     }
 
