@@ -5,6 +5,9 @@
 
 import SwiftUI
 import PhotosUI
+import OSLog
+
+private let composeLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "InterlinedList", category: "ComposeView")
 
 /// Fallback when user's maxMessageLength is not available (matches API default).
 private let defaultMaxMessageLength = 666
@@ -227,8 +230,17 @@ struct ComposeView: View {
         else if scheduledDate != nil { base = "Your message has been scheduled." }
         else { base = "Your message was posted." }
         if !lastCrossPostResults.isEmpty {
-            let summary = lastCrossPostResults.map { r in
-                "\(r.platform.capitalized) \(r.success ? "✓" : "✗")"
+            let summary = lastCrossPostResults.map { r -> String in
+                let succeeded = r.success ?? false
+                let label = r.platform?.capitalized ?? "Cross-post"
+                let status = succeeded ? "✓" : "✗"
+                let detail: String
+                if !succeeded, let msg = r.error, !msg.isEmpty {
+                    detail = " (\(msg))"
+                } else {
+                    detail = ""
+                }
+                return "\(label) \(status)\(detail)"
             }.joined(separator: " · ")
             return base + "\n" + summary
         }
@@ -585,6 +597,7 @@ struct ComposeView: View {
         } catch APIError.status(403) {
             errorMessage = "You may need to verify your email before posting."
         } catch {
+            composeLog.error("postMessage failed: \(error)")
             errorMessage = "Connection failed. Please try again."
         }
     }
