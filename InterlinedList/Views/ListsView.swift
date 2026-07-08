@@ -118,8 +118,14 @@ struct ListsView: View {
             }
         } label: {
             Image(systemName: "plus")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color(ILColor.primary))
+                .frame(width: 34, height: 34)
+                .background(Color(ILColor.primary).opacity(0.12))
+                .clipShape(Circle())
         }
         .accessibilityLabel("New item")
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

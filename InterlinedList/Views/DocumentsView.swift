@@ -108,8 +108,14 @@ struct DocumentsView: View {
                         }
                     } label: {
                         Image(systemName: "plus")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color(ILColor.primary))
+                            .frame(width: 34, height: 34)
+                            .background(Color(ILColor.primary).opacity(0.12))
+                            .clipShape(Circle())
                     }
                     .accessibilityLabel("New item")
+                    .buttonStyle(.plain)
                 }
             }
             .refreshable { await store.refreshDocuments() }
@@ -335,8 +341,14 @@ private struct DocumentFolderView: View {
                     }
                 } label: {
                     Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color(ILColor.primary))
+                        .frame(width: 34, height: 34)
+                        .background(Color(ILColor.primary).opacity(0.12))
+                        .clipShape(Circle())
                 }
                 .accessibilityLabel("New item in \(folder.name)")
+                .buttonStyle(.plain)
             }
         }
         .refreshable { await load() }
@@ -541,7 +553,14 @@ private struct DocumentDetailView: View {
                     Button("Delete", role: .destructive) { showDeleteConfirm = true }
                 } label: {
                     Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color(ILColor.primary))
+                        .frame(width: 34, height: 34)
+                        .background(Color(ILColor.primary).opacity(0.12))
+                        .clipShape(Circle())
                 }
+                .accessibilityLabel("Document options")
+                .buttonStyle(.plain)
             }
         }
         .sheet(isPresented: $showEdit) {

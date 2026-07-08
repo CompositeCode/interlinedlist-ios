@@ -88,8 +88,14 @@ struct UserProfileView: View {
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color(ILColor.primary))
+                                .frame(width: 34, height: 34)
+                                .background(Color(ILColor.primary).opacity(0.12))
+                                .clipShape(Circle())
                         }
                         .accessibilityLabel("More options")
+                        .buttonStyle(.plain)
                     }
                 }
             }
