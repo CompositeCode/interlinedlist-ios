@@ -124,7 +124,7 @@ struct PublicListDetailView: View {
             self.error = "Could not load this list."
         }
         // Watch status is best-effort and independent of the list body.
-        isWatching = try? await APIClient.shared.isWatchingList(listId: listId)
+        isWatching = try? await APIClient.shared.isWatchingList(listId: listId).watching
     }
 
     private func toggleWatch() async {
@@ -137,7 +137,7 @@ struct PublicListDetailView: View {
                 try await APIClient.shared.removeWatcher(listId: listId, userId: userId)
                 isWatching = false
             } else {
-                _ = try await APIClient.shared.addWatcher(listId: listId, userId: userId, role: .watcher)
+                try await APIClient.shared.watchSelf(listId: listId)
                 isWatching = true
             }
         } catch APIError.status(401) {

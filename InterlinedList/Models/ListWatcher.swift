@@ -94,4 +94,5 @@ struct WatcherCandidatesResponse: Decodable {
 
 struct WatchingResponse: Decodable {
     let watching: Bool
+    let role: String?
 }

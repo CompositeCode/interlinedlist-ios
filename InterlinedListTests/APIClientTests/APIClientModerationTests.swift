@@ -54,6 +54,30 @@ final class APIClientModerationTests: XCTestCase {
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/users/user-id/report")
     }
 
+    func test_reportUser_sendsBearerToken() async throws {
+        session.stub(json: #"{"reported":true}"#)
+        try await sut.reportUser(id: "user-id", reason: .spam, detail: nil)
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+    }
+
+    func test_reportUser_bodyContainsReason() async throws {
+        session.stub(json: #"{"reported":true}"#)
+        try await sut.reportUser(id: "user-id", reason: .misinformation, detail: "test detail")
+        let bodyData = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        XCTAssertEqual(json?["reason"] as? String, "misinformation")
+    }
+
+    func test_reportUser_401_throws() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            try await sut.reportUser(id: "user-id", reason: .spam, detail: nil)
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
+
     // MARK: blockUser()
 
     func test_blockUser_sendsPostToCorrectPath() async throws {
@@ -68,6 +92,22 @@ final class APIClientModerationTests: XCTestCase {
         XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
     }
 
+    func test_blockUser_sendsBearerToken() async throws {
+        session.stub(json: #"{"blocked":true}"#)
+        try await sut.blockUser(id: "user-id")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+    }
+
+    func test_blockUser_401_throws() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            try await sut.blockUser(id: "user-id")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
+
     // MARK: unblockUser()
 
     func test_unblockUser_sendsDeleteToCorrectPath() async throws {
@@ -75,6 +115,22 @@ final class APIClientModerationTests: XCTestCase {
         try await sut.unblockUser(id: "user-id")
         XCTAssertEqual(session.lastRequest?.httpMethod, "DELETE")
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/users/user-id/block")
+    }
+
+    func test_unblockUser_sendsBearerToken() async throws {
+        session.stub(data: Data(), statusCode: 200)
+        try await sut.unblockUser(id: "user-id")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+    }
+
+    func test_unblockUser_401_throws() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            try await sut.unblockUser(id: "user-id")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
     }
 
     // MARK: blockedUsers()
@@ -103,6 +159,22 @@ final class APIClientModerationTests: XCTestCase {
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/users/user-id/mute")
     }
 
+    func test_muteUser_sendsBearerToken() async throws {
+        session.stub(json: #"{"muted":true}"#)
+        try await sut.muteUser(id: "user-id")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+    }
+
+    func test_muteUser_401_throws() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            try await sut.muteUser(id: "user-id")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
+
     // MARK: unmuteUser()
 
     func test_unmuteUser_sendsDeleteRequest() async throws {
@@ -110,6 +182,22 @@ final class APIClientModerationTests: XCTestCase {
         try await sut.unmuteUser(id: "user-id")
         XCTAssertEqual(session.lastRequest?.httpMethod, "DELETE")
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/users/user-id/mute")
+    }
+
+    func test_unmuteUser_sendsBearerToken() async throws {
+        session.stub(data: Data(), statusCode: 200)
+        try await sut.unmuteUser(id: "user-id")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+    }
+
+    func test_unmuteUser_401_throws() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            try await sut.unmuteUser(id: "user-id")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
     }
 
     // MARK: mutedUsers()

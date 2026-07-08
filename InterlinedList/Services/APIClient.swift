@@ -209,14 +209,25 @@ final class APIClient {
         request.httpBody = body
         let (responseData, response) = try await session.data(for: request)
         try checkResponse(data: responseData, response: response)
-        // Endpoint returns { url } only; refresh the user object to satisfy the signature.
+        struct UploadResp: Decodable { let url: String? }
+        if let avatarUrl = (try? decoder.decode(UploadResp.self, from: responseData))?.url {
+            return try await applyAvatarUrl(avatarUrl)
+        }
         return try await currentUser()
     }
 
-    func setAvatarFromURL(_ url: String) async throws -> User {
+    func setAvatarFromURL(_ avatarUrl: String) async throws -> User {
         struct Body: Encodable { let url: String }
         struct Response: Decodable { let url: String? }
-        let _: Response = try await post("/api/user/avatar/from-url", body: Body(url: url))
+        let resp: Response = try await post("/api/user/avatar/from-url", body: Body(url: avatarUrl))
+        return try await applyAvatarUrl(resp.url ?? avatarUrl)
+    }
+
+    private func applyAvatarUrl(_ url: String) async throws -> User {
+        struct Body: Encodable { let avatar: String }
+        struct Resp: Decodable { let user: User? }
+        let wrapped: Resp = try await post("/api/user/update", body: Body(avatar: url))
+        if let user = wrapped.user { return user }
         return try await currentUser()
     }
 
@@ -910,10 +921,16 @@ final class APIClient {
         return response.watchers
     }
 
-    func isWatchingList(listId: String) async throws -> Bool {
+    func isWatchingList(listId: String) async throws -> WatchingResponse {
         let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
-        let response: WatchingResponse = try await get("/api/lists/\(encoded)/watchers/me")
-        return response.watching
+        return try await get("/api/lists/\(encoded)/watchers/me")
+    }
+
+    func watchSelf(listId: String) async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let watching: Bool? }
+        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
+        let _: Response = try await postCamel("/api/lists/\(encoded)/watchers", body: Empty())
     }
 
     func searchWatcherCandidates(listId: String, limit: Int = 20, offset: Int = 0) async throws -> [WatcherCandidate] {

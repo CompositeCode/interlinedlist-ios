@@ -63,10 +63,11 @@ final class APIClientGapPhasesTests: XCTestCase {
     }
 
     func test_isWatchingList_decodesBool() async throws {
-        session.stub(json: #"{"watching":true}"#)
-        let watching = try await sut.isWatchingList(listId: "l1")
+        session.stub(json: #"{"watching":true,"role":"watcher"}"#)
+        let response = try await sut.isWatchingList(listId: "l1")
         XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/lists/l1/watchers/me") == true)
-        XCTAssertTrue(watching)
+        XCTAssertTrue(response.watching)
+        XCTAssertEqual(response.role, "watcher")
     }
 
     func test_addWatcher_postsUserIdAndRole() async throws {

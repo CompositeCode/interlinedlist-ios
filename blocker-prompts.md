@@ -14,9 +14,18 @@ the API openapi.json and `/help/api/*` pages for current route definitions.
 
 ---
 
+## Audit log
+
+| Date | Summary |
+|---|---|
+| 2026-07-02 | Initial audit. All items below identified as outstanding. |
+| 2026-07-07 | Re-audit. All hard blockers and v1 targets confirmed resolved. One new Bearer-auth gap found on `GET /api/user/organizations`. See Prompt 8 (updated). |
+
+---
+
 ## HARD BLOCKERS
 
-### 1. Implement content reporting endpoints
+### 1. Implement content reporting endpoints ✅ RESOLVED 2026-07-07
 
 **Why:** Apple Guideline 1.2 requires every UGC/social app to let users
 report objectionable content. The iOS app **will be rejected** without this.
@@ -54,7 +63,7 @@ Response: { "reported": true }
 
 ---
 
-### 2. Implement user block / unblock endpoints
+### 2. Implement user block / unblock endpoints ✅ RESOLVED 2026-07-07
 
 **Why:** Apple Guideline 1.2 requires a mechanism to block abusive users.
 Hard gate on App Store submission.
@@ -98,7 +107,7 @@ Response 200:
 
 ---
 
-### 3. Implement user mute endpoint (recommended, not strictly required)
+### 3. Implement user mute endpoint (recommended, not strictly required) ✅ RESOLVED 2026-07-07
 
 **Why:** A mute (softer than a block) is not strictly required by Apple 1.2,
 but if a server-side mute exists it prevents re-surfacing muted content after
@@ -120,7 +129,7 @@ iOS client will fall back to local-only muting.
 
 ---
 
-### 4. Publish a Community Guidelines / EULA page
+### 4. Publish a Community Guidelines / EULA page ✅ RESOLVED 2026-07-07
 
 **Why:** Apple 1.2 requires UGC apps to display a zero-tolerance community
 agreement that users accept at registration. The iOS `RegisterView` needs a
@@ -146,7 +155,7 @@ EULA decision) to the iOS team so they can wire `RegisterView`.
 
 ## v1 TARGETS
 
-### 5. Confirm and document push notification endpoint contracts
+### 5. Confirm and document push notification endpoint contracts ✅ RESOLVED 2026-07-07
 
 **Why:** Phase 9 (APNs push notifications) ships in v1. The endpoints
 reportedly exist (`POST /api/push/register`, `DELETE /api/push/unregister`)
@@ -189,11 +198,15 @@ Expected response: { "unregistered": true }
 
 ---
 
-### 6. Confirm or add org-author field to create-message endpoint
+### 6. Confirm or add org-author field to create-message endpoint ✅ CONFIRMED 2026-07-07
 
 **Why:** Phase 15 (post on behalf of an organization) requires the
 create-message endpoint to accept the posting organization as the author.
 This field has not been confirmed to exist.
+
+**Confirmed 2026-07-07:** `organizationId` is recognized — a probe with a non-member org
+UUID returned `403 Forbidden: you must be an owner or admin of this organization`, confirming
+the field is parsed and the auth check is enforced. No further backend work needed here.
 
 **Confirm or add:**
 
@@ -217,7 +230,7 @@ team can formally defer Phase 15.
 
 ---
 
-### 7. Make GET /api/user/identities accept Bearer tokens
+### 7. Make GET /api/user/identities accept Bearer tokens ✅ RESOLVED 2026-07-07
 
 **Why:** This endpoint currently returns `401 Unauthorized` for a valid
 Bearer token (confirmed 2026-07-02). It accepts session cookies only. Because
@@ -263,16 +276,34 @@ there eliminates the extra round-trip.
 These are not App Store blockers but they each require a server change and
 are worth fixing before v1 if the effort is low.
 
-### 8. Add userRole and memberCount to org list responses
+### 8. Make GET /api/user/organizations accept Bearer tokens ⚠️ ACTIVE — found 2026-07-07
 
-**Why:** `GET /api/user/organizations` and `GET /api/organizations` don't
-include `userRole`, so `OrganizationDetailView` must make a second round-trip
-to `GET /api/organizations/{id}` just to learn whether the caller is
-owner/admin/member and therefore whether to show edit/delete actions.
+**Why:** `GET /api/user/organizations` returns `{"error":"Unauthorized"}` when called with a
+valid Bearer token. Session-cookie auth works fine. Because the iOS app is Bearer-only, the
+org list in the app is permanently empty — the same class of bug that was just fixed for
+`GET /api/user/identities` (Prompt 7).
 
-**Fix:** Add per-item fields to both list endpoints:
+**Confirmed 2026-07-07:** When called with a session cookie the endpoint already returns
+`userRole` and `memberCount` per org — so the response shape (the original ask) is already
+correct; only the auth layer needs fixing.
+
+**Fix:** Accept a valid Bearer token on `GET /api/user/organizations`, the same way
+`GET /api/user` and (now) `GET /api/user/identities` do.
+
+Confirmed response shape (no change needed):
 ```json
-{ "id": "…", "name": "…", "userRole": "owner" | "admin" | "member", "memberCount": 12, … }
+{
+  "organizations": [
+    {
+      "id": "…",
+      "name": "…",
+      "slug": "…",
+      "userRole": "owner" | "admin" | "member",
+      "memberCount": 3,
+      …
+    }
+  ]
+}
 ```
 
 ---
@@ -449,17 +480,20 @@ Conflicted docs should be returned so the iOS client can show a banner.
 
 ## Confirmed gaps for reference
 
-These were live issues as of the last audit (2026-07-02):
+Last audit: 2026-07-07.
 
 | Ref | Gap | iOS workaround | Status |
 |---|---|---|---|
-| D0 | `GET /api/user/identities` returns 401 for Bearer tokens | Mastodon picker always empty | **Active — see Prompt 7** |
+| D0 | `GET /api/user/identities` returns 401 for Bearer tokens | Mastodon picker always empty | ✅ Resolved 2026-07-07 |
+| D0b | `GET /api/user/organizations` returns 401 for Bearer tokens | Org list always empty | **Active — see Prompt 8** |
 | B4 | `/api/github/*` requires session cookie, not Bearer | GitHub integration deferred | Deferred — Prompt 15 |
 | B6 | No tag discovery endpoints | Tag explorer/autocomplete deferred | Deferred — Prompt 16 |
 | B8 | No realtime (WebSocket/SSE) | Poll-only | Deferred — Prompt 17 |
-| B10 | Moderation endpoints unverified | Phase 14 blocked | **Hard blocker — Prompts 1–4** |
-| C2 | Watcher list pagination has `total` at top level, not in `pagination` | Special-cased decoder | Quality — Prompt 9 |
-| C3 | Self-watch `userId` requirement unclear | iOS sends own userId | Quality — Prompt 13 |
-| D1 | Cross-post failure shape unconfirmed | Toast shows only successes | Quality — Prompt 14 |
+| B10 | Moderation (report/block/mute) endpoints missing | Phase 14 blocked | ✅ Resolved 2026-07-07 |
+| B10b | Community guidelines page missing | RegisterView terms link broken | ✅ Resolved 2026-07-07 |
+| B11 | Push register/unregister contracts unconfirmed | PushService not built | ✅ Resolved 2026-07-07 |
+| C2 | Watcher list pagination has `total` at top level, not in `pagination` | Special-cased decoder | Quality — Prompt 9 (unverified) |
+| C3 | Self-watch `userId` requirement unclear | iOS sends own userId | Quality — Prompt 13 (unverified) |
+| D1 | Cross-post failure shape unconfirmed | Toast shows only successes | Quality — Prompt 14 (unverified) |
 | D2 | `linkedInTargets[].kind` vocabulary undocumented | Boolean-only cross-post | Deferred with Phase 18 |
-| E | Avatar endpoints don't return updated user | Extra `GET /api/user` after upload | Quality — Prompt 11 |
+| E | Avatar endpoints don't return updated user | Extra `GET /api/user` after upload | Quality — Prompt 11 (unverified) |
