@@ -5,6 +5,9 @@
 
 import SwiftUI
 import PhotosUI
+import OSLog
+
+private let composeLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "InterlinedList", category: "ComposeView")
 
 /// Fallback when user's maxMessageLength is not available (matches API default).
 private let defaultMaxMessageLength = 666
@@ -106,7 +109,7 @@ struct ComposeView: View {
                 }
 
                 if !isReply && !isRepost && !postableOrgs.isEmpty {
-                    Section("Post as") {
+                    Section("Post Message As") {
                         Picker("Author", selection: $selectedOrgId) {
                             Text("Yourself").tag(String?.none)
                             ForEach(postableOrgs) { org in
@@ -200,13 +203,13 @@ struct ComposeView: View {
     private var navTitle: String {
         if isReply { return "Reply" }
         if isRepost { return "Repost" }
-        return "New post"
+        return "New Message"
     }
 
     private var postButtonLabel: String {
         if isRepost { return "Repost" }
         if scheduledDate != nil { return "Schedule" }
-        return isReply ? "Reply" : "Post"
+        return isReply ? "Reply" : "Post Message"
     }
 
     /// Reposts may have empty commentary; everything else requires content.
@@ -217,7 +220,7 @@ struct ComposeView: View {
     private var successTitle: String {
         if isReply { return "Replied" }
         if isRepost { return "Reposted" }
-        return scheduledDate != nil ? "Scheduled" : "Posted"
+        return scheduledDate != nil ? "Scheduled" : "Message Posted"
     }
 
     private var successMessage: String {
@@ -227,8 +230,17 @@ struct ComposeView: View {
         else if scheduledDate != nil { base = "Your message has been scheduled." }
         else { base = "Your message was posted." }
         if !lastCrossPostResults.isEmpty {
-            let summary = lastCrossPostResults.map { r in
-                "\(r.platform.capitalized) \(r.success ? "✓" : "✗")"
+            let summary = lastCrossPostResults.map { r -> String in
+                let succeeded = r.success ?? false
+                let label = r.platform?.capitalized ?? "Cross-post"
+                let status = succeeded ? "✓" : "✗"
+                let detail: String
+                if !succeeded, let msg = r.error, !msg.isEmpty {
+                    detail = " (\(msg))"
+                } else {
+                    detail = ""
+                }
+                return "\(label) \(status)\(detail)"
             }.joined(separator: " · ")
             return base + "\n" + summary
         }
@@ -304,7 +316,7 @@ struct ComposeView: View {
                             .foregroundStyle(scheduledDate != nil ? ILColor.primary : Color.secondary)
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel(scheduledDate != nil ? "Clear schedule" : "Schedule post")
+                    .accessibilityLabel(scheduledDate != nil ? "Clear schedule" : "Schedule message")
                 }
             }
             Spacer(minLength: 0)
@@ -389,10 +401,10 @@ struct ComposeView: View {
 
     // MARK: - Cross-post controls
 
-    private var mastodonIdentities: [APIClient.LinkedIdentity] { allIdentities.filter { $0.provider == "mastodon" } }
-    private var hasBluesky: Bool { allIdentities.contains { $0.provider == "bluesky" } }
-    private var hasLinkedIn: Bool { allIdentities.contains { $0.provider == "linkedin" } }
-    private var hasTwitter: Bool { allIdentities.contains { $0.provider == "twitter" } }
+    private var mastodonIdentities: [APIClient.LinkedIdentity] { allIdentities.filter { $0.providerType == "mastodon" } }
+    private var hasBluesky: Bool { allIdentities.contains { $0.providerType == "bluesky" } }
+    private var hasLinkedIn: Bool { allIdentities.contains { $0.providerType == "linkedin" } }
+    private var hasTwitter: Bool { allIdentities.contains { $0.providerType == "twitter" } }
     private var hasMastodon: Bool { !mastodonIdentities.isEmpty }
     private var hasCrossPostTargets: Bool { hasBluesky || hasLinkedIn || hasTwitter || hasMastodon }
 
@@ -585,6 +597,7 @@ struct ComposeView: View {
         } catch APIError.status(403) {
             errorMessage = "You may need to verify your email before posting."
         } catch {
+            composeLog.error("postMessage failed: \(error)")
             errorMessage = "Connection failed. Please try again."
         }
     }

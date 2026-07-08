@@ -45,6 +45,8 @@ struct UserProfileView: View {
             VStack(spacing: 0) {
                 if authState.user?.username != username {
                     followHeader
+                } else {
+                    organizationsSection
                 }
 
                 Picker("Content", selection: $selectedTab) {
@@ -62,7 +64,6 @@ struct UserProfileView: View {
                 }
 
                 if authState.user?.username == username {
-                    organizationsSection
                     exportSection
                 }
             }
@@ -87,8 +88,14 @@ struct UserProfileView: View {
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color(ILColor.primary))
+                                .frame(width: 34, height: 34)
+                                .background(Color(ILColor.primary).opacity(0.12))
+                                .clipShape(Circle())
                         }
                         .accessibilityLabel("More options")
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -99,10 +106,10 @@ struct UserProfileView: View {
                 }
             }
             .task {
-                await loadMessages()
-                if authState.user?.username == username && !organizationsLoaded {
-                    await loadOrganizations()
-                }
+                let shouldLoadOrgs = authState.user?.username == username && !organizationsLoaded
+                async let msgs: Void = loadMessages()
+                async let orgs: Void = shouldLoadOrgs ? loadOrganizations() : ()
+                _ = await (msgs, orgs)
             }
             .onChange(of: selectedTab) { _, tab in
                 if tab == 1 && lists.isEmpty && listsError == nil {

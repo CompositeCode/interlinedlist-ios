@@ -118,7 +118,7 @@ struct UserList: Identifiable, Codable, Hashable {
     }
 }
 
-struct ListFolder: Identifiable, Codable {
+struct ListFolder: Identifiable, Codable, Equatable {
     let id: String
     let name: String
     let parentId: String?

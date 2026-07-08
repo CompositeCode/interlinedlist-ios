@@ -161,12 +161,13 @@ struct CreateMessageBody: Encodable {
 
 /// One platform's result after a cross-post attempt. Surfaced in a post-publish toast.
 /// Best-effort: the create response may or may not include this depending on deployment.
+/// All fields are optional because the server shape is inconsistent across deployments.
 struct CrossPostResult: Codable, Identifiable {
-    let platform: String
-    let success: Bool
+    let platform: String?
+    let success: Bool?
     let error: String?
 
-    var id: String { platform }
+    var id: String { platform ?? error ?? UUID().uuidString }
 }
 
 struct CreateMessageResponse: Codable {

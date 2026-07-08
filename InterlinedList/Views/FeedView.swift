@@ -227,12 +227,21 @@ struct FeedView: View {
         }
         return nav
             .onChange(of: store.feedMessages.count) { _, _ in
-                guard !syncedFromStore && !showOnlyMine && tagFilter == nil else { return }
-                let msgs = store.feedMessages
-                messages = msgs
-                initDigStates(from: msgs)
-                isLoading = false
-                syncedFromStore = !msgs.isEmpty
+                guard !showOnlyMine && tagFilter == nil else { return }
+                if !syncedFromStore {
+                    let msgs = store.feedMessages
+                    messages = msgs
+                    initDigStates(from: msgs)
+                    isLoading = false
+                    syncedFromStore = !msgs.isEmpty
+                } else {
+                    let existingIds = Set(messages.map { $0.id })
+                    let newMessages = store.feedMessages.filter { !existingIds.contains($0.id) }
+                    if !newMessages.isEmpty {
+                        messages.insert(contentsOf: newMessages, at: 0)
+                        initDigStates(from: newMessages)
+                    }
+                }
             }
             .onChange(of: store.feedLoading) { _, loading in
                 guard !showOnlyMine && tagFilter == nil else { return }
@@ -255,17 +264,33 @@ struct FeedView: View {
                 Text("InterlinedList").font(.ilTitle()).foregroundStyle(.white)
             }
         }
-        ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: 4) {
-                // Scheduled posts are a subscriber-only feature; entry point hidden
-                // entirely for free users per the iOS-free-app direction.
-                if authState.user?.isSubscriber == true {
-                    Button { showScheduled = true } label: { Image(systemName: "calendar") }
-                        .accessibilityLabel("Scheduled posts")
+        // Scheduled posts are a subscriber-only feature; entry point hidden
+        // entirely for free users per the iOS-free-app direction.
+        if authState.user?.isSubscriber == true {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showScheduled = true } label: {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.white.opacity(0.15))
+                        .clipShape(Circle())
                 }
-                Button { showCompose = true } label: { Image(systemName: "square.and.pencil") }
-                    .accessibilityLabel("Compose")
+                .buttonStyle(.plain)
+                .accessibilityLabel("Scheduled posts")
             }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { showCompose = true } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(.white.opacity(0.15))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Compose")
         }
     }
 

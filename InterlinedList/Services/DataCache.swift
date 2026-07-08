@@ -5,14 +5,12 @@
 
 import Foundation
 
-final class DataCache {
-    static let shared = DataCache()
-
+actor DataCache {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let cacheDir: URL
 
-    private init() {
+    init() {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         cacheDir = base.appendingPathComponent("ILDataCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)

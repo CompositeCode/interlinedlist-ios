@@ -24,13 +24,13 @@ final class AppDataStore: ObservableObject {
     @Published private(set) var unreadCount = 0
     @Published private(set) var pendingRequestCount = 0
 
-    private let cache = DataCache.shared
+    private let cache = DataCache()
     private var userId: String?
 
     func prefetchAll(userId: String?) async {
         if let uid = userId, self.userId != uid {
             self.userId = uid
-            loadFromCache(userId: uid)
+            await loadFromCache(userId: uid)
         }
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.refreshFeed() }
@@ -43,8 +43,9 @@ final class AppDataStore: ObservableObject {
     func onUserIdAvailable(_ id: String) {
         guard userId != id else { return }
         userId = id
-        if feedMessages.isEmpty { loadFromCache(userId: id) }
-        saveToCache()
+        if feedMessages.isEmpty {
+            Task { await loadFromCache(userId: id) }
+        }
     }
 
     func refreshFeed() async {
@@ -54,7 +55,7 @@ final class AppDataStore: ObservableObject {
         do {
             let (list, _) = try await APIClient.shared.messages(limit: 50, offset: 0, onlyMine: false, tag: nil)
             feedMessages = list
-            saveToCache()
+            saveFeedCache()
         } catch APIError.status(401) {
         } catch APIError.server(let msg) {
             if feedMessages.isEmpty { feedError = msg }
@@ -71,7 +72,7 @@ final class AppDataStore: ObservableObject {
             let result = try await APIClient.shared.listsAndFolders()
             listFolders = result.folders
             userLists = result.lists
-            saveToCache()
+            saveListsCache()
         } catch APIError.status(401) {
         } catch APIError.server(let msg) {
             if userLists.isEmpty { listsError = msg }
@@ -90,7 +91,7 @@ final class AppDataStore: ObservableObject {
             let (f, d) = try await (fTask, dTask)
             documentFolders = f
             documents = d
-            saveToCache()
+            saveDocsCache()
         } catch APIError.status(401) {
         } catch {
             // GET /api/documents is not documented as subscriber-only, so a
@@ -119,20 +120,20 @@ final class AppDataStore: ObservableObject {
 
     func insertFeedMessage(_ message: Message) {
         feedMessages.insert(message, at: 0)
-        saveToCache()
+        saveFeedCache()
     }
 
-    func removeList(id: String) { userLists.removeAll { $0.id == id }; saveToCache() }
-    func removeListFolder(id: String) { listFolders.removeAll { $0.id == id }; saveToCache() }
+    func removeList(id: String) { userLists.removeAll { $0.id == id }; saveListsCache() }
+    func removeListFolder(id: String) { listFolders.removeAll { $0.id == id }; saveListsCache() }
 
-    func insertDocument(_ doc: Document) { documents.insert(doc, at: 0); saveToCache() }
+    func insertDocument(_ doc: Document) { documents.insert(doc, at: 0); saveDocsCache() }
     func updateDocument(_ doc: Document) {
         if let idx = documents.firstIndex(where: { $0.id == doc.id }) { documents[idx] = doc }
-        saveToCache()
+        saveDocsCache()
     }
-    func removeDocument(id: String) { documents.removeAll { $0.id == id }; saveToCache() }
-    func insertDocumentFolder(_ folder: DocumentFolder) { documentFolders.append(folder); saveToCache() }
-    func removeDocumentFolder(id: String) { documentFolders.removeAll { $0.id == id }; saveToCache() }
+    func removeDocument(id: String) { documents.removeAll { $0.id == id }; saveDocsCache() }
+    func insertDocumentFolder(_ folder: DocumentFolder) { documentFolders.append(folder); saveDocsCache() }
+    func removeDocumentFolder(id: String) { documentFolders.removeAll { $0.id == id }; saveDocsCache() }
 
     func reset() {
         feedMessages = []
@@ -153,23 +154,34 @@ final class AppDataStore: ObservableObject {
 
     // MARK: - Cache
 
-    private func loadFromCache(userId: String) {
-        if let msgs: [Message] = cache.load(key: "\(userId)_feed") { feedMessages = msgs }
-        if let cached: ListsCache = cache.load(key: "\(userId)_lists") {
+    private func loadFromCache(userId: String) async {
+        if let msgs: [Message] = await cache.load(key: "\(userId)_feed") { feedMessages = msgs }
+        if let cached: ListsCache = await cache.load(key: "\(userId)_lists") {
             listFolders = cached.folders
             userLists = cached.lists
         }
-        if let cached: DocsCache = cache.load(key: "\(userId)_docs") {
+        if let cached: DocsCache = await cache.load(key: "\(userId)_docs") {
             documentFolders = cached.folders
             documents = cached.documents
         }
     }
 
-    private func saveToCache() {
+    private func saveFeedCache() {
         guard let uid = userId else { return }
-        cache.save(feedMessages, key: "\(uid)_feed")
-        cache.save(ListsCache(folders: listFolders, lists: userLists), key: "\(uid)_lists")
-        cache.save(DocsCache(folders: documentFolders, documents: documents), key: "\(uid)_docs")
+        let snapshot = feedMessages
+        Task { await cache.save(snapshot, key: "\(uid)_feed") }
+    }
+
+    private func saveListsCache() {
+        guard let uid = userId else { return }
+        let snapshot = ListsCache(folders: listFolders, lists: userLists)
+        Task { await cache.save(snapshot, key: "\(uid)_lists") }
+    }
+
+    private func saveDocsCache() {
+        guard let uid = userId else { return }
+        let snapshot = DocsCache(folders: documentFolders, documents: documents)
+        Task { await cache.save(snapshot, key: "\(uid)_docs") }
     }
 }
 

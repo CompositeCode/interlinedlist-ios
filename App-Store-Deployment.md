@@ -49,6 +49,13 @@ The following phases are complete and in the current build:
 
 **Shipped since last update (2026-07-05):** Phase 0.5 (Info.plist: arm64, ITSAppUsesNonExemptEncryption), Phase 14 (UGC safety: report message/user, block/unblock user, mute, terms acceptance on register, blocked users in settings), Phase 9 (push notifications: PushService, APNs delegate, register/unregister device token).
 
+**Shipped 2026-07-07 (backend sync + iOS follow-up):**
+- `GET /api/user/organizations` now accepts Bearer tokens → `OrganizationListView` unblocked; no iOS workaround needed.
+- `GET /api/lists/{id}/watchers/me` now returns `role` field → `WatchingResponse` model updated; `isWatchingList` returns full response.
+- Self-watch via `POST /api/lists/{id}/watchers` no longer requires `userId` in body → `watchSelf(listId:)` added; `PublicListDetailView` uses it.
+- Avatar update flow no longer issues trailing `GET /api/user`; uses `PATCH /api/user/update` response instead.
+- Moderation unit tests expanded (bearer token + error handling tests for all 8 methods); `ModerationModelTests` added with Codable decode coverage for `BlockedUser`, `MutedUser`, and their response wrappers.
+
 ---
 
 ## 1. Feature Completion — What Must Ship Before Submission
@@ -86,7 +93,7 @@ iOS work (after backend is confirmed):
 - [x] Surface Terms + Community Guidelines links in `SettingsView` → About
 - [x] New files: `Views/ReportSheet.swift`, `Views/BlockedUsersView.swift`, `Models/Moderation.swift`, `Services/PushService.swift`
 - [x] New `APIClient` methods: `reportMessage`, `reportUser`, `blockUser`, `unblockUser`, `blockedUsers`, `muteUser`, `unmuteUser`, `mutedUsers`
-- [ ] Unit tests (MockURLSession) for all new API methods; decoding tests for new models
+- [x] Unit tests (MockURLSession) for all new API methods; decoding tests for new models
 - [x] `#Preview` for all new views; `.accessibilityLabel` on all new controls
 
 #### Phase 0.5 — Info.plist Hygiene  `Tiny` ⛔
@@ -407,7 +414,7 @@ Copy this and tick it off just before submitting.
 **Feature gates**
 - [x] Phase 14 — UGC safety shipped (report, block, mute, terms gate)
 - [x] Phase 0.5 — Info.plist hygiene done (`ITSAppUsesNonExemptEncryption`, `arm64`, icon)
-- [x] Phase 9 — Push notifications wired (PushService, register/unregister); APNs capability still needs adding in Xcode
+- [x] Phase 9 — Push notifications wired (PushService, register/unregister, `aps-environment: development` entitlement in place; Xcode auto-signing upgrades to production on archive)
 
 **Accounts & credentials**
 - [ ] Apple Developer Program membership active; agreements accepted in ASC
