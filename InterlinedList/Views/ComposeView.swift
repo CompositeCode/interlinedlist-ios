@@ -540,9 +540,18 @@ struct ComposeView: View {
         errorMessage = nil
         defer { isUploadingImage = false }
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else { return }
-            let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
-            uploadedImageURL = try await APIClient.shared.uploadImage(data: data, mimeType: mimeType)
+            guard let rawData = try await item.loadTransferable(type: Data.self) else { return }
+            // loadTransferable returns the native format (often HEIC on iPhone). Convert to
+            // JPEG via UIImage so the server always receives a supported format.
+            let (uploadData, mimeType): (Data, String)
+            if let img = UIImage(data: rawData), let jpeg = img.jpegData(compressionQuality: 0.85) {
+                uploadData = jpeg
+                mimeType = "image/jpeg"
+            } else {
+                uploadData = rawData
+                mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
+            }
+            uploadedImageURL = try await APIClient.shared.uploadImage(data: uploadData, mimeType: mimeType)
         } catch {
             // Picker is hidden for non-subscribers; 403 falls through here.
             errorMessage = "Failed to upload image. Please try again."

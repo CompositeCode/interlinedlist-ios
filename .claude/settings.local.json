@@ -96,7 +96,8 @@
       "Bash(curl -s -o /tmp/avatar.json -w '%{http_code}' -X POST https://interlinedlist.com/api/user/avatar/from-url -H 'Authorization: Bearer f3fc370ad110b4fe5b002772d70eac3eab3d29e77949cd45c4033565fc15c0eb' -H 'Content-Type: application/json' -d '{\"url\":\"https://example.com/fake.jpg\"}')",
       "Bash(curl -s https://interlinedlist.com/api/messages?limit=20 -H 'Authorization: Bearer f3fc370ad110b4fe5b002772d70eac3eab3d29e77949cd45c4033565fc15c0eb')",
       "Bash(curl -s -o /tmp/msg_org.json -w '%{http_code}' -X POST https://interlinedlist.com/api/messages -H 'Authorization: Bearer f3fc370ad110b4fe5b002772d70eac3eab3d29e77949cd45c4033565fc15c0eb' -H 'Content-Type: application/json' -d '{\"organizationId\":\"00000000-0000-0000-0000-000000000000\"}')",
-      "Bash(curl -s https://interlinedlist.com/api/folders -H 'Authorization: Bearer f3fc370ad110b4fe5b002772d70eac3eab3d29e77949cd45c4033565fc15c0eb')"
+      "Bash(curl -s https://interlinedlist.com/api/folders -H 'Authorization: Bearer f3fc370ad110b4fe5b002772d70eac3eab3d29e77949cd45c4033565fc15c0eb')",
+      "Bash(brew doctor *)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

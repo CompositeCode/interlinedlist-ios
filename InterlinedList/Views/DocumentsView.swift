@@ -767,15 +767,24 @@ private struct EditDocumentView: View {
         imageUploadError = nil
         isUploadingImage = true
         defer { isUploadingImage = false; selectedPhoto = nil }
-        guard let data = try? await item.loadTransferable(type: Data.self) else {
+        guard let rawData = try? await item.loadTransferable(type: Data.self) else {
             imageUploadError = "Failed to load image."
             return
         }
-        let mimeType = data.starts(with: [0x89, 0x50]) ? "image/png" : "image/jpeg"
+        // loadTransferable returns the native format (often HEIC on iPhone). Convert to
+        // JPEG via UIImage so the server always receives a supported format.
+        let (uploadData, mimeType): (Data, String)
+        if let img = UIImage(data: rawData), let jpeg = img.jpegData(compressionQuality: 0.85) {
+            uploadData = jpeg
+            mimeType = "image/jpeg"
+        } else {
+            uploadData = rawData
+            mimeType = rawData.starts(with: [0x89, 0x50]) ? "image/png" : "image/jpeg"
+        }
         do {
             let url = try await APIClient.shared.uploadDocumentImage(
                 documentId: document.id,
-                data: data,
+                data: uploadData,
                 mimeType: mimeType
             )
             let altText = "image"

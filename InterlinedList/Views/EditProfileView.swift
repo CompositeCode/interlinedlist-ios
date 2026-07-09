@@ -279,12 +279,21 @@ struct EditProfileView: View {
             selectedPhoto = nil
         }
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
+            guard let rawData = try await item.loadTransferable(type: Data.self) else {
                 avatarError = "Couldn't upload avatar."
                 return
             }
-            let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
-            let updated = try await APIClient.shared.uploadAvatar(data: data, mimeType: mimeType)
+            // loadTransferable returns the native format (often HEIC on iPhone). Convert to
+            // JPEG via UIImage so the server always receives a supported format.
+            let (uploadData, mimeType): (Data, String)
+            if let img = UIImage(data: rawData), let jpeg = img.jpegData(compressionQuality: 0.85) {
+                uploadData = jpeg
+                mimeType = "image/jpeg"
+            } else {
+                uploadData = rawData
+                mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
+            }
+            let updated = try await APIClient.shared.uploadAvatar(data: uploadData, mimeType: mimeType)
             authState.updateUser(updated)
             currentAvatarURL = updated.avatar
         } catch APIError.status(401) {
