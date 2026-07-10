@@ -522,15 +522,29 @@ struct ComposeView: View {
         errorMessage = nil
         defer { isUploadingVideo = false }
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else { return }
-            let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "video/mp4"
-            uploadedVideoURL = try await APIClient.shared.uploadVideo(data: data, mimeType: mimeType)
+            let videoData: Data
+            let mimeType: String
+            if let fileURL = try await item.loadTransferable(type: URL.self) {
+                videoData = try Data(contentsOf: fileURL)
+                let ext = fileURL.pathExtension.lowercased()
+                mimeType = ext == "mp4" ? "video/mp4" : "video/quicktime"
+            } else if let data = try await item.loadTransferable(type: Data.self) {
+                videoData = data
+                mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "video/mp4"
+            } else {
+                composeLog.error("uploadVideo: both URL and Data transferable returned nil")
+                errorMessage = "Could not load video from photo library."
+                selectedVideo = nil
+                return
+            }
+            uploadedVideoURL = try await APIClient.shared.uploadVideo(data: videoData, mimeType: mimeType)
         } catch {
             // 403 falls through here. The video picker is hidden for free
             // users so a subscriber-only response shouldn't normally reach
             // this branch; no subscription copy surfaces either way per the
             // iOS-free-app direction.
-            errorMessage = "Failed to upload video. Please try again."
+            composeLog.error("uploadVideo failed: \(error)")
+            errorMessage = "Failed to upload video: \(error.localizedDescription)"
             selectedVideo = nil
         }
     }
@@ -554,7 +568,8 @@ struct ComposeView: View {
             uploadedImageURL = try await APIClient.shared.uploadImage(data: uploadData, mimeType: mimeType)
         } catch {
             // Picker is hidden for non-subscribers; 403 falls through here.
-            errorMessage = "Failed to upload image. Please try again."
+            composeLog.error("uploadPhoto failed: \(error)")
+            errorMessage = "Failed to upload image: \(error.localizedDescription)"
             selectedPhoto = nil
         }
     }

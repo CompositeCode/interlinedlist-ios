@@ -637,7 +637,7 @@ final class APIClient {
         var body = Data()
         let ext = mimeType == "image/png" ? "png" : "jpg"
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(data)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
@@ -661,7 +661,7 @@ final class APIClient {
         let ext = mimeType == "image/png" ? "png" : "jpg"
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(data)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
@@ -684,7 +684,7 @@ final class APIClient {
         let ext = mimeType.contains("mp4") ? "mp4" : "mov"
         var body = Data()
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"video\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
         body.append(data)
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
