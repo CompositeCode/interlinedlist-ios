@@ -279,12 +279,21 @@ struct EditProfileView: View {
             selectedPhoto = nil
         }
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
+            guard let rawData = try await item.loadTransferable(type: Data.self) else {
                 avatarError = "Couldn't upload avatar."
                 return
             }
-            let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
-            let updated = try await APIClient.shared.uploadAvatar(data: data, mimeType: mimeType)
+            let (uploadData, mimeType): (Data, String)
+            if let processed = await Task.detached(priority: .userInitiated, operation: {
+                ImageUploadProcessor.process(rawData)
+            }).value {
+                uploadData = processed.data
+                mimeType = processed.mimeType
+            } else {
+                uploadData = rawData
+                mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
+            }
+            let updated = try await APIClient.shared.uploadAvatar(data: uploadData, mimeType: mimeType)
             authState.updateUser(updated)
             currentAvatarURL = updated.avatar
         } catch APIError.status(401) {

@@ -767,15 +767,24 @@ private struct EditDocumentView: View {
         imageUploadError = nil
         isUploadingImage = true
         defer { isUploadingImage = false; selectedPhoto = nil }
-        guard let data = try? await item.loadTransferable(type: Data.self) else {
+        guard let rawData = try? await item.loadTransferable(type: Data.self) else {
             imageUploadError = "Failed to load image."
             return
         }
-        let mimeType = data.starts(with: [0x89, 0x50]) ? "image/png" : "image/jpeg"
+        let (uploadData, mimeType): (Data, String)
+        if let processed = await Task.detached(priority: .userInitiated, operation: {
+            ImageUploadProcessor.process(rawData)
+        }).value {
+            uploadData = processed.data
+            mimeType = processed.mimeType
+        } else {
+            uploadData = rawData
+            mimeType = rawData.starts(with: [0x89, 0x50]) ? "image/png" : "image/jpeg"
+        }
         do {
             let url = try await APIClient.shared.uploadDocumentImage(
                 documentId: document.id,
-                data: data,
+                data: uploadData,
                 mimeType: mimeType
             )
             let altText = "image"
