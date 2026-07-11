@@ -98,7 +98,9 @@
       "Bash(curl -s -o /tmp/msg_org.json -w '%{http_code}' -X POST https://interlinedlist.com/api/messages -H 'Authorization: Bearer f3fc370ad110b4fe5b002772d70eac3eab3d29e77949cd45c4033565fc15c0eb' -H 'Content-Type: application/json' -d '{\"organizationId\":\"00000000-0000-0000-0000-000000000000\"}')",
       "Bash(curl -s https://interlinedlist.com/api/folders -H 'Authorization: Bearer f3fc370ad110b4fe5b002772d70eac3eab3d29e77949cd45c4033565fc15c0eb')",
       "Bash(brew doctor *)",
-      "Bash(brew upgrade *)"
+      "Bash(brew upgrade *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('mcpServers', {}\\), indent=2\\)\\)\")",
+      "Read(//Users/adron/.claude/**)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"
