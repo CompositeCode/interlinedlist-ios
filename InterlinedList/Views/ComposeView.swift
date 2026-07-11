@@ -555,12 +555,12 @@ struct ComposeView: View {
         defer { isUploadingImage = false }
         do {
             guard let rawData = try await item.loadTransferable(type: Data.self) else { return }
-            // loadTransferable returns the native format (often HEIC on iPhone). Convert to
-            // JPEG via UIImage so the server always receives a supported format.
             let (uploadData, mimeType): (Data, String)
-            if let img = UIImage(data: rawData), let jpeg = img.jpegData(compressionQuality: 0.85) {
-                uploadData = jpeg
-                mimeType = "image/jpeg"
+            if let processed = await Task.detached(priority: .userInitiated, operation: {
+                ImageUploadProcessor.process(rawData)
+            }).value {
+                uploadData = processed.data
+                mimeType = processed.mimeType
             } else {
                 uploadData = rawData
                 mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
