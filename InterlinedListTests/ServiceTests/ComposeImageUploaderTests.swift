@@ -101,6 +101,36 @@ final class ComposeImageUploaderTests: XCTestCase {
         XCTAssertEqual(uploader.remainingSlots, ComposeImageUploader.maxImages)
     }
 
+    func testMoveAttachmentReordersUploadedURLs() async {
+        let uploader = echoUploader()
+        guard let a = uploader.reserve(), let b = uploader.reserve(), let c = uploader.reserve() else {
+            return XCTFail("reserve failed")
+        }
+        await upload(uploader, a, "A")
+        await upload(uploader, b, "B")
+        await upload(uploader, c, "C")
+        XCTAssertEqual(uploader.uploadedURLs, ["A", "B", "C"])
+
+        // Drag C ahead of A -> C, A, B
+        uploader.moveAttachment(c, ahead: a)
+        XCTAssertEqual(uploader.uploadedURLs, ["C", "A", "B"])
+
+        // Drag A (now at index 1) ahead of B (index 2) -> C, B, A
+        uploader.moveAttachment(a, ahead: b)
+        XCTAssertEqual(uploader.uploadedURLs, ["C", "B", "A"])
+    }
+
+    func testMoveAttachmentOntoItselfIsNoOp() async {
+        let uploader = echoUploader()
+        guard let a = uploader.reserve(), let b = uploader.reserve() else {
+            return XCTFail("reserve failed")
+        }
+        await upload(uploader, a, "A")
+        await upload(uploader, b, "B")
+        uploader.moveAttachment(a, ahead: a)
+        XCTAssertEqual(uploader.uploadedURLs, ["A", "B"])
+    }
+
     func testIsUploadingWhileSlotReservedButNotYetComplete() {
         let uploader = echoUploader()
         _ = uploader.reserve()
