@@ -27,9 +27,8 @@ struct ComposeView: View {
     @State private var errorMessage: String?
     @State private var showSuccess = false
     @State private var showAdvancedBar = false
-    @State private var selectedPhoto: PhotosPickerItem?
-    @State private var uploadedImageURL: String?
-    @State private var isUploadingImage = false
+    @StateObject private var imageUploader = ComposeImageUploader()
+    @State private var photoSelection: [PhotosPickerItem] = []
     @State private var selectedVideo: PhotosPickerItem?
     @State private var uploadedVideoURL: String?
     @State private var isUploadingVideo = false
@@ -100,8 +99,8 @@ struct ComposeView: View {
                     if showSchedulePicker && !isReply && canUseSubscriberFeatures {
                         schedulePicker
                     }
-                    if let url = uploadedImageURL {
-                        uploadedImagePreview(url: url)
+                    if !imageUploader.attachments.isEmpty {
+                        ComposeImageStrip(uploader: imageUploader)
                     }
                     if let url = uploadedVideoURL {
                         uploadedVideoPreview(url: url)
@@ -167,8 +166,8 @@ struct ComposeView: View {
             .alert(successTitle, isPresented: $showSuccess) {
                 Button("OK") {
                     content = ""
-                    uploadedImageURL = nil
-                    selectedPhoto = nil
+                    imageUploader.reset()
+                    photoSelection = []
                     uploadedVideoURL = nil
                     selectedVideo = nil
                     scheduledDate = nil
@@ -185,9 +184,11 @@ struct ComposeView: View {
             } message: {
                 Text(successMessage)
             }
-            .onChange(of: selectedPhoto) { _, newItem in
-                guard let newItem else { return }
-                Task { await uploadPhoto(newItem) }
+            .onChange(of: photoSelection) { _, items in
+                guard !items.isEmpty else { return }
+                let picked = items
+                photoSelection = []
+                Task { await imageUploader.add(picked) }
             }
         }
     }
@@ -214,7 +215,10 @@ struct ComposeView: View {
 
     /// Reposts may have empty commentary; everything else requires content.
     private var canSubmit: Bool {
-        isRepost || !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !imageUploader.isUploading else { return false }
+        if isRepost { return true }
+        if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        return !imageUploader.uploadedURLs.isEmpty
     }
 
     private var successTitle: String {
@@ -255,6 +259,31 @@ struct ComposeView: View {
     }
 
     @ViewBuilder
+    private var attachPhotosButton: some View {
+        let attached = imageUploader.count
+        PhotosPicker(
+            selection: $photoSelection,
+            maxSelectionCount: max(1, imageUploader.remainingSlots),
+            selectionBehavior: .ordered,
+            matching: .images
+        ) {
+            HStack(spacing: 4) {
+                Image(systemName: attached > 0 ? "photo.fill.on.rectangle.fill" : "photo")
+                    .font(.ilBody())
+                    .foregroundStyle(attached > 0 ? ILColor.primary : Color.secondary)
+                if attached > 0 {
+                    Text("\(attached)/\(ComposeImageUploader.maxImages)")
+                        .font(.ilMono())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .buttonStyle(.borderless)
+        .disabled(imageUploader.remainingSlots == 0)
+        .accessibilityLabel("Attach photos")
+    }
+
+    @ViewBuilder
     private var advancedToolbar: some View {
         HStack(alignment: .center, spacing: 8) {
             Text("\(remainingCharacters) characters remaining")
@@ -275,19 +304,7 @@ struct ComposeView: View {
             }
             if showAdvancedBar && canUseSubscriberFeatures {
                 HStack(spacing: 12) {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        if isUploadingImage {
-                            ProgressView()
-                                .frame(width: 20, height: 20)
-                        } else {
-                            Image(systemName: uploadedImageURL != nil ? "photo.fill.on.rectangle.fill" : "photo")
-                                .font(.ilBody())
-                                .foregroundStyle(uploadedImageURL != nil ? ILColor.primary : Color.secondary)
-                        }
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(isUploadingImage)
-                    .accessibilityLabel("Attach photo")
+                    attachPhotosButton
                     PhotosPicker(selection: $selectedVideo, matching: .videos) {
                         if isUploadingVideo {
                             ProgressView()
@@ -347,36 +364,6 @@ struct ComposeView: View {
         .font(.ilMono())
         .foregroundStyle(.red)
         .buttonStyle(.borderless)
-    }
-
-    @ViewBuilder
-    private func uploadedImagePreview(url: String) -> some View {
-        HStack {
-            if let imageURL = URL(string: url) {
-                AsyncImage(url: imageURL) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        Image(systemName: "photo").foregroundStyle(.secondary)
-                    }
-                }
-                .frame(width: 60, height: 60)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            Text("Image attached")
-                .font(.ilMono())
-                .foregroundStyle(.secondary)
-            Spacer()
-            Button {
-                uploadedImageURL = nil
-                selectedPhoto = nil
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Remove attached image")
-        }
     }
 
     @ViewBuilder
@@ -549,31 +536,6 @@ struct ComposeView: View {
         }
     }
 
-    private func uploadPhoto(_ item: PhotosPickerItem) async {
-        isUploadingImage = true
-        errorMessage = nil
-        defer { isUploadingImage = false }
-        do {
-            guard let rawData = try await item.loadTransferable(type: Data.self) else { return }
-            let (uploadData, mimeType): (Data, String)
-            if let processed = await Task.detached(priority: .userInitiated, operation: {
-                ImageUploadProcessor.process(rawData)
-            }).value {
-                uploadData = processed.data
-                mimeType = processed.mimeType
-            } else {
-                uploadData = rawData
-                mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
-            }
-            uploadedImageURL = try await APIClient.shared.uploadImage(data: uploadData, mimeType: mimeType)
-        } catch {
-            // Picker is hidden for non-subscribers; 403 falls through here.
-            composeLog.error("uploadPhoto failed: \(error)")
-            errorMessage = "Failed to upload image: \(error.localizedDescription)"
-            selectedPhoto = nil
-        }
-    }
-
     private func postMessage() async {
         errorMessage = nil
         isLoading = true
@@ -584,7 +546,8 @@ struct ComposeView: View {
         let isoScheduled = scheduledDate.map {
             ISO8601DateFormatter().string(from: $0)
         }
-        let urls = uploadedImageURL.map { [$0] }
+        let uploadedImages = imageUploader.uploadedURLs
+        let urls = uploadedImages.isEmpty ? nil : uploadedImages
         let videoUrls = uploadedVideoURL.map { [$0] }
         // Cross-post params only when the user is a subscriber and not replying.
         let crossPostEnabled = canUseSubscriberFeatures && !isReply
