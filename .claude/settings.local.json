@@ -100,7 +100,11 @@
       "Bash(brew doctor *)",
       "Bash(brew upgrade *)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('mcpServers', {}\\), indent=2\\)\\)\")",
-      "Read(//Users/adron/.claude/**)"
+      "Read(//Users/adron/.claude/**)",
+      "Bash(ruby *)",
+      "mcp__xcodebuildmcp__session_show_defaults",
+      "mcp__xcodebuildmcp__list_sims",
+      "mcp__xcodebuildmcp__build_sim"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"
