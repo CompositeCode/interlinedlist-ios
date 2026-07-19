@@ -4,11 +4,14 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Horizontal strip of the images attached to a compose draft. Shows each
 /// image's upload progress, a retry affordance on failure, and a remove button.
+/// Thumbnails drag-to-reorder; attachment order is the post's image order.
 struct ComposeImageStrip: View {
     @ObservedObject var uploader: ComposeImageUploader
+    @State private var dragging: UUID?
 
     private let side: CGFloat = 76
 
@@ -34,6 +37,19 @@ struct ComposeImageStrip: View {
             removeButton(attachment.id)
                 .padding(3)
         }
+        .opacity(dragging == attachment.id ? 0.35 : 1)
+        .onDrag {
+            dragging = attachment.id
+            return NSItemProvider(object: attachment.id.uuidString as NSString)
+        } preview: {
+            image(attachment)
+                .frame(width: side, height: side)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .onDrop(
+            of: [UTType.text],
+            delegate: ReorderDropDelegate(targetId: attachment.id, uploader: uploader, dragging: $dragging)
+        )
     }
 
     @ViewBuilder
@@ -90,6 +106,31 @@ struct ComposeImageStrip: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Remove image")
+    }
+}
+
+/// Live drag-to-reorder: as the dragged thumbnail hovers over another, the
+/// dragged attachment slots in ahead of it. SwiftUI invokes these callbacks on
+/// the main thread, so the `@MainActor` uploader mutation is safe to assume.
+private struct ReorderDropDelegate: DropDelegate {
+    let targetId: UUID
+    let uploader: ComposeImageUploader
+    @Binding var dragging: UUID?
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging, dragging != targetId else { return }
+        MainActor.assumeIsolated {
+            withAnimation { uploader.moveAttachment(dragging, ahead: targetId) }
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }
 

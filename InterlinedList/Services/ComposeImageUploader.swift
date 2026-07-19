@@ -85,6 +85,16 @@ final class ComposeImageUploader: ObservableObject {
         sources[id] = nil
     }
 
+    /// Move the dragged attachment to sit just ahead of the target, driving the
+    /// live drag-to-reorder in `ComposeImageStrip`. Attachment order is the
+    /// post's image order, so this reorders what `uploadedURLs` returns.
+    func moveAttachment(_ draggingId: UUID, ahead targetId: UUID) {
+        guard draggingId != targetId,
+              let from = index(of: draggingId),
+              let to = index(of: targetId) else { return }
+        attachments.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+    }
+
     func reset() {
         attachments.removeAll()
         sources.removeAll()
