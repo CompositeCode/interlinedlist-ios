@@ -104,7 +104,8 @@
       "Bash(ruby *)",
       "mcp__xcodebuildmcp__session_show_defaults",
       "mcp__xcodebuildmcp__list_sims",
-      "mcp__xcodebuildmcp__build_sim"
+      "mcp__xcodebuildmcp__build_sim",
+      "Bash(grep -E \"\\\\.swift$\")"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

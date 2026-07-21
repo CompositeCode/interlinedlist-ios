@@ -94,8 +94,7 @@ struct PublicDocumentReader: View {
                     Text(document?.title ?? title)
                         .font(.ilDisplay(20))
                     if let content = document?.content, !content.isEmpty {
-                        Text(content)
-                            .font(.ilBody())
+                        MarkdownView(content: content)
                             .textSelection(.enabled)
                     } else {
                         Text("This document is empty.")

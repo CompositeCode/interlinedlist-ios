@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import PhotosUI
 
 struct DocumentsView: View {
     @EnvironmentObject var authState: AuthState
@@ -528,14 +527,7 @@ private struct DocumentDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let content = current.content, !content.isEmpty {
-                    if let attributed = try? AttributedString(markdown: content,
-                        options: .init(interpretedSyntax: .full)) {
-                        Text(attributed)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Text(content)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    MarkdownView(content: content)
                 } else {
                     Text("No content")
                         .foregroundStyle(.secondary)
@@ -593,38 +585,71 @@ private struct CreateDocumentView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
 
+    // Image upload is scoped to an existing document, so inserting an image in a
+    // brand-new doc forces an auto-save to obtain an id. The draft stays off the
+    // visible list until the user saves (then it's inserted) or cancels (deleted).
+    @State private var draftId: String?
+    @State private var isDismissing = false
+
+    private var trimmedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Title") {
-                    TextField("Document title", text: $title)
-                }
-                Section("Content (Markdown)") {
-                    TextField("Write in markdown…", text: $content, axis: .vertical)
-                        .lineLimit(8...20)
-                        .font(.system(.body, design: .monospaced))
-                }
-                Section {
-                    Toggle("Public", isOn: $isPublic)
-                }
-                if let error = errorMessage {
-                    Section {
-                        Text(error).foregroundStyle(.red).font(.ilMono())
-                    }
+            VStack(spacing: 0) {
+                TextField("Document title", text: $title)
+                    .font(.ilTitle(17))
+                    .padding(.horizontal)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+                    .accessibilityLabel("Document title")
+                Divider()
+                DocumentContentEditor(content: $content, uploadImage: uploadImage)
+                if let errorMessage {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                        .font(.ilMono())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.bottom, 6)
                 }
             }
             .navigationTitle("New Document")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") { Task { await cancel() } }
+                        .disabled(isDismissing)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Create") { Task { await save() } }
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                    HStack(spacing: 12) {
+                        Menu {
+                            Toggle("Public", isOn: $isPublic)
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                        }
+                        .accessibilityLabel("Document settings")
+                        Button("Create") { Task { await save() } }
+                            .disabled(trimmedTitle.isEmpty || isLoading)
+                    }
                 }
             }
         }
+    }
+
+    private func uploadImage(_ data: Data, _ mimeType: String) async throws -> String {
+        if draftId == nil {
+            let draft = try await APIClient.shared.createDocument(
+                title: trimmedTitle.isEmpty ? "Untitled" : trimmedTitle,
+                content: content.isEmpty ? nil : content,
+                isPublic: isPublic,
+                folderId: folderId
+            )
+            draftId = draft.id
+        }
+        guard let id = draftId else { throw APIError.noData }
+        return try await APIClient.shared.uploadDocumentImage(documentId: id, data: data, mimeType: mimeType)
     }
 
     private func save() async {
@@ -632,13 +657,24 @@ private struct CreateDocumentView: View {
         defer { isLoading = false }
         errorMessage = nil
         do {
-            let doc = try await APIClient.shared.createDocument(
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                content: content.isEmpty ? nil : content,
-                isPublic: isPublic,
-                folderId: folderId
-            )
-            onSave(doc)
+            let saved: Document
+            if let draftId {
+                saved = try await APIClient.shared.updateDocument(
+                    id: draftId,
+                    title: trimmedTitle,
+                    content: content.isEmpty ? nil : content,
+                    isPublic: isPublic,
+                    folderId: folderId
+                )
+            } else {
+                saved = try await APIClient.shared.createDocument(
+                    title: trimmedTitle,
+                    content: content.isEmpty ? nil : content,
+                    isPublic: isPublic,
+                    folderId: folderId
+                )
+            }
+            onSave(saved)
             dismiss()
         } catch APIError.status(401) {
             authState.handleUnauthorized()
@@ -647,6 +683,16 @@ private struct CreateDocumentView: View {
         } catch {
             errorMessage = "Failed to create document."
         }
+    }
+
+    private func cancel() async {
+        // Discard the auto-saved draft the user never committed so it doesn't
+        // linger on the server.
+        if let draftId {
+            isDismissing = true
+            try? await APIClient.shared.deleteDocument(id: draftId)
+        }
+        dismiss()
     }
 }
 
@@ -663,9 +709,6 @@ private struct EditDocumentView: View {
     @State private var availableFolders: [DocumentFolder] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
-    @State private var selectedPhoto: PhotosPickerItem?
-    @State private var isUploadingImage = false
-    @State private var imageUploadError: String?
 
     init(document: Document, onSave: @escaping (Document) -> Void) {
         self.document = document
@@ -679,41 +722,25 @@ private struct EditDocumentView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Title") {
-                    TextField("Document title", text: $title)
+            VStack(spacing: 0) {
+                TextField("Document title", text: $title)
+                    .font(.ilTitle(17))
+                    .padding(.horizontal)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+                    .accessibilityLabel("Document title")
+                Divider()
+                DocumentContentEditor(content: $content) { data, mimeType in
+                    try await APIClient.shared.uploadDocumentImage(
+                        documentId: document.id, data: data, mimeType: mimeType)
                 }
-                Section("Content (Markdown)") {
-                    TextField("Write in markdown…", text: $content, axis: .vertical)
-                        .lineLimit(8...20)
-                        .font(.system(.body, design: .monospaced))
-                }
-                Section {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Label(isUploadingImage ? "Uploading…" : "Insert image…", systemImage: "photo.badge.plus")
-                            .font(.ilBody())
-                    }
-                    .disabled(isUploadingImage)
-                    .accessibilityLabel("Insert image into document")
-                    if let imageUploadError {
-                        Text(imageUploadError).foregroundStyle(.red).font(.ilMono())
-                    }
-                }
-                Section {
-                    Toggle("Public", isOn: $isPublic)
-                }
-                Section("Location") {
-                    Picker("Folder", selection: $selectedFolderId) {
-                        Text("No Folder").tag(String?.none)
-                        ForEach(availableFolders) { folder in
-                            Text(folder.name).tag(Optional(folder.id))
-                        }
-                    }
-                }
-                if let error = errorMessage {
-                    Section {
-                        Text(error).foregroundStyle(.red).font(.ilMono())
-                    }
+                if let errorMessage {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                        .font(.ilMono())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.bottom, 6)
                 }
             }
             .navigationTitle("Edit Document")
@@ -723,18 +750,28 @@ private struct EditDocumentView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") { Task { await save() } }
-                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                    HStack(spacing: 12) {
+                        Menu {
+                            Toggle("Public", isOn: $isPublic)
+                            Picker("Folder", selection: $selectedFolderId) {
+                                Text("No Folder").tag(String?.none)
+                                ForEach(availableFolders) { folder in
+                                    Text(folder.name).tag(Optional(folder.id))
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                        }
+                        .accessibilityLabel("Document settings")
+                        Button("Save") { Task { await save() } }
+                            .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                    }
                 }
             }
             .task {
                 if let folders = try? await APIClient.shared.documentFolders() {
                     availableFolders = folders
                 }
-            }
-            .onChange(of: selectedPhoto) { _, newItem in
-                guard let newItem else { return }
-                Task { await uploadPhoto(newItem) }
             }
         }
     }
@@ -760,39 +797,6 @@ private struct EditDocumentView: View {
             errorMessage = msg
         } catch {
             errorMessage = "Failed to save changes."
-        }
-    }
-
-    private func uploadPhoto(_ item: PhotosPickerItem) async {
-        imageUploadError = nil
-        isUploadingImage = true
-        defer { isUploadingImage = false; selectedPhoto = nil }
-        guard let rawData = try? await item.loadTransferable(type: Data.self) else {
-            imageUploadError = "Failed to load image."
-            return
-        }
-        let (uploadData, mimeType): (Data, String)
-        if let processed = await Task.detached(priority: .userInitiated, operation: {
-            ImageUploadProcessor.process(rawData)
-        }).value {
-            uploadData = processed.data
-            mimeType = processed.mimeType
-        } else {
-            uploadData = rawData
-            mimeType = rawData.starts(with: [0x89, 0x50]) ? "image/png" : "image/jpeg"
-        }
-        do {
-            let url = try await APIClient.shared.uploadDocumentImage(
-                documentId: document.id,
-                data: uploadData,
-                mimeType: mimeType
-            )
-            let altText = "image"
-            content += "\n![\(altText)](\(url))"
-        } catch APIError.status(401) {
-            authState.handleUnauthorized()
-        } catch {
-            imageUploadError = "Image upload failed."
         }
     }
 }

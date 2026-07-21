@@ -170,6 +170,37 @@ struct CrossPostResult: Codable, Identifiable {
     var id: String { platform ?? error ?? UUID().uuidString }
 }
 
+/// Builds the one-line "where did this go" summary shown in the post-confirmation
+/// dialog. `crossPostUrls` is the reliable source of destination *names*; some
+/// deployments return `crossPostResults` with `platform == nil`, which is why a
+/// results-only summary can degrade to a nameless "Cross-post ✓". We therefore
+/// prefer the URLs, then append any explicit failures the results array reports.
+enum CrossPostSummary {
+    static func line(urls: [CrossPostUrl], results: [CrossPostResult]) -> String? {
+        if !urls.isEmpty {
+            var parts = urls.map { "\($0.destinationName) ✓" }
+            parts.append(contentsOf: failureParts(from: results))
+            return parts.joined(separator: " · ")
+        }
+        let parts = results.map { resultPart(from: $0) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private static func failureParts(from results: [CrossPostResult]) -> [String] {
+        results.filter { $0.success == false }.map { resultPart(from: $0) }
+    }
+
+    private static func resultPart(from result: CrossPostResult) -> String {
+        let succeeded = result.success ?? false
+        let label = result.platform?.capitalized ?? "Cross-post"
+        let status = succeeded ? "✓" : "✗"
+        if !succeeded, let msg = result.error, !msg.isEmpty {
+            return "\(label) \(status) (\(msg))"
+        }
+        return "\(label) \(status)"
+    }
+}
+
 struct CreateMessageResponse: Codable {
     let message: String?
     let data: Message?

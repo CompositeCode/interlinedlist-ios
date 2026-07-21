@@ -149,6 +149,49 @@ final class MessageCrossPostUrlTests: XCTestCase {
         let item = try decoder.decode(CrossPostUrl.self, from: Data(json.utf8))
         XCTAssertEqual(item.destinationName, "Bluesky")
     }
+
+    // MARK: - CrossPostSummary.line (drives the "Message Posted" dialog)
+
+    private func url(_ platform: String, instanceName: String?) -> CrossPostUrl {
+        let name = instanceName.map { "\"\($0)\"" } ?? "null"
+        let json = "{\"platform\":\"\(platform)\",\"url\":\"https://x/y\",\"instanceName\":\(name)}"
+        return try! decoder.decode(CrossPostUrl.self, from: Data(json.utf8))
+    }
+
+    private func result(_ platform: String?, success: Bool?, error: String? = nil) -> CrossPostResult {
+        let p = platform.map { "\"\($0)\"" } ?? "null"
+        let s = success.map { "\($0)" } ?? "null"
+        let e = error.map { "\"\($0)\"" } ?? "null"
+        let json = "{\"platform\":\(p),\"success\":\(s),\"error\":\(e)}"
+        return try! decoder.decode(CrossPostResult.self, from: Data(json.utf8))
+    }
+
+    func test_summary_usesDestinationNames_fromUrls() {
+        let urls = [url("mastodon", instanceName: "techhub.social"), url("bluesky", instanceName: "Bluesky")]
+        XCTAssertEqual(CrossPostSummary.line(urls: urls, results: []), "techhub.social ✓ · Bluesky ✓")
+    }
+
+    func test_summary_prefersUrls_evenWhenResultsHaveNilPlatform() {
+        // The reported bug: results with nil platform used to render "Cross-post ✓".
+        let urls = [url("linkedin", instanceName: "LinkedIn")]
+        let results = [result(nil, success: true), result(nil, success: true)]
+        XCTAssertEqual(CrossPostSummary.line(urls: urls, results: results), "LinkedIn ✓")
+    }
+
+    func test_summary_appendsFailuresFromResults() {
+        let urls = [url("bluesky", instanceName: "Bluesky")]
+        let results = [result("mastodon", success: false, error: "rate limited")]
+        XCTAssertEqual(CrossPostSummary.line(urls: urls, results: results), "Bluesky ✓ · Mastodon ✗ (rate limited)")
+    }
+
+    func test_summary_fallsBackToResults_whenNoUrls() {
+        let results = [result("bluesky", success: true), result("linkedin", success: false)]
+        XCTAssertEqual(CrossPostSummary.line(urls: [], results: results), "Bluesky ✓ · Linkedin ✗")
+    }
+
+    func test_summary_isNil_whenNothingToShow() {
+        XCTAssertNil(CrossPostSummary.line(urls: [], results: []))
+    }
 }
 
 final class CreateMessageBodyEncodingTests: XCTestCase {

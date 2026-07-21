@@ -233,26 +233,7 @@ struct ComposeView: View {
         else if isRepost { base = "You reposted this." }
         else if scheduledDate != nil { base = "Your message has been scheduled." }
         else { base = "Your message was posted." }
-        if !lastCrossPostResults.isEmpty {
-            let summary = lastCrossPostResults.map { r -> String in
-                let succeeded = r.success ?? false
-                let label = r.platform?.capitalized ?? "Cross-post"
-                let status = succeeded ? "✓" : "✗"
-                let detail: String
-                if !succeeded, let msg = r.error, !msg.isEmpty {
-                    detail = " (\(msg))"
-                } else {
-                    detail = ""
-                }
-                return "\(label) \(status)\(detail)"
-            }.joined(separator: " · ")
-            return base + "\n" + summary
-        }
-        // Fall back to the destinations the server actually reached.
-        if !lastCrossPostUrls.isEmpty {
-            let summary = lastCrossPostUrls
-                .map { "\($0.destinationName) ✓" }
-                .joined(separator: " · ")
+        if let summary = CrossPostSummary.line(urls: lastCrossPostUrls, results: lastCrossPostResults) {
             return base + "\n" + summary
         }
         return base
