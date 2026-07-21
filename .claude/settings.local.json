@@ -105,7 +105,9 @@
       "mcp__xcodebuildmcp__session_show_defaults",
       "mcp__xcodebuildmcp__list_sims",
       "mcp__xcodebuildmcp__build_sim",
-      "Bash(grep -E \"\\\\.swift$\")"
+      "Bash(grep -E \"\\\\.swift$\")",
+      "Bash(/usr/bin/env bash --version)",
+      "Bash(./run-iphone.sh)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

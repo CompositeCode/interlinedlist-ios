@@ -32,6 +32,7 @@ struct FeedView: View {
     @State private var searchPerformed = false
     @State private var reportTarget: ReportTarget? = nil
     @State private var blockedUserIds: Set<String> = []
+    @State private var detailMessage: Message?
 
     private var distinctTags: [String] {
         var seen = Set<String>()
@@ -79,7 +80,8 @@ struct FeedView: View {
                     onRepost: { messageToRepost = message },
                     onTapAuthor: { username in profileUsername = username },
                     onReport: { reportTarget = .message(id: message.id) },
-                    onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } }
+                    onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } },
+                    onOpenDetail: { detailMessage = message }
                 )
             }
         }
@@ -134,7 +136,12 @@ struct FeedView: View {
                     onRepost: { messageToRepost = message },
                     onTapAuthor: { username in profileUsername = username },
                     onReport: { reportTarget = .message(id: message.id) },
-                    onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } }
+                    onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } },
+                    onOpenDetail: {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        detailMessage = message
+                    },
+                    truncateContent: true
                 )
             }
             if let pagination = pagination, pagination.hasMore, !isLoading {

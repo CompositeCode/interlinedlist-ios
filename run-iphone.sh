@@ -85,7 +85,7 @@ xcodebuild \
     -destination "platform=iOS,id=$DEV_UDID" \
     -derivedDataPath "$DERIVED_DATA" \
     -allowProvisioningUpdates \
-    "${TEAM_ARGS[@]}" \
+    "${TEAM_ARGS[@]+"${TEAM_ARGS[@]}"}" \
     build
 
 # --- Locate the built .app ----------------------------------------------------
@@ -101,7 +101,7 @@ echo "==> Built: $APP_PATH"
 echo "==> Installing to device…"
 xcrun devicectl device install app --device "$DEV_ID" "$APP_PATH"
 
-echo "==> Launching $BUNDLE_ID…"
+echo "==> Launching ${BUNDLE_ID}…"
 xcrun devicectl device process launch --device "$DEV_ID" "$BUNDLE_ID"
 
 echo "==> Done."
