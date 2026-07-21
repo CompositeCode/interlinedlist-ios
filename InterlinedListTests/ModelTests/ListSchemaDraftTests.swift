@@ -208,4 +208,41 @@ final class ListSchemaDraftTests: XCTestCase {
         let props = [makeProp(id: "1", name: "Title", type: "unsupported")]
         XCTAssertFalse(ListSchemaDraft.isSchemaValid(props))
     }
+
+    // MARK: starterColumns
+
+    func test_starterColumns_returnsSingleTitleTextColumn() {
+        let cols = ListSchemaDraft.starterColumns()
+        XCTAssertEqual(cols.count, 1)
+        XCTAssertEqual(cols.first?.propertyName, "Title")
+        XCTAssertEqual(cols.first?.propertyType, "text")
+    }
+
+    func test_starterColumns_serializeToValidDSL() {
+        let dsl = ListSchemaDraft.serializeSchemaDSL(ListSchemaDraft.starterColumns())
+        XCTAssertEqual(dsl, "Title:text")
+    }
+
+    // MARK: hasCreatableColumns
+
+    func test_hasCreatableColumns_empty_rejects() {
+        XCTAssertFalse(ListSchemaDraft.hasCreatableColumns([]))
+    }
+
+    func test_hasCreatableColumns_starterColumns_accepts() {
+        XCTAssertTrue(ListSchemaDraft.hasCreatableColumns(ListSchemaDraft.starterColumns()))
+    }
+
+    func test_hasCreatableColumns_anyBlankName_rejects() {
+        let props = [
+            makeProp(id: "1", name: "Title", type: "text"),
+            makeProp(id: "2", name: "  ", type: "text"),
+        ]
+        XCTAssertFalse(ListSchemaDraft.hasCreatableColumns(props))
+    }
+
+    func test_hasCreatableColumns_unsupportedType_rejects() {
+        let props = [makeProp(id: "1", name: "Title", type: "bogus")]
+        XCTAssertFalse(ListSchemaDraft.hasCreatableColumns(props))
+    }
 }

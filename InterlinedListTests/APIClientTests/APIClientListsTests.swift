@@ -81,6 +81,23 @@ final class APIClientListsTests: XCTestCase {
         XCTAssertEqual(json["isPublic"] as? Bool, false)
     }
 
+    func test_createList_withSchema_includesSchemaKeyInBody() async throws {
+        session.stub(json: #"{"list":\#(listJSON)}"#)
+        _ = try await sut.createList(title: "My List", description: nil, isPublic: true,
+                                     schema: "Title:text, Author:text")
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["schema"] as? String, "Title:text, Author:text")
+    }
+
+    func test_createList_withoutSchema_omitsSchemaKey() async throws {
+        session.stub(json: #"{"list":\#(listJSON)}"#)
+        _ = try await sut.createList(title: "My List", description: nil, isPublic: true)
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNil(json["schema"], "Nil schema should be omitted from the request body")
+    }
+
     func test_createList_401_throws() async throws {
         session.stub(data: Data(), statusCode: 401)
         do {

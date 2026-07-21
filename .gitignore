@@ -12,5 +12,6 @@ xcuserdata/
 
 # Xcode build output
 DerivedData/
+build/
 
 .env

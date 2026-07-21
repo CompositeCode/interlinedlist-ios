@@ -415,10 +415,13 @@ final class APIClient {
         return response.data.properties
     }
 
-    func createList(title: String, description: String?, isPublic: Bool) async throws -> UserList {
-        struct Body: Encodable { let title: String; let description: String?; let isPublic: Bool }
+    /// Creates a list. `schema` is the column DSL the create endpoint accepts
+    /// (e.g. "Title:text, Author:text"); pass nil to omit it. A list needs at
+    /// least one column to be usable, so the create UI always supplies one.
+    func createList(title: String, description: String?, isPublic: Bool, schema: String? = nil) async throws -> UserList {
+        struct Body: Encodable { let title: String; let description: String?; let isPublic: Bool; let schema: String? }
         struct Response: Decodable { let list: UserList? }
-        let response: Response = try await postCamel("/api/lists", body: Body(title: title, description: description, isPublic: isPublic))
+        let response: Response = try await postCamel("/api/lists", body: Body(title: title, description: description, isPublic: isPublic, schema: schema))
         guard let list = response.list else { throw APIError.noData }
         return list
     }

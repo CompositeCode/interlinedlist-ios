@@ -12,8 +12,19 @@ struct CreateListView: View {
     @State private var name = ""
     @State private var description = ""
     @State private var isPublic = true
+    @State private var columns: [DraftProperty] = ListSchemaDraft.starterColumns()
     @State private var isLoading = false
     @State private var errorMessage: String?
+
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canCreate: Bool {
+        !isLoading
+            && !trimmedName.isEmpty
+            && ListSchemaDraft.hasCreatableColumns(columns)
+    }
 
     var body: some View {
         NavigationStack {
@@ -22,6 +33,34 @@ struct CreateListView: View {
                     TextField("Name", text: $name)
                     TextField("Description (optional)", text: $description)
                     Toggle("Public", isOn: $isPublic)
+                }
+
+                Section {
+                    ForEach($columns) { $column in
+                        ColumnRow(column: $column, onDelete: {
+                            columns.removeAll { $0.id == column.id }
+                        })
+                    }
+                    .onMove { from, to in
+                        columns.move(fromOffsets: from, toOffset: to)
+                    }
+                    Button {
+                        columns.append(DraftProperty.newBlank())
+                    } label: {
+                        Label("Add Column", systemImage: "plus")
+                    }
+                    .accessibilityLabel("Add column")
+                } header: {
+                    HStack {
+                        Text("Columns")
+                        Spacer()
+                        if columns.count > 1 {
+                            EditButton()
+                                .font(.ilMono())
+                        }
+                    }
+                } footer: {
+                    Text("Lists need at least one named column.")
                 }
 
                 if let error = errorMessage {
@@ -45,7 +84,7 @@ struct CreateListView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(isLoading || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!canCreate)
                 }
             }
             .navigationTitle("New List")
@@ -60,16 +99,17 @@ struct CreateListView: View {
 
     private func create() async {
         errorMessage = nil
+        guard !trimmedName.isEmpty, ListSchemaDraft.hasCreatableColumns(columns) else { return }
         isLoading = true
         defer { isLoading = false }
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else { return }
         let trimmedDesc = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let schemaDSL = ListSchemaDraft.serializeSchemaDSL(columns)
         do {
             let list = try await APIClient.shared.createList(
                 title: trimmedName,
                 description: trimmedDesc.isEmpty ? nil : trimmedDesc,
-                isPublic: isPublic
+                isPublic: isPublic,
+                schema: schemaDSL.isEmpty ? nil : schemaDSL
             )
             onCreate(list)
             dismiss()
@@ -77,6 +117,35 @@ struct CreateListView: View {
             errorMessage = msg
         } catch {
             errorMessage = "Failed to create list."
+        }
+    }
+}
+
+// MARK: - Column row (name + type)
+
+private struct ColumnRow: View {
+    @Binding var column: DraftProperty
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack {
+            TextField("Column name", text: $column.propertyName)
+                .textInputAutocapitalization(.words)
+                .accessibilityLabel("Column name")
+            Picker("Type", selection: $column.propertyType) {
+                ForEach(DraftProperty.supportedTypes, id: \.self) { t in
+                    Text(t.capitalized).tag(t)
+                }
+            }
+            .labelsHidden()
+            .accessibilityLabel("Column type")
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Delete column \(column.propertyName.isEmpty ? "untitled" : column.propertyName)")
         }
     }
 }

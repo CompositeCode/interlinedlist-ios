@@ -64,6 +64,15 @@ struct DraftProperty: Identifiable, Equatable {
 enum ListSchemaDraft {
     static let titleMaxLength = 120
 
+    /// Columns a brand-new list starts with. The backend requires at least one
+    /// column at creation, so seed a primary "Title" text column the user can
+    /// rename or retype before creating.
+    static func starterColumns() -> [DraftProperty] {
+        var title = DraftProperty.newBlank()
+        title.propertyName = "Title"
+        return [title]
+    }
+
     static func isTitleValid(_ title: String) -> Bool {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let count = trimmed.count
@@ -149,5 +158,12 @@ enum ListSchemaDraft {
             if !DraftProperty.supportedTypes.contains(prop.propertyType) { return false }
         }
         return true
+    }
+
+    /// Gate for the create-list form: the backend requires at least one column,
+    /// and every column must be named with a supported type (no silently-dropped
+    /// blank rows). Empty array is invalid.
+    static func hasCreatableColumns(_ properties: [DraftProperty]) -> Bool {
+        !properties.isEmpty && isSchemaValid(properties)
     }
 }

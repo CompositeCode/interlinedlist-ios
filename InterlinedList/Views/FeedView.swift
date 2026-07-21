@@ -66,7 +66,7 @@ struct FeedView: View {
             ContentUnavailableView.search(text: searchText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            List(searchResults.filter { !blockedUserIds.contains($0.userId ?? "") }) { message in
+            List(searchResults.filter { !blockedUserIds.contains($0.userId) }) { message in
                 MessageRow(
                     message: message,
                     currentUserId: authState.user?.id,
@@ -79,7 +79,7 @@ struct FeedView: View {
                     onRepost: { messageToRepost = message },
                     onTapAuthor: { username in profileUsername = username },
                     onReport: { reportTarget = .message(id: message.id) },
-                    onBlock: { Task { await blockUser(userId: message.userId ?? "", username: message.user?.username ?? "") } }
+                    onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } }
                 )
             }
         }
@@ -115,7 +115,7 @@ struct FeedView: View {
                     }
                 }
             }
-            ForEach(messages.filter { !blockedUserIds.contains($0.userId ?? "") }) { message in
+            ForEach(messages.filter { !blockedUserIds.contains($0.userId) }) { message in
                 MessageRow(
                     message: message,
                     currentUserId: authState.user?.id,
@@ -134,7 +134,7 @@ struct FeedView: View {
                     onRepost: { messageToRepost = message },
                     onTapAuthor: { username in profileUsername = username },
                     onReport: { reportTarget = .message(id: message.id) },
-                    onBlock: { Task { await blockUser(userId: message.userId ?? "", username: message.user?.username ?? "") } }
+                    onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } }
                 )
             }
             if let pagination = pagination, pagination.hasMore, !isLoading {
