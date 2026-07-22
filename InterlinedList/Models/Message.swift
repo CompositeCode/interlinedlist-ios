@@ -98,6 +98,14 @@ struct Message: Codable, Identifiable {
     }
 }
 
+// Identity-based conformance so a Message can drive `navigationDestination(item:)`.
+// The `id` uniquely identifies a message; the nested link/cross-post/user payloads
+// are not (and need not be) Hashable.
+extension Message: Hashable {
+    static func == (lhs: Message, rhs: Message) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
 struct MessagesResponse: Codable {
     let messages: [Message]
     let pagination: Pagination?

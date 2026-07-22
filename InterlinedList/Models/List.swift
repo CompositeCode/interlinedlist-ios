@@ -97,6 +97,26 @@ struct SchemaUpdateResponse: Decodable {
     let properties: [ListPropertyDef]?
 }
 
+/// The DSL object `POST /api/lists` expects under its `schema` key. The backend's
+/// `validateDSLSchema` requires an object (`{ name, fields: [{ key, type, label }] }`)
+/// and rejects anything else with "DSL must be an object". Note: the published API
+/// docs at /help/api still show the legacy `"Name:type"` DSL *string* — that form no
+/// longer works; the backend source is authoritative.
+struct ListSchemaDSL: Encodable {
+    let name: String
+    let description: String?
+    let fields: [Field]
+
+    struct Field: Encodable {
+        let key: String
+        let label: String
+        let type: String
+        let displayOrder: Int
+        let required: Bool
+        let visible: Bool
+    }
+}
+
 // MARK: - Core list models
 
 struct UserList: Identifiable, Codable, Hashable {

@@ -98,17 +98,25 @@ enum ListSchemaDraft {
         original != current
     }
 
-    /// Serializes properties into the DSL string the backend's POST /api/lists example uses
-    /// (e.g. "Title:text, Author:text"). Properties with an empty trimmed name are skipped.
-    /// Note: this format loses `isVisible`, `isRequired`, and `displayOrder` — acceptable for v1.
-    static func serializeSchemaDSL(_ properties: [DraftProperty]) -> String {
-        properties
-            .compactMap { prop -> String? in
-                let trimmed = prop.propertyName.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return nil }
-                return "\(trimmed):\(prop.propertyType)"
-            }
-            .joined(separator: ", ")
+    /// Builds the DSL object the backend's `POST /api/lists` expects under `schema`
+    /// (`{ name, fields: [{ key, label, type, ... }] }`). Properties with an empty
+    /// trimmed name are skipped; array order drives `displayOrder`. New columns get a
+    /// slugified key. `name` is required by the validator — pass the list title.
+    static func dslSchema(name: String, _ properties: [DraftProperty]) -> ListSchemaDSL {
+        let fields = properties.enumerated().compactMap { index, prop -> ListSchemaDSL.Field? in
+            let label = prop.propertyName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !label.isEmpty else { return nil }
+            let key = prop.propertyKey.isEmpty ? slugifyKey(label) : prop.propertyKey
+            return ListSchemaDSL.Field(
+                key: key,
+                label: label,
+                type: prop.propertyType,
+                displayOrder: index,
+                required: prop.isRequired,
+                visible: prop.isVisible
+            )
+        }
+        return ListSchemaDSL(name: name, description: nil, fields: fields)
     }
 
     /// Derive a snake_case property key from a display name (for new properties).

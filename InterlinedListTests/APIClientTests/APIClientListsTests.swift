@@ -66,14 +66,21 @@ final class APIClientListsTests: XCTestCase {
     // MARK: createList()
 
     func test_createList_sendsPostToCorrectPath() async throws {
-        session.stub(json: #"{"list":\#(listJSON)}"#)
+        session.stub(json: #"{"data":\#(listJSON)}"#)
         _ = try await sut.createList(title: "New", description: nil, isPublic: true)
         XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/lists")
     }
 
+    func test_createList_decodesListFromDataKey() async throws {
+        session.stub(json: #"{"message":"List created successfully","data":\#(listJSON)}"#)
+        let list = try await sut.createList(title: "New", description: nil, isPublic: true)
+        XCTAssertEqual(list.id, "l1")
+        XCTAssertEqual(list.name, "My List")
+    }
+
     func test_createList_bodyContainsTitle() async throws {
-        session.stub(json: #"{"list":\#(listJSON)}"#)
+        session.stub(json: #"{"data":\#(listJSON)}"#)
         _ = try await sut.createList(title: "My List", description: "Desc", isPublic: false)
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
@@ -81,17 +88,27 @@ final class APIClientListsTests: XCTestCase {
         XCTAssertEqual(json["isPublic"] as? Bool, false)
     }
 
-    func test_createList_withSchema_includesSchemaKeyInBody() async throws {
-        session.stub(json: #"{"list":\#(listJSON)}"#)
-        _ = try await sut.createList(title: "My List", description: nil, isPublic: true,
-                                     schema: "Title:text, Author:text")
+    func test_createList_withSchema_sendsDSLObjectInBody() async throws {
+        session.stub(json: #"{"data":\#(listJSON)}"#)
+        let schema = ListSchemaDSL(name: "My List", description: nil, fields: [
+            .init(key: "title", label: "Title", type: "text", displayOrder: 0, required: false, visible: true),
+            .init(key: "author", label: "Author", type: "text", displayOrder: 1, required: false, visible: true),
+        ])
+        _ = try await sut.createList(title: "My List", description: nil, isPublic: true, schema: schema)
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["schema"] as? String, "Title:text, Author:text")
+        let sentSchema = try XCTUnwrap(json["schema"] as? [String: Any],
+                                       "schema must be an object, not a DSL string")
+        XCTAssertEqual(sentSchema["name"] as? String, "My List")
+        let fields = try XCTUnwrap(sentSchema["fields"] as? [[String: Any]])
+        XCTAssertEqual(fields.count, 2)
+        XCTAssertEqual(fields.first?["key"] as? String, "title")
+        XCTAssertEqual(fields.first?["label"] as? String, "Title")
+        XCTAssertEqual(fields.first?["type"] as? String, "text")
     }
 
     func test_createList_withoutSchema_omitsSchemaKey() async throws {
-        session.stub(json: #"{"list":\#(listJSON)}"#)
+        session.stub(json: #"{"data":\#(listJSON)}"#)
         _ = try await sut.createList(title: "My List", description: nil, isPublic: true)
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])

@@ -211,6 +211,11 @@ struct FeedView: View {
     private var navigationContent: some View {
         let nav = NavigationStack {
             feedContent
+                .navigationDestination(item: $detailMessage) { message in
+                    MessageDetailView(message: message, currentUserId: authState.user?.id)
+                        .environmentObject(authState)
+                        .environmentObject(store)
+                }
                 .navigationTitle("InterlinedList")
                 .navigationBarTitleDisplayMode(.inline)
                 .searchable(text: $searchText, prompt: "Search posts")
@@ -431,10 +436,17 @@ struct MessageRow: View {
     var onTapAuthor: ((String) -> Void)? = nil
     var onReport: (() -> Void)? = nil
     var onBlock: (() -> Void)? = nil
+    var onOpenDetail: (() -> Void)? = nil
+    var truncateContent: Bool = false
 
     private var canDelete: Bool {
         guard let uid = currentUserId else { return false }
         return message.userId == uid
+    }
+
+    private var displayedContent: (text: String, isTruncated: Bool) {
+        guard truncateContent else { return (message.content, false) }
+        return feedTruncated(message.content)
     }
 
     private var isPrivate: Bool {
@@ -477,8 +489,7 @@ struct MessageRow: View {
                     .font(.ilMono())
                     .foregroundStyle(.secondary)
             }
-            Text(message.content)
-                .font(.ilBody())
+            contentView
             if let tags = message.tags, !tags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -577,6 +588,36 @@ struct MessageRow: View {
     }
 
     @ViewBuilder
+    private var contentView: some View {
+        let content = displayedContent
+        if let onOpenDetail {
+            Button(action: onOpenDetail) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(content.text)
+                        .font(.ilBody())
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if content.isTruncated {
+                        HStack(spacing: 3) {
+                            Text("Read more")
+                            Image(systemName: "chevron.right")
+                        }
+                        .font(.ilMono(12))
+                        .foregroundStyle(ILColor.primary)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(content.isTruncated ? message.content : content.text)
+            .accessibilityHint("Opens the full message")
+        } else {
+            Text(content.text)
+                .font(.ilBody())
+        }
+    }
+
+    @ViewBuilder
     private var previewSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let urls = message.imageUrls, !urls.isEmpty {
@@ -639,7 +680,7 @@ struct MessageRow: View {
     }
 }
 
-private struct LinkPreviewBlock: View {
+struct LinkPreviewBlock: View {
     let link: LinkMetadataItem
     let meta: LinkMetadataItemContent
 
@@ -681,6 +722,22 @@ private struct LinkPreviewBlock: View {
         .background(ILColor.surface)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
+}
+
+/// Truncates message content for the feed list. Returns the original string when
+/// it is at or under `limit`; otherwise cuts at the last word boundary within the
+/// limit (falling back to a hard cut when there's no whitespace) and appends `…`.
+/// Operates on `Character`s so it never splits a grapheme cluster (emoji, accents).
+func feedTruncated(_ content: String, limit: Int = 200) -> (text: String, isTruncated: Bool) {
+    guard content.count > limit else { return (content, false) }
+    let cutoff = content.index(content.startIndex, offsetBy: limit)
+    let head = content[content.startIndex..<cutoff]
+    var end = head.lastIndex(where: { $0.isWhitespace }) ?? head.endIndex
+    while end > head.startIndex, head[head.index(before: end)].isWhitespace {
+        end = head.index(before: end)
+    }
+    let text = end > head.startIndex ? String(head[head.startIndex..<end]) : String(head)
+    return (text + "…", true)
 }
 
 // Shared across all MessageRow and LinkPreviewBlock instances — allocated once,

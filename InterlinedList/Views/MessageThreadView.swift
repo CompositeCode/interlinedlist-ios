@@ -102,53 +102,10 @@ struct MessageThreadView: View {
                 tagChips(tags)
             }
             if let urls = rootMessage.crossPostUrls, !urls.isEmpty {
-                crossPostLinks(urls)
+                CrossPostLinksView(urls: urls)
             }
         }
         .padding(.vertical, 4)
-    }
-
-    @ViewBuilder
-    private func crossPostLinks(_ urls: [CrossPostUrl]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Cross-posted to")
-                .font(.ilMono(10))
-                .foregroundStyle(.secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(urls) { crossPost in
-                        crossPostChip(crossPost)
-                    }
-                }
-            }
-        }
-        .padding(.top, 2)
-    }
-
-    @ViewBuilder
-    private func crossPostChip(_ crossPost: CrossPostUrl) -> some View {
-        let label = Label(crossPost.destinationName, systemImage: crossPostIcon(crossPost.platform))
-            .font(.ilMono(11))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(ILColor.surface2)
-            .clipShape(Capsule())
-        if let urlString = crossPost.url, let url = URL(string: urlString) {
-            Link(destination: url) { label }
-                .accessibilityLabel("Open on \(crossPost.destinationName)")
-        } else {
-            label.foregroundStyle(.secondary)
-        }
-    }
-
-    private func crossPostIcon(_ platform: String) -> String {
-        switch platform.lowercased() {
-        case "bluesky": return "cloud"
-        case "linkedin": return "briefcase"
-        case "twitter": return "xmark"
-        case "mastodon": return "number"
-        default: return "link"
-        }
     }
 
     private func replyRow(_ reply: Message) -> some View {

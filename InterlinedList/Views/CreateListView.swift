@@ -103,13 +103,13 @@ struct CreateListView: View {
         isLoading = true
         defer { isLoading = false }
         let trimmedDesc = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        let schemaDSL = ListSchemaDraft.serializeSchemaDSL(columns)
+        let schema = ListSchemaDraft.dslSchema(name: trimmedName, columns)
         do {
             let list = try await APIClient.shared.createList(
                 title: trimmedName,
                 description: trimmedDesc.isEmpty ? nil : trimmedDesc,
                 isPublic: isPublic,
-                schema: schemaDSL.isEmpty ? nil : schemaDSL
+                schema: schema.fields.isEmpty ? nil : schema
             )
             onCreate(list)
             dismiss()
