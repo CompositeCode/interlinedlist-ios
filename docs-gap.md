@@ -1,6 +1,8 @@
 # API Docs ↔ Implementation Gaps — for the interlinedlist.com site / API team
 
 **Prepared:** 2026-07-18
+**Updated:** 2026-07-22 — added the list-schema create contract (F15/F16); see the
+Addendum in §9. Most of that item is **already resolved** on your side.
 **By:** the InterlinedList **iOS** client team
 **Sources:**
 1. The shipped iOS client's `APIClient.swift` — a production HTTP client that
@@ -57,6 +59,8 @@ support to these endpoints** (see Prompt A). Everything else below is smaller.
 | F12 | **VERIFY** | Push body field: docs say **`deviceToken`**, client sends **`token`** → likely silent push failure | Not write-tested; verb/path confirmed correct |
 | F13 | **VERIFY** | `POST /api/documents` documented **Subscriber-only**; iOS assumes documents are **free** | Test account is a subscriber; couldn't observe free-user path |
 | F14 | **DOC** | `crossPostResults[].platform` can be omitted (crashed a strict client decoder) | Client patched it to optional |
+| F15 | **iOS** *(fixed 2026-07-22)* | `POST /api/lists` client sent `schema` as a DSL **string** and read the created list from a `list` key; server wants a DSL **object** and returns it under **`data`** | Live 400 "Invalid Schema: DSL must be an object"; backend `validateDSLSchema` + route return `{message, data}` |
+| F16 | **DOC** *(resolved 2026-07-22)* | Docs previously showed `POST /api/lists` `"schema": "string"` — the exact form the server rejects; now corrected to the object form. Residual: canonical ref still omits the response-body envelope | `/help/api/lists`, `/help/api/lists-dsl`, `api-reference.md:2709` now object; response body still status-codes only |
 
 ---
 
@@ -275,6 +279,10 @@ changed by mistake:
 `github-integration`, `linkedin-integration`, `utility-endpoints`,
 `administration`. (There is **no** `moderation` page — that's finding F5.)
 
+**Re-review 2026-07-22 (targeted):** `/help/api`, `/help/api/lists`, the new
+`/help/api/lists-dsl` page, and `docs/api-reference.md` §`POST /api/lists`, prompted
+by a live `400 "Invalid Schema: DSL must be an object"`. See §9.
+
 **Live probe (read-only) on 2026-07-18, account `messenger` (subscriber):**
 login (POST sync-token), ~30 GETs, and `OPTIONS` verb-detection on 15 routes.
 No writes were performed.
@@ -287,3 +295,60 @@ We're happy to run authorized write-tests for any of these if useful.
 **Recommendation:** diff this report against your OpenAPI/route table. The
 client-contract items (Section 4) and the Bearer-rejection items (Section 2) are
 where a real, shipped consumer already diverges from the platform today.
+
+---
+
+## 9. Addendum — 2026-07-22: the `POST /api/lists` schema contract
+
+A real user hit **`400 "Invalid Schema: DSL must be an object"`** creating a list.
+Root-causing it surfaced one client bug (F15, now fixed) and one doc problem that
+**you've already largely fixed** while we were investigating (F16). Recording both
+so the report stays accurate and closes the loop.
+
+### F15 — [iOS, FIXED] client sent a DSL *string* and read the wrong response key
+The shipped client built `schema` as the legacy comma-separated DSL **string**
+(`"Title:text, Author:text"`) and decoded the created list from a **`list`** key.
+The server (`validateDSLSchema` in `lib/lists/dsl-parser.ts`) requires `schema` to
+be a DSL **object** and rejects any non-object with *"DSL must be an object"*; the
+route returns the created list under **`data`** (`{ "message": …, "data": { … } }`),
+not `list`. We fixed the client on 2026-07-22 to send the object and decode `data`:
+
+```jsonc
+// POST /api/lists  — request body the client now sends
+{
+  "title": "Books to Read",
+  "isPublic": true,
+  "schema": {                      // object, NOT "Title:text, Author:text"
+    "name": "Books to Read",
+    "fields": [
+      { "key": "title",  "type": "text",   "label": "Title",  "displayOrder": 0,
+        "required": false, "visible": true }
+    ]
+  }
+}
+// 201 response — list is under `data`
+{ "message": "List created successfully", "data": { "id": "lst_…", "properties": [ … ] } }
+```
+
+This one is on us — listed so you know your (corrected) docs are right.
+
+### F16 — [DOC, RESOLVED] the docs used to show the string form; residual response gap
+As of our 2026-07-18 read, both `/help/api/lists` and the canonical
+`docs/api-reference.md` documented `POST /api/lists` with **`"schema": "string"`**
+and the old `"Name:type, Name:type"` example — i.e. the docs described *exactly the
+request the server now rejects*. Any integrator following them would have hit F15.
+
+Re-checked 2026-07-22: **this is fixed.** `/help/api/lists`, the new dedicated
+**`/help/api/lists-dsl`** reference (nice addition — types + object shape are clear),
+and `docs/api-reference.md:2709` all now show the DSL **object**. Thank you.
+
+**Two small residuals worth closing:**
+1. **Response body isn't documented.** The `POST /api/lists` section of the canonical
+   `docs/api-reference.md` still lists only status codes (201/400/401/403) with no
+   response-body example, so the `{ message, data: { … } }` envelope (the second half
+   of our client bug) is undocumented. A one-line example would prevent the next
+   client from decoding the wrong key.
+2. **Subscriber gate.** The route is `[Subscriber]`-only and returns
+   `403 "Subscribe to create lists."` for non-subscribers (same family as F13). This
+   is documented in `api-reference.md`; we're just flagging it as a **[VERIFY, iOS]**
+   to confirm our app surfaces that 403 gracefully rather than as a generic failure.
