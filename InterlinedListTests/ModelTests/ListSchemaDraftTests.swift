@@ -140,37 +140,54 @@ final class ListSchemaDraftTests: XCTestCase {
         XCTAssertTrue(ListSchemaDraft.schemaChanged(original: [original], current: [changed]))
     }
 
-    // MARK: serializeSchemaDSL
+    // MARK: dslSchema
 
-    func test_serializeSchemaDSL_empty_returnsEmptyString() {
-        XCTAssertEqual(ListSchemaDraft.serializeSchemaDSL([]), "")
+    func test_dslSchema_carriesNameAndEmptyFields() {
+        let schema = ListSchemaDraft.dslSchema(name: "My List", [])
+        XCTAssertEqual(schema.name, "My List")
+        XCTAssertTrue(schema.fields.isEmpty)
     }
 
-    func test_serializeSchemaDSL_onePropertyTextType_returnsNameColonType() {
-        let p = makeProp(name: "Name", type: "text")
-        XCTAssertEqual(ListSchemaDraft.serializeSchemaDSL([p]), "Name:text")
+    func test_dslSchema_onePropertyMapsKeyLabelType() {
+        let p = makeProp(name: "Name", type: "text", key: "name")
+        let schema = ListSchemaDraft.dslSchema(name: "L", [p])
+        XCTAssertEqual(schema.fields.count, 1)
+        let f = try? XCTUnwrap(schema.fields.first)
+        XCTAssertEqual(f?.key, "name")
+        XCTAssertEqual(f?.label, "Name")
+        XCTAssertEqual(f?.type, "text")
+        XCTAssertEqual(f?.displayOrder, 0)
     }
 
-    func test_serializeSchemaDSL_multipleProperties_returnsCommaSpaceSeparated() {
-        let a = makeProp(id: "1", name: "Title", type: "text")
-        let b = makeProp(id: "2", name: "Year", type: "number")
-        let c = makeProp(id: "3", name: "Read", type: "boolean")
-        XCTAssertEqual(ListSchemaDraft.serializeSchemaDSL([a, b, c]),
-                       "Title:text, Year:number, Read:boolean")
+    func test_dslSchema_multipleProperties_assignDisplayOrderByIndex() {
+        let a = makeProp(id: "1", name: "Title", type: "text", key: "title")
+        let b = makeProp(id: "2", name: "Year", type: "number", key: "year")
+        let c = makeProp(id: "3", name: "Read", type: "boolean", key: "read")
+        let schema = ListSchemaDraft.dslSchema(name: "L", [a, b, c])
+        XCTAssertEqual(schema.fields.map(\.key), ["title", "year", "read"])
+        XCTAssertEqual(schema.fields.map(\.type), ["text", "number", "boolean"])
+        XCTAssertEqual(schema.fields.map(\.displayOrder), [0, 1, 2])
     }
 
-    func test_serializeSchemaDSL_excludesEmptyNames() {
-        let a = makeProp(id: "1", name: "Title", type: "text")
-        let blank = makeProp(id: "2", name: "  ", type: "text")
-        let c = makeProp(id: "3", name: "", type: "number")
-        let d = makeProp(id: "4", name: "Year", type: "number")
-        XCTAssertEqual(ListSchemaDraft.serializeSchemaDSL([a, blank, c, d]),
-                       "Title:text, Year:number")
+    func test_dslSchema_excludesEmptyNames() {
+        let a = makeProp(id: "1", name: "Title", type: "text", key: "title")
+        let blank = makeProp(id: "2", name: "  ", type: "text", key: "blank")
+        let c = makeProp(id: "3", name: "", type: "number", key: "c")
+        let d = makeProp(id: "4", name: "Year", type: "number", key: "year")
+        let schema = ListSchemaDraft.dslSchema(name: "L", [a, blank, c, d])
+        XCTAssertEqual(schema.fields.map(\.label), ["Title", "Year"])
     }
 
-    func test_serializeSchemaDSL_trimsWhitespaceAroundName() {
-        let p = makeProp(name: "  Title  ", type: "text")
-        XCTAssertEqual(ListSchemaDraft.serializeSchemaDSL([p]), "Title:text")
+    func test_dslSchema_trimsWhitespaceAroundLabel() {
+        let p = makeProp(name: "  Title  ", type: "text", key: "title")
+        let schema = ListSchemaDraft.dslSchema(name: "L", [p])
+        XCTAssertEqual(schema.fields.first?.label, "Title")
+    }
+
+    func test_dslSchema_emptyKey_slugifiesFromLabel() {
+        let p = makeProp(name: "Have Read?", type: "boolean", key: "")
+        let schema = ListSchemaDraft.dslSchema(name: "L", [p])
+        XCTAssertEqual(schema.fields.first?.key, "have_read")
     }
 
     // MARK: isSchemaValid
@@ -218,9 +235,13 @@ final class ListSchemaDraftTests: XCTestCase {
         XCTAssertEqual(cols.first?.propertyType, "text")
     }
 
-    func test_starterColumns_serializeToValidDSL() {
-        let dsl = ListSchemaDraft.serializeSchemaDSL(ListSchemaDraft.starterColumns())
-        XCTAssertEqual(dsl, "Title:text")
+    func test_starterColumns_buildValidDSLSchema() {
+        let schema = ListSchemaDraft.dslSchema(name: "New List", ListSchemaDraft.starterColumns())
+        XCTAssertEqual(schema.name, "New List")
+        XCTAssertEqual(schema.fields.count, 1)
+        XCTAssertEqual(schema.fields.first?.label, "Title")
+        XCTAssertEqual(schema.fields.first?.type, "text")
+        XCTAssertEqual(schema.fields.first?.key, "title")
     }
 
     // MARK: hasCreatableColumns
