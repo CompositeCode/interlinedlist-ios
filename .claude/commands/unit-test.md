@@ -12,54 +12,35 @@ Usage:
 
 ## Steps
 
-### 1. Locate or create the test target
+### 1. Use the existing test target and mock (already set up)
 
-```bash
-ls InterlinedListTests/ 2>/dev/null || echo "TEST TARGET MISSING"
+The `InterlinedListTests/` target already exists with this structure — add new tests into the matching folder, don't recreate anything:
+
+```
+InterlinedListTests/
+  MockURLSession.swift      shared mock (conforms to URLSessionProtocol)
+  Fixtures/                 JSON fixture files (.json) for decode tests
+  APIClientTests/           one test file per APIClient domain section
+  ModelTests/               Codable round-trip and logic tests
+  ServiceTests/             KeychainService, AppDataStore, image upload, etc.
+  E2E/                      read-only live-API smoke tests (see /e2e-test)
 ```
 
-If `InterlinedListTests/` does not exist, create the directory and a minimal test harness:
-
-```bash
-mkdir -p InterlinedListTests/Fixtures
-mkdir -p InterlinedListTests/APIClientTests
-mkdir -p InterlinedListTests/ModelTests
-```
-
-Create `InterlinedListTests/MockURLSession.swift` if it does not exist:
+**`MockURLSession` already exists — reuse it.** It conforms to **`URLSessionProtocol`** (it does *not* subclass `URLSession`, whose async `data(for:)` lives in an extension and can't be overridden). It's injected via `APIClient(session:)` — `init(baseURL: String? = nil, session: URLSessionProtocol = URLSession.shared)`. Its API:
 
 ```swift
-import Foundation
-@testable import InterlinedList
-
-final class MockURLSession: URLSession {
-    private var stubbedData: Data = Data()
-    private var stubbedStatusCode: Int = 200
+final class MockURLSession: URLSessionProtocol {
     private(set) var lastRequest: URLRequest?
     private(set) var requestHistory: [URLRequest] = []
 
-    func stub(data: Data, statusCode: Int) {
-        stubbedData = data
-        stubbedStatusCode = statusCode
-    }
+    func stub(data: Data, statusCode: Int = 200)        // single response
+    func stub(json: String, statusCode: Int = 200)
+    func enqueue(json: String, statusCode: Int = 200)   // FIFO queue for sequenced responses
+    func enqueue(data: Data, statusCode: Int = 200)
 
-    func stub(json: String, statusCode: Int = 200) {
-        stubbedData = Data(json.utf8)
-        stubbedStatusCode = statusCode
-    }
-
-    override func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        lastRequest = request
-        requestHistory.append(request)
-        let url = request.url ?? URL(string: "https://interlinedlist.com")!
-        let response = HTTPURLResponse(url: url, statusCode: stubbedStatusCode,
-                                       httpVersion: nil, headerFields: nil)!
-        return (stubbedData, response)
-    }
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
 }
 ```
-
-Also add `InterlinedListTests/InterlinedListTests.swift` as the entry point if missing (Xcode requires at least one file with `import XCTest`).
 
 ### 2. Identify what needs testing
 
@@ -156,37 +137,41 @@ final class UserListCodableTests: XCTestCase {
 final class ListTreeNodeTests: XCTestCase {
     func test_buildTree_rootListWithNoFolder_appearsAtRoot() {
         let list = UserList(id: "1", name: "Root", description: nil, folderId: nil,
-                            createdAt: "2024-01-01T00:00:00Z", updatedAt: nil, itemCount: nil)
+                            isPublic: nil, createdAt: "2024-01-01T00:00:00Z",
+                            updatedAt: nil, itemCount: nil)
         let nodes = ListTreeNode.buildTree(folders: [], lists: [list])
         XCTAssertEqual(nodes.count, 1)
         XCTAssertEqual(nodes.first?.name, "Root")
     }
 
     func test_buildTree_listWithEmptyFolderIdTreatedAsRoot() {
-        var list = UserList(id: "1", name: "L", description: nil, folderId: "",
-                            createdAt: "2024-01-01T00:00:00Z", updatedAt: nil, itemCount: nil)
+        let list = UserList(id: "1", name: "L", description: nil, folderId: "",
+                            isPublic: nil, createdAt: "2024-01-01T00:00:00Z",
+                            updatedAt: nil, itemCount: nil)
         let nodes = ListTreeNode.buildTree(folders: [], lists: [list])
         XCTAssertEqual(nodes.count, 1)
     }
 }
 ```
 
-### 4. Add new files to the Xcode test target
+### 4. Register new test files in the Xcode target
 
-After writing test files, verify they appear in `project.pbxproj`:
+There are no synced/file-system groups, so a new `.swift` file won't compile into the test target until it's added to `project.pbxproj`. After writing test files, confirm they're referenced:
 ```bash
-grep -l "InterlinedListTests" InterlinedList.xcodeproj/project.pbxproj | head -1
+grep -c "<NewTestFile>.swift" InterlinedList.xcodeproj/project.pbxproj
 ```
-
-If they are missing, add them. The easiest approach is to add an explicit file reference and build phase entry to `project.pbxproj`, or instruct the user to drag the file into Xcode under the test target.
+If it returns 0, register the file (and its build-phase entry) in `project.pbxproj` — use the `xcodeproj` Ruby gem for a reliable edit, or have the user drag the file into Xcode under the `InterlinedListTests` target.
 
 ### 5. Run the tests
 
+Prefer XcodeBuildMCP `test_sim` (after `session_show_defaults`). Raw fallback — pin a UDID and serialize (the `.xctestplan` sets `parallelizable:false`; the E2E suite shares a static login token that parallel cloned sims would break):
 ```bash
 xcodebuild -scheme InterlinedList \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,id=<SIM_UDID>' \
+  -parallel-testing-enabled NO \
   test 2>&1 | grep -E '(error:|Test Suite|Test Case|passed|failed|BUILD)'
 ```
+Run a single class/method with `-only-testing:InterlinedListTests/<Class>[/<method>]`.
 
 ### 6. Report results
 

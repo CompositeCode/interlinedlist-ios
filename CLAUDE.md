@@ -131,4 +131,4 @@ xcrun simctl list devices --json | jq '.devices | to_entries[] | select(.value |
 ## Reference docs
 
 - `App-Store-Deployment.md` — feature completion status, required credentials/assets/costs, and the full App Store submission checklist.
-- `blocker-prompts.md` — backend/API work needed to unblock iOS App Store submission (moderation endpoints, Bearer auth fixes, push contract confirmation, and deferred API gaps).
+- `the-gaps.md` — the merged iOS↔web parity/gap doc: iOS-side defects (D1–D5) and feature gaps **and** the backend/API work needed to unblock submission (Bearer-auth fixes, moderation endpoints, push contract confirmation, deferred API gaps), with ready-to-paste prompts for the API team.

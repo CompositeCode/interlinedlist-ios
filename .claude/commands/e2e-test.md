@@ -1,263 +1,121 @@
 # /e2e-test
 
-Write and run end-to-end tests for one or more user-facing flows using XCUITest. If no argument is given, run the full XCUITest suite.
+Add and run **read-only** end-to-end smoke tests against the live
+`interlinedlist.com` API. If no argument is given, run the whole E2E suite.
 
 Usage:
-- `/e2e-test` — run all XCUITests
-- `/e2e-test login` — write + run login/logout flow tests
-- `/e2e-test compose` — write + run message compose flow tests
-- `/e2e-test lists` — write + run list management flow tests
+- `/e2e-test` — run the full E2E suite
+- `/e2e-test documents` — add + run a read-only probe for the documents endpoints
+- `/e2e-test <area>` — add + run a read-only probe for that API area
 
 ---
 
-## Scope of e2e tests in this project
+## What E2E means in this project (read this first)
 
-XCUITest exercises the live app UI against the **real API** (`https://interlinedlist.com`). Tests must:
-- Use a dedicated test account (credentials stored in `InterlinedListUITests/TestCredentials.swift`, never committed to git — see setup below).
-- Be idempotent: clean up any data they create.
-- Be independent: each test method starts from the login screen (log out in `tearDown`).
+There is **no XCUITest / UI-automation target** and no `TestCredentials.swift`.
+The E2E suite is `InterlinedListTests/E2E/E2EReadOnlyTests.swift` — it drives the
+real `APIClient` against production and asserts on responses. Hard rules:
 
-E2e tests are **not** a substitute for unit tests. Use them only for critical user flows where a regression in the wiring (view → service → API → UI update) would be invisible to unit tests.
+- **Read-only.** Tests only **GET**. They never POST/PUT/PATCH/DELETE or otherwise
+  mutate server state, so they're safe against the production account. Do **not**
+  add a mutating probe here — if you need to exercise a write, mock it in a unit
+  test (`/unit-test`) instead.
+- **Credentials come from `EnvLoader`** (`InterlinedListTests/E2E/EnvLoader.swift`),
+  which reads `INTERLINEDLIST_EMAIL` / `INTERLINEDLIST_PASSWORD` from, in order:
+  1. the process environment (Xcode scheme Test action env, or CI secrets), then
+  2. a gitignored `.env` at the repo root.
+- **Auto-skip without creds.** Every test begins with
+  `try XCTSkipUnless(EnvLoader.hasCredentials, …)`, so a fresh checkout or a CI run
+  without secrets skips cleanly instead of failing.
+- **One login per run.** The suite logs in once and caches a `static` token
+  (`sharedToken`) reused across every test, and caches a login failure so the rest
+  skip fast rather than re-hitting the rate-limited login endpoint. Don't add
+  per-test logins.
 
 ---
 
 ## Steps
 
-### 1. Locate or create the UI test target
+### 1. Confirm the suite and credentials
 
 ```bash
-ls InterlinedListUITests/ 2>/dev/null || echo "UI TEST TARGET MISSING"
+ls InterlinedListTests/E2E/           # E2EReadOnlyTests.swift + EnvLoader.swift
+grep -c . .env 2>/dev/null || echo "no .env — tests will XCTSkip unless env vars are set"
 ```
 
-If `InterlinedListUITests/` does not exist, create it:
+The suite and `EnvLoader` already exist — extend them, don't recreate them.
 
-```bash
-mkdir -p InterlinedListUITests
-```
+### 2. Add a read-only probe (if an area was named)
 
-Create `InterlinedListUITests/TestCredentials.swift` **only if it does not already exist**, and add it to `.gitignore`:
+Add a new `func test_e2e_<area>_<expectation>() async throws` to
+`E2EReadOnlyTests.swift`. `setUp()` already logs in and sets the bearer token on
+`client`, so a test just calls a GET method and asserts. Pattern to mirror:
 
 ```swift
-// NOT committed to git — fill in manually or via CI secrets
-enum TestCredentials {
-    static let email    = "uitest@example.com"
-    static let password = "changeme"
-    static let username = "uitestuser"
+// MARK: - Documents (read-only)
+
+func test_e2e_documents_rootListLoads() async throws {
+    let docs = try await client.documents()          // GET /api/documents (root only)
+    // Don't assert exact counts against a live account — assert shape/invariants.
+    XCTAssertNoThrow(docs)
+    for doc in docs { XCTAssertFalse(doc.id.isEmpty) }
 }
 ```
 
-Check `.gitignore`:
-```bash
-grep "TestCredentials" .gitignore || echo "InterlinedListUITests/TestCredentials.swift" >> .gitignore
-```
+Guidance:
+- **Only call GET methods.** If the `APIClient` method you want to exercise
+  mutates state, stop — cover it with a `MockURLSession` unit test instead.
+- Assert on **invariants** (non-empty ids, decodable shape, expected optionals),
+  not on exact live data that changes between runs.
+- Respect the confirmed **public-browse namespace split** when probing public
+  routes: `/api/user/:username/messages` (singular) vs
+  `/api/users/:username/lists` (plural) — the wrong one 404s (see `the-gaps.md`).
 
-Create a shared `BaseUITestCase.swift`:
+### 3. Register the file (only if you added a new one)
 
-```swift
-import XCTest
+You'll normally extend the existing file. If you add a *new* `.swift` file, it
+must be registered in `project.pbxproj` (no synced groups) under the
+`InterlinedListTests` target — use the `xcodeproj` Ruby gem, or drag it into Xcode.
 
-class BaseUITestCase: XCTestCase {
-    var app: XCUIApplication!
+### 4. Run the suite
 
-    override func setUp() {
-        super.setUp()
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["--uitesting"]
-        app.launch()
-        login()
-    }
-
-    override func tearDown() {
-        logout()
-        super.tearDown()
-    }
-
-    func login() {
-        let emailField = app.textFields["Email"]
-        guard emailField.waitForExistence(timeout: 5) else {
-            return  // already logged in
-        }
-        emailField.tap()
-        emailField.typeText(TestCredentials.email)
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText(TestCredentials.password)
-        app.buttons["Log in"].tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10),
-                      "Tab bar did not appear after login")
-    }
-
-    func logout() {
-        // Navigate to Profile tab and tap logout if present
-        app.tabBars.buttons["Profile"].tap()
-        if app.buttons["Log out"].exists {
-            app.buttons["Log out"].tap()
-        }
-    }
-}
-```
-
-### 2. Identify accessibility labels in the target flow
-
-Before writing XCUITest selectors, read the relevant view file(s) to find `.accessibilityLabel` values and button/field labels used as identifiers.
+Prefer XcodeBuildMCP `test_sim` scoped to the class. Raw fallback — pin a UDID and
+serialize (the `.xctestplan` sets `parallelizable:false`; the shared static login
+token breaks under parallel cloned simulators):
 
 ```bash
-grep -n "accessibilityLabel\|accessibilityIdentifier\|\.buttons\[" \
-  InterlinedList/Views/<TargetView>.swift
+xcodebuild test -scheme InterlinedList \
+  -destination 'platform=iOS Simulator,id=<SIM_UDID>' \
+  -parallel-testing-enabled NO \
+  -only-testing:InterlinedListTests/E2EReadOnlyTests \
+  2>&1 | grep -E '(error:|Test Suite|Test Case|passed|failed|Skipped|BUILD)'
 ```
 
-If interactive elements are missing `.accessibilityIdentifier` that XCUITest needs to target reliably, add them to the source view now (do not add `.accessibilityLabel` purely for test targeting — use `.accessibilityIdentifier` instead, which is invisible to VoiceOver).
+Run a single method with
+`-only-testing:InterlinedListTests/E2EReadOnlyTests/<methodName>`.
 
-### 3. Write the XCUITest
+> If every test reports **Skipped**, credentials aren't visible to the test
+> process — set `INTERLINEDLIST_EMAIL`/`INTERLINEDLIST_PASSWORD` in the scheme's
+> Test action env or add them to `.env` at the repo root.
 
-One file per flow in `InterlinedListUITests/`. Examples:
+### 5. Optional pre-flight: `scripts/test_api.py`
 
-**Login flow (`LoginUITests.swift`):**
-
-```swift
-import XCTest
-
-final class LoginUITests: XCTestCase {
-    var app: XCUIApplication!
-
-    override func setUp() {
-        super.setUp()
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launchArguments = ["--uitesting"]
-        app.launch()
-    }
-
-    func test_login_validCredentials_showsTabBar() {
-        let emailField = app.textFields["Email"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 5))
-        emailField.tap()
-        emailField.typeText(TestCredentials.email)
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText(TestCredentials.password)
-        app.buttons["Log in"].tap()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
-    }
-
-    func test_login_wrongPassword_showsErrorMessage() {
-        app.textFields["Email"].tap()
-        app.textFields["Email"].typeText(TestCredentials.email)
-        app.secureTextFields["Password"].tap()
-        app.secureTextFields["Password"].typeText("wrongpassword")
-        app.buttons["Log in"].tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Invalid'"))
-                          .firstMatch.waitForExistence(timeout: 5))
-    }
-}
-```
-
-**Compose flow (`ComposeUITests.swift`):**
-
-```swift
-final class ComposeUITests: BaseUITestCase {
-    func test_compose_postMessage_appearsInFeed() throws {
-        let unique = "UITest-\(Int(Date().timeIntervalSince1970))"
-        app.tabBars.buttons["Home"].tap()
-        app.navigationBars.buttons["compose"].tap()   // accessibilityIdentifier on compose button
-        let textEditor = app.textViews.firstMatch
-        XCTAssertTrue(textEditor.waitForExistence(timeout: 5))
-        textEditor.tap()
-        textEditor.typeText(unique)
-        app.buttons["Post"].tap()
-        XCTAssertTrue(app.alerts.buttons["OK"].waitForExistence(timeout: 5))
-        app.alerts.buttons["OK"].tap()
-        // Verify the message appears in the feed
-        XCTAssertTrue(app.staticTexts[unique].waitForExistence(timeout: 10))
-    }
-}
-```
-
-**Lists flow (`ListsUITests.swift`):**
-
-```swift
-final class ListsUITests: BaseUITestCase {
-    func test_createList_appearsInListsTab() {
-        let name = "UITest-List-\(Int(Date().timeIntervalSince1970))"
-        app.tabBars.buttons["Lists"].tap()
-        app.navigationBars.buttons["Add"].tap()
-        app.textFields["List name"].tap()
-        app.textFields["List name"].typeText(name)
-        app.buttons["Create"].tap()
-        XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5))
-    }
-
-    func test_deleteList_removedFromListsTab() {
-        // Create a list first, then delete it
-        let name = "UITest-Delete-\(Int(Date().timeIntervalSince1970))"
-        app.tabBars.buttons["Lists"].tap()
-        app.navigationBars.buttons["Add"].tap()
-        app.textFields["List name"].tap()
-        app.textFields["List name"].typeText(name)
-        app.buttons["Create"].tap()
-        XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 5))
-        // Swipe to delete
-        app.staticTexts[name].swipeLeft()
-        app.buttons["Delete"].tap()
-        XCTAssertFalse(app.staticTexts[name].waitForExistence(timeout: 3))
-    }
-}
-```
-
-### 4. Handle `--uitesting` launch argument in the app
-
-In `InterlinedListApp.swift` or `RootView.swift`, check for the flag and skip any onboarding or animation that would interfere with tests:
-
-```swift
-// In app init or scene setup:
-if ProcessInfo.processInfo.arguments.contains("--uitesting") {
-    // Disable animations for deterministic test timing
-    UIView.setAnimationsEnabled(false)
-}
-```
-
-### 5. Run the tests
-
-Boot the simulator first (avoids a cold-boot timeout):
-```bash
-xcrun simctl boot "iPhone 16" 2>/dev/null || true
-```
-
-Run the UI test scheme:
-```bash
-xcodebuild -scheme InterlinedList \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
-  -only-testing:InterlinedListUITests \
-  test 2>&1 | grep -E '(error:|Test Suite|Test Case|passed|failed|BUILD)'
-```
-
-To run a single test class:
-```bash
-xcodebuild -scheme InterlinedList \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
-  -only-testing:InterlinedListUITests/LoginUITests \
-  test 2>&1 | grep -E '(Test Case|passed|failed|error:)'
-```
-
-### 6. API-level smoke test (optional, fast)
-
-For flows that are purely API logic (no UI assertions needed), the existing `scripts/test_api.py` can serve as a faster complement to XCUITest:
+For a fast, simulator-free sanity check of API behavior before compiling the
+suite:
 
 ```bash
 python3 scripts/test_api.py 2>&1 | tail -20
 ```
 
-Use this as a pre-flight check before launching the simulator.
-
-### 7. Report results
+### 6. Report results
 
 ```
-Flow tested:     <name>
-Tests written:   N
-Tests passed:    N
-Tests failed:    N
-  - <TestClass/testMethod>: <failure message> at <file:line>
-Accessibility gaps: Any interactive elements that lacked identifiers and were added
-Cleanup:         Any test data created (listed) — confirm deleted in tearDown
+Suite:            E2EReadOnlyTests
+Ran / Skipped:    N ran, M skipped (creds present? yes/no)
+Passed / Failed:  N / N
+  - <testMethod>: <failure message> at <file:line>
+New probes added: <list, all read-only>
 ```
 
-If any test fails due to missing `.accessibilityIdentifier` on a view element, add it to the source view and note the change.
+If tests skipped for missing credentials, say so explicitly — a green "0 failed"
+with everything skipped is **not** a passing E2E run.

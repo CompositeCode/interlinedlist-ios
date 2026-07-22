@@ -27,9 +27,11 @@ Perform a focused code review of the Swift/SwiftUI changes on the current branch
    - [ ] `Codable` models are pure value types with no networking or SwiftUI imports
 
    ### Project-specific
-   - [ ] POST `/api/messages` body encoded with `camelCaseEncoder`, not default snake-case encoder
-   - [ ] Empty-string `folderId` / `parentId` treated same as `nil`
+   - [ ] Correct encoder per endpoint: camelCase bodies use the `postCamel`/`putCamel`/`patchCamel` helpers, snake_case bodies use `post`/`put`/`patch` — mismatches fail silently server-side (check the existing method, don't assume)
+   - [ ] Empty-string `folderId` / `parentId` treated same as `nil` (both `UserList.folderId` and `ListFolder.parentId`)
+   - [ ] Document-folder path-scoping honored: folder reads/creates use `/api/documents/folders/{id}/documents`; root routes are root-only
    - [ ] Tokens stored in Keychain only — no `UserDefaults`
+   - [ ] New `.swift` files registered in `project.pbxproj` (no synced groups)
    - [ ] New `View` files include a `#Preview` block
    - [ ] Interactive elements have `.accessibilityLabel` where label isn't self-evident
 
@@ -47,9 +49,9 @@ Perform a focused code review of the Swift/SwiftUI changes on the current branch
    - Suggestions (non-blocking improvements)
    - Positives (good patterns worth noting)
 
-5. **Run a build** to confirm there are no compilation errors:
+5. **Run a build** to confirm there are no compilation errors. Prefer XcodeBuildMCP `build_sim` (after `session_show_defaults`); raw fallback pins a concrete UDID (`name=iPhone 16` alone is ambiguous across runtimes):
    ```bash
    xcodebuild -scheme InterlinedList \
-     -destination 'platform=iOS Simulator,name=iPhone 16' \
+     -destination 'platform=iOS Simulator,id=<SIM_UDID>' \
      build 2>&1 | grep -E '(error:|warning:|BUILD SUCCEEDED|BUILD FAILED)'
    ```

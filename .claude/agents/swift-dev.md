@@ -33,8 +33,8 @@ You are an expert iOS/Swift engineer working on **InterlinedList**, a SwiftUI ap
 - **No force-unwrap** (`!`) on optional values in production code paths.
 - **No `DispatchQueue.main.async`** — use `@MainActor` annotations or `MainActor.run {}`.
 - **No comments** unless the reason is non-obvious (API quirk, hidden constraint, workaround). Do not describe what the code does; well-named identifiers already do that.
-- **camelCase encoder** — the `/api/messages` POST endpoint expects camelCase keys (`publiclyVisible`, `parentId`). Use `camelCaseEncoder`, not the default `encoder`.
-- **Empty-string == nil** — `ListFolder.parentId` and `UserList.folderId` may arrive as `""` instead of `null`. Treat both as absent.
+- **camelCase vs snake_case bodies** — `APIClient` has two encoder families and choosing wrong fails **silently** server-side. Use `postCamel`/`putCamel`/`patchCamel` (plain `camelCaseEncoder`) for the **many** camelCase endpoints (messages, lists, documents, organizations, watchers, identities, change-email, notification-preferences, message metadata, …); use `post`/`put`/`patch` (snake_case `encoder`) for the rest. **Check the existing method for that endpoint before adding a new one** — don't assume `/api/messages` is the only camelCase route.
+- **Empty-string == nil** — **both** `ListFolder.parentId` **and** `UserList.folderId` may arrive as `""` instead of `null`. Treat empty-string the same as absent (this is what `ListTreeNode.buildTree` does).
 - **Token in Keychain only** — never `UserDefaults` or in-memory across app restarts without Keychain backing.
 - Every new `View` file needs a `#Preview` macro block.
 - Every interactive element without an obvious label needs `.accessibilityLabel`.
@@ -42,15 +42,27 @@ You are an expert iOS/Swift engineer working on **InterlinedList**, a SwiftUI ap
 ## File layout
 ```
 InterlinedList/Models/       Codable structs, lightweight computed properties only
-InterlinedList/Views/        SwiftUI views — one public struct per file
-InterlinedList/Services/     APIClient, AuthState, KeychainService
+InterlinedList/Views/        SwiftUI views — one public struct per file (~41 files)
+InterlinedList/Services/     APIClient, AuthState, AppDataStore, DataCache,
+                             KeychainService, OAuthCoordinator, URLSessionProtocol,
+                             PushService, ComposeImageUploader / ImageUploadProcessor
+InterlinedListApp.swift      @main entry; also defines AppRouter inline (deep links)
 ```
 
+## Project gotchas (see `CLAUDE.md` for the full list — don't re-derive)
+- **401 ≠ logged out.** `APIClient` just throws `APIError.status(401)`. Views call `authState.handleUnauthorized()`, which re-validates against `GET /api/user` and only logs out if *that* 401s. Never call `logout()` directly on a feature-endpoint 401.
+- **Document folders are path-scoped.** `GET /api/documents` and `POST /api/documents` are root-only (GET ignores `?folderId`, POST has no `folderId` field). Folder contents = `GET /api/documents/folders/{id}/documents`; create-in-folder = `POST /api/documents/folders/{id}/documents`; only `PATCH /api/documents/{id}` takes `folderId` (to move). Using the root route silently drops the doc to root.
+- **New `.swift` files must be registered in `project.pbxproj`** — there are no synced/file-system groups, so a new file won't compile into the target until it's added (use the `xcodeproj` Ruby gem).
+
 ## Build verification
-After writing or editing Swift files, verify with:
+After writing or editing Swift files, verify the build. Prefer XcodeBuildMCP (call `session_show_defaults` first, then `build_sim`), or the repo's run script to build-and-launch and eyeball a change:
+```bash
+./run-simulator.sh            # build → boot sim → install → launch com.interlinedlist.app
+```
+Raw fallback — pin a concrete simulator UDID (`name=iPhone 16` alone is ambiguous across runtimes; `xcrun simctl list devices`):
 ```bash
 xcodebuild -scheme InterlinedList \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,id=<SIM_UDID>' \
   build 2>&1 | grep -E '(error:|warning:|BUILD SUCCEEDED|BUILD FAILED)'
 ```
 
@@ -108,45 +120,43 @@ final class APIClientMessagesTests: XCTestCase {
 ```
 
 ### Mock URLSession pattern
-Create `InterlinedListTests/MockURLSession.swift`:
+`InterlinedListTests/MockURLSession.swift` **already exists** — reuse it, don't recreate it. It conforms to **`URLSessionProtocol`** (it does **not** subclass `URLSession`: `URLSession`'s async `data(for:)` lives in an extension and can't be overridden). `APIClient` accepts it via `init(baseURL: String? = nil, session: URLSessionProtocol = URLSession.shared)`, so tests do `APIClient(session: mock)`. Its API:
 
 ```swift
-final class MockURLSession: URLSession {
-    private var stubbedData: Data = Data()
-    private var stubbedStatusCode: Int = 200
+final class MockURLSession: URLSessionProtocol {
     private(set) var lastRequest: URLRequest?
+    private(set) var requestHistory: [URLRequest] = []
 
-    func stub(data: Data, statusCode: Int) {
-        stubbedData = data
-        stubbedStatusCode = statusCode
-    }
+    func stub(data: Data, statusCode: Int = 200)        // single response
+    func stub(json: String, statusCode: Int = 200)
+    func enqueue(json: String, statusCode: Int = 200)   // FIFO queue for sequenced responses
+    func enqueue(data: Data, statusCode: Int = 200)
 
-    override func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        lastRequest = request
-        let url = request.url ?? URL(string: "https://interlinedlist.com")!
-        let response = HTTPURLResponse(url: url, statusCode: stubbedStatusCode,
-                                       httpVersion: nil, headerFields: nil)!
-        return (stubbedData, response)
-    }
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
 }
 ```
 
 ### File placement
+These folders already exist — add new tests into the matching one (don't recreate them):
 ```
 InterlinedListTests/
-  MockURLSession.swift          shared mock
+  MockURLSession.swift          shared mock (URLSessionProtocol)
   Fixtures/                     JSON fixture files (.json) for decode tests
   APIClientTests/               one test file per APIClient domain section
   ModelTests/                   Codable round-trip and logic tests
+  ServiceTests/                 KeychainService, AppDataStore, image upload, etc.
+  E2E/                          read-only live-API smoke tests (see /e2e-test)
 ```
 
 ### Test naming
 Use `test_<subject>_<condition>_<expectedOutcome>` — e.g. `test_buildTree_rootListWithNoFolder_appearsAtRoot`.
 
 ### Running tests
+Prefer XcodeBuildMCP `test_sim` (after `session_show_defaults`). Raw fallback — pin a UDID and serialize (the `.xctestplan` sets `parallelizable:false`; the E2E suite shares a static login token that parallel cloned sims would break):
 ```bash
 xcodebuild -scheme InterlinedList \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,id=<SIM_UDID>' \
+  -parallel-testing-enabled NO \
   test 2>&1 | grep -E '(error:|warning:|Test Suite|passed|failed)'
 ```
 

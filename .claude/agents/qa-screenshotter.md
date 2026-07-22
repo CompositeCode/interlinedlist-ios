@@ -29,17 +29,15 @@ xcrun simctl list devices --json | jq '.devices | to_entries[] | select(.value |
 
 ## Screenshot capture workflow
 
-1. Build and install for the target simulator:
+1. Build, install, and launch on the target simulator. Prefer the repo run script (it resolves/boots a UDID, builds, installs, and launches `com.interlinedlist.app`):
    ```bash
-   xcodebuild -scheme InterlinedList -destination 'platform=iOS Simulator,id=<UDID>' build
-   xcrun simctl boot <UDID>   # if not already booted
-   xcrun simctl install <UDID> <path-to-.app>
-   xcrun simctl launch <UDID> com.interlinedlist.app
+   ./run-simulator.sh "iPhone 16 Pro Max"    # 6.9"   (or "iPhone 15 Plus" for 6.5")
    ```
-2. Navigate to each required screen (Feed, Compose, Lists, Profile, Settings). There is no scripted-tap CLI for the simulator — navigation must go through either:
-   - **Deep links** for the few screens that support them: `xcrun simctl openurl <UDID> "interlinedlist://<path>"`.
-   - **A lightweight XCUITest UI test** (create/extend an `InterlinedListUITests` target if one doesn't exist) that logs in with E2E test credentials, taps through via accessibility identifiers, and calls `XCUIScreen.main.screenshot()` at each stop. Every interactive element already carries `.accessibilityLabel` per project convention — reuse those as lookup hooks rather than inventing new identifiers.
-3. Capture the raster screenshot at the right moment:
+   Or drive it through XcodeBuildMCP: `session_show_defaults` → `build_run_sim`. Raw `xcodebuild`/`simctl install`/`simctl launch` remain a fallback if the script/MCP is unavailable.
+2. Navigate to each required screen (Feed, Compose, Lists, Profile, Settings). Options, in order of preference:
+   - **XcodeBuildMCP UI automation** — `describe_ui`/`snapshot_ui` to find elements, then `tap`/`swipe`/`type_text` to drive the app. Every interactive element carries `.accessibilityLabel` per project convention — use those as lookup hooks.
+   - **Deep links** for screens that support them: `xcrun simctl openurl <UDID> "interlinedlist://<path>"`.
+3. Capture the raster screenshot at the right moment — XcodeBuildMCP `screenshot`, or:
    ```bash
    xcrun simctl io <UDID> screenshot /path/to/output/<screen>-<size-class>.png
    ```

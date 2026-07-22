@@ -36,7 +36,7 @@ Flag broken contracts:
 
 ### I — Interface Segregation
 Flag fat dependencies:
-- A `View` that receives a full service (`APIClient`, `AuthState`) but only uses one method — suggest passing a closure or narrow protocol instead
+- A `View` that receives a full service (`APIClient`, `AuthState`, `AppDataStore`) but only uses one method/property — suggest passing a closure or narrow protocol instead
 - A protocol with 5+ requirements where conformers only need 1-2 — suggest splitting
 
 ### D — Dependency Inversion
