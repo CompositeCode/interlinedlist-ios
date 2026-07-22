@@ -504,15 +504,6 @@ struct ListDetailView: View {
                         }
                     }
                     Section {
-                        Button {
-                            showAddItem = true
-                        } label: {
-                            Label("Add Item", systemImage: "plus")
-                        }
-                        .disabled(schema.isEmpty)
-                        .accessibilityLabel("Add item to list")
-                    }
-                    Section {
                         if connections.isEmpty {
                             Text("No connections yet")
                                 .foregroundStyle(.secondary)
@@ -556,6 +547,15 @@ struct ListDetailView: View {
         .navigationTitle(list.name)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showAddItem = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .disabled(schema.isEmpty)
+                .accessibilityLabel("Add item to list")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showWatchers = true
