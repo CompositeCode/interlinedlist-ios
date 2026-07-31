@@ -1,104 +1,195 @@
 # The Gaps — InterlinedList iOS ↔ interlinedlist.com
 
-Single source of truth for **(a)** the iOS↔web feature/parity gaps the iOS team
-owns, and **(b)** the backend/API work the `interlinedlist.com` team owns to
-unblock mobile. Merged from the two former gap docs — the backend-asks audit and
-the iOS work list — now consolidated here.
+Single source of truth for the iOS↔web feature/parity gaps and the plan to close
+them. **This is a full rewrite (2026-07-31)** — the landscape changed materially
+since the 2026-07-18/22 assessment (see [What changed](#what-changed-since-2026-07-22)).
 
-**Prepared:** 2026-07-18 (live read-only API probes)
-**Merged & updated:** 2026-07-22
+**Prepared:** 2026-07-31
+**Method (this pass):** cross-checked four sources, with the backend source as ground truth:
+1. **The backend source** at `~/Codez/interlinedlist/app/api/**` (Next.js route
+   handlers — the authoritative contract). Auth model read directly from each
+   route's helper: `getCurrentUserOrSyncToken` = **Bearer OR session** (mobile-OK);
+   `getCurrentUser` (no sync-token) = **session-only**. Subscriber gates read from
+   `isSubscriber(...)` / `forbidden("Subscribe to …")` calls.
+2. **The live docs** at `https://interlinedlist.com/help/api/*` (all 21 pages,
+   read 2026-07-31).
+3. **The shipped iOS client** — `APIClient.swift` (78 endpoint methods) + the 41
+   Views / 12 Models.
+4. **Live read-only Bearer probes** (2026-07-31) with the `messenger` test account
+   (`.env`, a **subscriber**): a `POST /api/auth/sync-token` login + GETs only, no
+   mutations. Confirmed the source findings against production — see
+   [Live evidence](#live-verification-evidence-2026-07-31). **Caveat:** `messenger`
+   is a subscriber, so the **free-user gating path** (what a non-subscriber sees for
+   list/doc create, media compose) is still the one thing not observable — that
+   read comes from source only.
 
-**Sources:**
-1. The shipped iOS client's `APIClient.swift` — a production HTTP client that
-   actually calls these endpoints.
-2. The public docs at `https://interlinedlist.com/help/api/*` (all detail pages
-   read verbatim 2026-07-18; targeted re-read 2026-07-22 for lists).
-3. **Live read-only probes** against production (2026-07-18) using the
-   `messenger@interlinedlist.com` test account (a **subscriber**). Probes were
-   GETs, `OPTIONS` (for `Allow`-header verb detection), and the login POST only —
-   **no data was mutated.**
-
-**Owner/status legend:**
-**[BACKEND]** the API blocks the mobile client (Bearer rejected) ·
-**[DOC]** docs are wrong/incomplete · **[iOS]** the client is wrong (we fix it) ·
-**[VERIFY]** still needs a write-test or a non-subscriber account.
-Status: **OPEN** · **RESOLVED** · **BLOCKED** (needs a backend change first).
-
-> Scope note: this is the **iOS** app. The web site lists an "iOS App (Coming
-> Soon)" and a separate "macOS App (Coming Soon)"; no native macOS target exists
-> in this repo.
+**Legend:** ✅ at parity · ◑ partial · ❌ missing · 🔴 broken · — n/a ·
+🟢 backend Bearer-ready (buildable now) · ⛔ backend-blocked (session-only) ·
+💲 subscriber-gated write (hide for free users, never paywall)
 
 ---
 
-## Part I — The one systemic finding
+## ▶ THE GAP LIST (prioritized)
 
-**Several whole feature areas reject Bearer tokens and only accept a session
-cookie.** The iOS app is **Bearer-only** (it has no cookie jar), so these
-features are simply unreachable from mobile. Confirmed live (401 with a valid
-Bearer) and/or stated in the API's own docs:
+Every open gap, most-actionable first. IDs are used throughout the plan below.
 
-| Area | Endpoint(s) | Bearer? | Consequence for iOS |
+### Tier 0 — Defects in already-shipped features (fix now; one `APIClient` PR)
+
+| ID | Gap | Root cause (source-verified) | Effort |
+|----|-----|------------------------------|--------|
+| **D1** 🔴 | Edit profile / settings / default-visibility silently fail | `updateProfile`/`updateUserSettings` send **POST** `/api/user/update`; route exports **only `PATCH`** → 405 | XS |
+| **D2** 🔴 | Editing a posted message fails | `editMessage` sends **PUT** `/api/messages/:id`; route exports **`PATCH`** (GET/PATCH/DELETE, no PUT) → 405 | XS |
+| **D3** 🔴 | Marking one notification read fails | `markNotificationRead` sends **PUT** `/api/notifications/:id/read`; route exports **only `PATCH`** → 405 | XS |
+
+### Tier 1 — New / unblocked features, Bearer-ready, high value
+
+| ID | Gap | Backend status | Effort |
+|----|-----|----------------|--------|
+| **G1** ❌ | **Direct Messages** (1:1 DMs, threads, image attach, unread badge, near-realtime) | 🟢 `/api/dm/*` (10 routes), **free** | **L** |
+| **G2** ❌ | **Sharing** — tokenized share-links + document collaborators for lists & docs | 🟢 `/api/{lists,documents}/:id/share-links`, `/collaborators` · 💲 create | **M** |
+| **G3** ❌ | **Document templates** — "Start from template" | 🟢 `/api/documents/templates` (free read) · 💲 `from-template` | **S** |
+| **G4** ❌ | **GitHub integration** — GitHub-backed lists + issues (biggest single web feature iOS lacks) | 🟢 `/api/github/*` (**now Bearer** — was blocked) | **L** |
+| **G5** ◑ | **LinkedIn posting-target picker** in the composer | 🟢 `/api/linkedin/{targets,posting-targets}` (**now Bearer** — was blocked) | **S** |
+| **G6** ◑ | **People search / discovery** — find & open other users | 🟢 `/api/users/search`, `/api/users/lookup` | **S** |
+| **G7** ◑ | **Muted-users management UI** (API wired, no screen) | 🟢 `/api/user/mutes` (already called) | **XS** |
+| **G8** ✅◑ | **CSV Exports** — was dead (D4), backend now accepts Bearer → **verify it works** | 🟢 `/api/exports/*` (**now Bearer**) | **XS** |
+
+### Tier 2 — Larger systems / lower urgency
+
+| ID | Gap | Backend status | Effort |
+|----|-----|----------------|--------|
+| **G9** ❌ | **Offline document sync** (delta sync + full tree) | 🟢 `/api/documents/sync`, `/api/documents/tree` | **L** |
+| **G10** ◑ | **Content deep links / Universal Links** (profiles, lists, docs, threads) | 🟢 client-side; ⛔ AASA needs a backend/hosting change | **M** |
+| **G11** ❌ | **Live document presence** (collaborative cursors) | 🟢 `/api/documents/:id/presence` (heartbeat+poll) | **M** |
+| **G12** ❌ | **Active-sessions management** (list & revoke logins) | 🟢 `/api/user/sessions`, `/api/user/sessions/:id` | **S** |
+
+### Backend-blocked or non-existent — document, do NOT build
+
+| ID | Item | Why it's not an iOS build |
+|----|------|---------------------------|
+| **X1** ⛔ | **Multi-account switching** | `/api/auth/{accounts,switch,remove-account}` are **session-cookie-only** (confirmed in source); the Bearer-only client has no cookie jar. Escalate if wanted. |
+| **X2** — | **Tag discovery / trending** | **No such endpoint exists in the backend** (no `/api/tags*`, no trending route). Not a gap — a non-feature. In-body `#hashtag` → existing `tag:` filter is the only viable slice. |
+| **X3** — | **General realtime channel** | No SSE/WebSocket endpoint exists. "Realtime" is achieved by **polling**: DM `/updates` and doc `/presence`. Adopt those per-feature (G1/G11); there is nothing global to build. |
+
+### Out of scope — web-only by design (must never ship on iOS)
+
+Billing/Stripe (App Store Guideline 3.1.1 — no price/upgrade/pay copy or links) ·
+dashboard & front-wall layout persistence · engagement stats · web widgets
+(bike-share/markets/news) · admin console · `materialize` / `architecture-aggregates`
+(internal) · **X4 — Generative AI BYO-keys** (OpenAI/Anthropic/Gemini keys stored
+via `PATCH /api/user/update`, consumed only by the web integrations page /
+`architecture-aggregates`; **no iOS-side consumer**, so defer). These are correct
+absences, not gaps.
+
+---
+
+## Progress log (execution)
+
+Live implementation status — updated as work lands on `dev` (uncommitted unless noted).
+
+| Phase | Items | Status |
+|---|---|---|
+| **1 — correctness + quick wins** | **D1/D2/D3** verb fixes (POST/PUT→PATCH, +tests) · **G7** Muted-users screen (`MutedUsersView`, linked from Settings) · **G8** exports un-hidden + `list-data-rows` 4th type | ✅ **Done** 2026-07-31 — build green, 68 affected tests pass; also fixed 3 pre-existing stale doc-image/`folderId` tests to match backend (`file`, `folderId`) |
+| **2 — Direct Messages (G1)** | `DirectMessage` models + 11 `APIClient` methods + `AppDataStore.dmUnreadCount` + envelope-badge in `MainTabView` + `MessagesInboxView` + `DMThreadView` (near-realtime `/updates` poll, image attach, block/not-mutual states) + profile "Message" button | ✅ **Done** 2026-07-31 — build green; 32 DM tests pass; ios-review fixed a duplicate-`navigationDestination` bug |
+| **3 — small additions** | **G3** document templates ("Start from template", subscriber-gated, `documentTemplates()` + `createDocumentFromTemplate`) · **G6** people search (`searchUsers` + `FindPeopleView`, linked from Profile › Social) | ✅ **Done** 2026-07-31 — build green; template + search + model tests pass |
+| **4 — LinkedIn target picker (G5)** | Rewrote `LinkedInTarget` to the real union `{kind,pageId?,personalPageId?}` (dropped wrong `organizationId`); `LinkedInPostingTarget` + `linkedInPostingTargets()`; multi-select in `ComposeView` (subscriber + LinkedIn identity) mapping into `linkedInTargets` on post, personal-fallback on fetch failure | ✅ **Done** 2026-07-31 — build green; 18 new tests pass |
+| **5 — Sharing (G2)** | `ShareLink` + reusable `ShareLinksSheet` (create/copy/revoke, roles) for lists & documents; `DocumentCollaborator` + `DocumentCollaboratorsView` (reused `WatcherRole`); 8 `APIClient` methods wired into list + document detail | ✅ **Done** 2026-07-31 — build green; 26 sharing tests + full suite (604) pass, no regressions |
+| **6 — GitHub-backed lists (G4)** | `UserList`+`source`/`githubRepo`/`githubMeta`; `GitHubRepo`/`GitHubIssue`; `githubRepos()`/`githubIssues()`/`refreshList()`/`createList(githubSource:)`; repo picker in `CreateListView` (gated on `AuthState.hasGitHubIdentity` + subscriber) + Refresh/meta on list detail | ✅ **Done** 2026-07-31 — build green; 50 tests pass. Residual: in-app GitHub *linking* still blocked (backend ask **A1**), so path verified via unit tests, not live |
+| **7 — Active sessions (G12)** | `UserSession` + `userSessions()`/`revokeSession()`; `SessionsView` ("Where you're signed in") in Settings | ✅ **Done** 2026-07-31 — build green; 9 tests pass |
+| — | **G9 offline sync** *(Large — needs design decision)* · **G10 deep/universal links** *(needs backend AASA — ask A2)* · **G11 presence** *(optional)* | ⏸ checkpoint w/ user |
+
+**Whole-tree gate (2026-07-31, after Phase 7):** full unit suite **622 tests, 0 failures**
+(E2E excluded). All 7 phases build and pass together on `dev` (uncommitted).
+
+**Shipped this session (parity closed):** defects **D1/D2/D3** · **G1** Direct
+Messages · **G2** Sharing · **G3** Templates · **G4** GitHub-backed lists · **G5**
+LinkedIn target picker · **G6** People search · **G7** Muted-users UI · **G8**
+Exports (verified live) · **G12** Active sessions. **Remaining:** G9 (needs design),
+G10 (needs backend AASA), G11 (optional), + backend asks **A1** (GitHub mobile
+linking) and **A2** (Universal-Links AASA).
+
+**Note on sequencing:** `APIClient.swift` (one 69 KB class) is the shared bottleneck —
+every remaining feature appends methods to it, so feature agents are **serialized**
+(one cohesive feature per agent, build verified between each) rather than run in
+parallel, to avoid clobbering that file.
+
+---
+
+## What changed since 2026-07-22
+
+The prior doc's headline finding — *"exports, GitHub, and LinkedIn reject Bearer,
+so they're unreachable from mobile"* — is **fully resolved**. The backend team
+shipped the old "Prompt A." Source-verified today: every one of those areas now
+authenticates through `getCurrentUserOrSyncToken` (Bearer or session).
+
+| Old item | Then | Now (source-verified 2026-07-31) |
+|----------|------|-----------------------------------|
+| D4 / F1 — CSV exports reject Bearer | 🔴 dead | ✅ **Bearer accepted** — all 4 `/api/exports/*` use `getCurrentUserOrSyncToken`. iOS already sends Bearer → **should work**; just verify (G8). |
+| §2.1 / F3 — GitHub rejects Bearer | ⛔ blocked | 🟢 **Bearer accepted** — `getGitHubIssuesContext` resolves the user via `getCurrentUserOrSyncToken`. Now buildable (G4). |
+| §2.3 / F2 — LinkedIn targets reject Bearer | ⛔ blocked | 🟢 **Bearer accepted** — `/api/linkedin/{targets,posting-targets,sync-pages}`. Now buildable (G5). |
+| D5 / F12 — push field `token` vs `deviceToken` | ⚠️ verify | ✅ **Non-issue** — docs + handler use `token`; iOS already sends `token`. Closed. |
+| F5 — no Moderation docs | ❌ missing | ✅ `/help/api/moderation` now exists; endpoints Bearer-accepted; iOS already ships block/mute/report. At parity. |
+| §2.9 — weather/geo as list column types? | ❓ | ✅ **No** — `/api/weather`, `/api/location`, `/api/widgets/*` are backend data helpers, not list column types. Not a lists gap. |
+| F13 — is document create subscriber-only? | ⚠️ verify | ✅ **Confirmed subscriber-only** — `POST /api/documents` → `forbidden("Subscribe to create documents.")`. Hide create for free users (💲). |
+| §2.6 — do multi-account routes take Bearer? | ❓ | ⛔ **No** — session-only (X1). Reclassified from "investigate" to backend-blocked. |
+| §2.2 — probe for a trending endpoint | ❓ | — **None exists** (X2). Reclassified to non-feature. |
+
+And three genuinely **new** feature areas shipped on the backend since the last
+pass, all Bearer-ready: **Direct Messages** (G1), **Sharing/share-links** (G2),
+and **document collaborators / templates / sync / presence** (G2/G3/G9/G11).
+
+**Net:** the parity story flipped from *"blocked on the backend"* to *"a stack of
+self-contained iOS builds we can do today."* Three tiny verb fixes are the only
+regressions left in shipped code.
+
+---
+
+## Live-verification evidence (2026-07-31)
+
+Read-only Bearer probes with `messenger` (subscriber) against production. Every
+new/unblocked area returned exactly what the source predicted — a **401 would mean
+Bearer rejected**; none did.
+
+| Gap | Endpoint (GET) | Live result | Reading |
 |---|---|---|---|
-| CSV Exports | `GET /api/exports/*` | ❌ 401 (confirmed live) | Export feature is **dead** in the shipped app (D4/F1) |
-| GitHub | `GET/POST/PATCH /api/github/*` | ❌ (docs: "not accepted") | GitHub-backed lists & issues **cannot be built** for iOS (§2.1/F3) |
-| LinkedIn targets | `GET/PUT /api/linkedin/posting-targets` | ❌ 401 (confirmed live) | LinkedIn org/target picker **cannot be built** for iOS (§2.3/F2) |
+| **G8** | `/api/exports/{messages,lists,list-data-rows,follows}` | **200** — real CSV rows | Exports **work over Bearer** (old D4 blocker gone) |
+| **G1** | `/api/dm` · `/api/dm/unread-count` · `/api/dm/recipients` | **200** `{items:[]}` · `{count:0}` · `{recipients:[…]}` | DMs live; `/recipients` returns the mutual-follow set |
+| **G1** | `/api/dm/thread/adron` | **200** `{items:[], olderCursor, isMutual:true, isBlocked:false, otherUser:{…}}` | Exact thread shape confirmed |
+| **G3** | `/api/documents/templates` | **200** `{folderCreated, templatesFolderId, templates:[…]}` | Real templates returned |
+| **G9** | `/api/documents/sync` | **200** `{folders, documents, lastSyncAt}`; folder rows carry `deletedAt` | Real delta-sync contract (`lastSyncAt` cursor + tombstones) |
+| **G9** | `/api/documents/tree` | **200** nested `{folders:[{…, documents:[…]}]}` | One-call hierarchy |
+| **G5** | `/api/linkedin/{posting-targets,targets}` | **200** `{targets:[{kind:"personal", label, avatarUrl, …}]}` | LinkedIn targets **work over Bearer** (old F2 blocker gone) |
+| **G4** | `/api/github/repos` | **400** `"GitHub account not linked"` (NOT 401) | Bearer **auth passes**; only identity-linking remains (ask A1) |
+| **G6** | `/api/users/search?q=…` | **200** `{users:[…]}` | People search works (note: `/users/lookup` wants a different param than `username=`) |
+| **G12** | `/api/user/sessions` | **200** `{sessions:[{deviceLabel:"CLI", isCurrent, lastUsedAt, …}]}` | Session list/revoke live |
+| **G2** | `/api/lists/:id/share-links` · `/api/documents/:id/{share-links,collaborators}` | **200** `{shareLinks:[]}` · `{collaborators:[], pagination}` | Owner reads work over Bearer |
 
-**The single highest-value thing the backend can do for mobile parity is add
-Bearer-token support to these endpoints** (see Prompt A). Everything else is
-smaller.
+**Two things surfaced by the live `GET /api/user` that the source scan hadn't:**
+- **`githubDefaultRepo`** — a user setting (validated `owner/repo`) for the default
+  repo of GitHub-backed lists. Belongs with **G4**; expose it in the GitHub-list UI.
+- **`hasOpenaiApiKey` / `hasAnthropicApiKey` / `hasGeminiApiKey`** — a **"Generative
+  AI" BYO-key** feature (web `Settings › GenerativeAISection`, keys set via
+  `PATCH /api/user/update`). The keys are consumed **only** by the web
+  `integrations` page and the internal `architecture-aggregates` tooling — there is
+  **no generative endpoint in the core app**. So it's a **web-only integrations
+  feature with no iOS-side consumer** → **out of scope** (X4), not a parity gap. iOS
+  could add key-entry fields cheaply once the D1 `PATCH /api/user/update` fix lands,
+  but nothing on iOS would use them, so defer.
 
 ---
 
-## Part II — iOS work (what we build / fix)
-
-### II.0 — Confirmed defects to fix first (found via live probe)
-
-Each is a **client bug** (or a backend-auth blocker) in already-shipped
-functionality. Backend-side detail is in Part III (F-items). **Status column
-re-verified against `APIClient.swift` on 2026-07-22 — all still OPEN.**
-
-| # | Symptom | Root cause | Fix | Status |
-|---|---|---|---|---|
-| D1 (↔F8) | Editing profile / theme / default-visibility / avatar-from-URL silently fails | `POST /api/user/update`; server allows **only `PATCH`** (405), and expects camelCase | Switch the three `/api/user/update` calls to `patchCamel` | **OPEN** — still `post` (`APIClient.swift:229,789,804`) |
-| D2 (↔F9) | Editing a posted message fails | `editMessage` uses `PUT /api/messages/:id`; server allows **`PATCH`, not `PUT`** (405) | Switch `editMessage` to `patchCamel` (`{content, publiclyVisible}`) | **OPEN** — still `put` (`APIClient.swift:358`) |
-| D3 (↔F10) | Marking a notification read fails | `markNotificationRead` uses `PUT /api/notifications/:id/read`; server allows **only `PATCH`** (405) | Switch to a `PATCH` request (empty body) | **OPEN** — still `put` (`APIClient.swift:726`) |
-| D4 (↔F1/F11) | CSV export always fails | `exportCSV` sends Bearer; `/api/exports/*` is **session-cookie-only** (401) | Backend-blocked (Prompt A). Until then, hide the Export UI | **OPEN/BLOCKED** — still Bearer (`APIClient.swift:831`) |
-| D5 (↔F12) | Push may never arrive | `registerPushDevice` sends body `{token}`; docs specify `{deviceToken}` | Confirm handler field; likely rename `token` → `deviceToken` | **OPEN/VERIFY** — sends `token` (`APIClient.swift:1167–1170`) |
-
-**Prompt for Claude — fix D1/D2/D3 (verb + casing):**
-> In `InterlinedList/Services/APIClient.swift`, three writes use the wrong HTTP
-> method (confirmed against production via `OPTIONS` Allow headers):
-> 1. `updateProfile`, `updateUserSettings`, and `applyAvatarUrl` all call
->    `post("/api/user/update", …)`. The server allows **only `PATCH`** and expects
->    a **camelCase** body. Change them to `patchCamel`. Keep the `{user?}`-unwrap.
-> 2. `editMessage` calls `put("/api/messages/:id", …)`; the server allows `PATCH`
->    not `PUT`. Change it to `patchCamel` with `{ content, publiclyVisible }`.
-> 3. `markNotificationRead` calls `put("/api/notifications/:id/read", …)`; the
->    server allows only `PATCH`. Change it to a `PATCH` request (empty body).
-> Update the `MockURLSession` unit tests to assert `PATCH` and the camelCase body
-> keys. Do NOT change `patchScheduledMessage` (already correct). Then smoke-test
-> in the simulator: edit profile, edit a message, mark a notification read.
-
-**Prompt for Claude — D4 (exports) + D5 (push):**
-> 1. Exports: `exportCSV` sends a Bearer token, but `/api/exports/*` rejects Bearer
->    (401, confirmed live) — session-cookie-only. Until the backend adds Bearer
->    support (Prompt A / F1), **hide the Export entry point** and leave a
->    `// TODO: re-enable when /api/exports accepts Bearer` note.
-> 2. Push: `registerPushDevice`/`unregisterPushDevice` send `{ token }`; the docs
->    specify `{ deviceToken }`. Confirm the handler field (ask backend or
->    write-test), rename the client field to `deviceToken` if needed, and add a
->    unit test asserting the body key. This is a silent-failure path — prioritize.
-
-### II.1 — Conventions every iOS prompt assumes (from `CLAUDE.md`)
+## Part I — Conventions every iOS prompt assumes (from `CLAUDE.md`)
 
 - **Encoders:** `get` / `postCamel` / `putCamel` / `patchCamel` for camelCase
   bodies (most endpoints); `post`/`put`/`patch` for snake_case. Check the existing
   method before adding one — mismatches fail **silently** server-side.
 - **401 contract:** never log out on a feature-endpoint 401; route through
   `authState.handleUnauthorized()` (re-validates against `GET /api/user`).
-- **Subscriber gating = hide, never disable/paywall.** Gate on
+- **Subscriber gating = HIDE, never disable/paywall.** Gate on
   `authState.user?.isSubscriber == true`. **No** billing/upgrade/price copy and
-  **no** link to interlinedlist.com to pay (App Store Guideline 3.1.1).
+  **no** link to interlinedlist.com to pay (Guideline 3.1.1). When a write 💲-gate
+  fires anyway (403 `"Subscribe to …"`), fail gracefully — don't surface the raw
+  server string as a paywall.
 - **Standards:** no comments unless the "why" is non-obvious; no force-unwrap;
   `@MainActor` over `DispatchQueue.main.async`; `.accessibilityLabel` on every
   control; a `#Preview` in every View file.
@@ -106,456 +197,389 @@ re-verified against `APIClient.swift` on 2026-07-22 — all still OPEN.**
   the `xcodeproj` Ruby gem.
 - **Tests:** add `MockURLSession` unit tests for every new/changed `APIClient`
   method (assert method, path, encoder casing, decode of happy + error paths).
+- **Public-browse namespace split is real and load-bearing** — do NOT normalize:
+  messages are `/api/user/:username/messages` (singular `user`); lists & documents
+  are `/api/users/:username/…` (plural). The wrong one 404s.
 
-### II.2 — Parity matrix
+---
 
-Legend: ✅ at parity · ◑ partial · ❌ missing · 🔴 broken · — n/a
+## Part II — Confirmed 💲 subscriber-gated writes (gating map)
+
+Same backend for web and iOS, so these aren't parity *gaps* — but every new/edited
+iOS write below must respect them (hide the affordance for non-subscribers). Read
+directly from source:
+
+| Write | Gate |
+|-------|------|
+| `POST /api/messages` (plain text) | **Free** ✅ |
+| `POST /api/messages` **with images / video / cross-post / schedule** | 💲 `"Subscribe to unlock images, video, cross-posting, and scheduled posts."` |
+| `POST /api/lists` (create list) | 💲 `"Subscribe to create lists."` |
+| `POST /api/documents` (create doc) | 💲 `"Subscribe to create documents."` |
+| `POST /api/documents/from-template`, `…/templates/seed-defaults` | 💲 |
+| `POST /api/{lists,documents}/:id/share-links` (create link) | 💲 |
+| `POST/PUT /api/documents/:id/collaborators*`, `POST/PUT /api/lists/:id/watchers*` | 💲 |
+| `POST /api/organizations` (create org) | 💲 |
+| Revoke share-link (`DELETE …/share-links/:token`), DM send, templates read | **Free** ✅ |
+
+> **Action item (gating audit):** verify the shipped composer already hides
+> image/video/cross-post/schedule affordances for non-subscribers, and that
+> `CreateListView` / document-create are hidden for free users. If not, that's a
+> Guideline 3.1.1 risk to fix alongside Tier 0.
+
+---
+
+## Part III — Parity matrix (current)
 
 | Web capability | iOS | Notes |
 |---|---|---|
-| Email/password + OAuth (Mastodon, Bluesky, LinkedIn, Twitter) | ✅ | GitHub sign-in intentionally hidden |
-| Feed, link previews, dig, reply, delete, search | ✅ | |
-| **Edit a posted message** | 🔴 | D2 — uses unsupported `PUT` (405) |
-| Compose: image/video, scheduled, cross-post, repost, post-as-org | ✅ | multi-image (≤8) + drag-reorder + normalization shipped; post-as-org = Phase 15 |
-| **Edit profile / settings / avatar-from-URL** | 🔴 | D1 — uses unsupported `POST` (405) |
-| **Mark notification read** | 🔴 | D3 — uses unsupported `PUT` (405) |
-| Lists: CRUD, folders, schema editor, rows, connections, watchers | ✅ | create-list schema contract fixed 2026-07-22 (F15) |
-| Documents: CRUD, folders, search, inline images, public reader | ✅ | inline images = Phase 10; free-user create gate unverified (§2.9/F13) |
-| Follow graph, organizations, notifications (tray/prefs), moderation, push | ✅ | push field name unverified (D5) |
-| **CSV exports** | 🔴 | D4 — `/api/exports/*` rejects Bearer (session-only) |
-| **GitHub-backed lists / GitHub issues** | ❌ | §2.1 — backend-blocked (Bearer rejected, confirmed) |
-| **Tag discovery / trending** | ◑ | §2.2 — can filter by tag; no discovery UI; endpoint unconfirmed |
-| **LinkedIn org/target picker** | ◑ | §2.3 — backend-blocked (targets are session-only, confirmed) |
-| **Document templates** | ❌ | §2.4 — endpoint confirmed live over Bearer; ready to build |
-| **Content deep links / universal links** | ❌ | §2.5 — only auth callbacks routed |
-| **Multi-account switching** | ❌ | §2.6 — web has `/api/auth/accounts`,`/switch`,`/remove-account`; iOS single-account |
-| **Realtime updates** | ❌ | §2.7 — no realtime endpoint found; poll/refresh only |
-| **Offline document sync** | ❌ | §2.8 — `/api/documents/sync` exists & is Bearer-accessible (confirmed); buildable |
-| Utility widgets (weather/geolocation) | ❓ | §2.9 — confirm if user-facing list column types |
-| Admin console | — | not an app feature |
-| Subscription/billing UI | — | web-only by design; must never appear on iOS |
+| Email/password + OAuth (Mastodon, Bluesky, LinkedIn, X) | ✅ | GitHub sign-in still hidden (see G4) |
+| Feed: previews, dig, reply, delete, search, scheduled, cross-post, post-as-org | ✅ | |
+| **Edit a posted message** | 🔴 | **D2** — client sends unsupported `PUT` |
+| **Edit profile / settings** | 🔴 | **D1** — client sends unsupported `POST` |
+| **Mark one notification read** | 🔴 | **D3** — client sends unsupported `PUT` |
+| Lists: CRUD, folders, schema DSL, rows, connections, watchers | ✅ | list create is 💲 |
+| Documents: CRUD, folders, search, inline images, public reader | ✅ | doc create is 💲 (confirmed) |
+| **Document templates** | ❌ | **G3** — Bearer-ready |
+| **Document collaborators / share-links** | ❌ | **G2** — iOS has list *watchers* only |
+| **List / document tokenized share-links** | ❌ | **G2** |
+| Follow graph, orgs, notifications, moderation (block/mute/report), push | ✅ | mute has no list UI (**G7**) |
+| **CSV exports** | ◑ | **G8** — wired; was dead (Bearer), now unblocked — verify |
+| **Direct Messages** | ❌ | **G1** — entirely absent |
+| **People search / discovery** | ◑ | **G6** — only list-scoped user search exists |
+| **GitHub-backed lists / issues** | ❌ | **G4** — now Bearer-ready |
+| **LinkedIn org/target picker** | ◑ | **G5** — `linkedInTargets` posts; can't fetch targets yet |
+| **Offline document sync** | ❌ | **G9** |
+| **Content deep / universal links** | ◑ | **G10** — only auth callbacks routed today |
+| **Live doc presence (cursors)** | ❌ | **G11** |
+| **Active-sessions management** | ❌ | **G12** |
+| Multi-account switching | ⛔ | **X1** — session-only backend |
+| Tag discovery / trending | — | **X2** — no backend endpoint |
+| Realtime channel (SSE/WS) | — | **X3** — none; polling only |
+| Billing, layouts, engagement, widgets, admin | — | web-only by design |
 
-### II.3 — The gaps, prioritized
+---
 
-#### Tier A — Ready to build now (backend confirmed working over Bearer)
+## Part IV — Implementation plan
 
-**§2.4 Document templates** `Small` ✅ backend-ready.
-Confirmed live: `GET /api/documents/templates` → `{ folderCreated,
-templatesFolderId, templates:[{id,title,…}] }` over Bearer (200). Web also has
-`POST /api/documents/from-template` (subscriber-only) and
-`POST /api/documents/templates/seed-defaults`. iOS status: ❌ new docs start blank.
-> Add `APIClient.documentTemplates()` returning `[DocumentTemplate]` (inspect the
-> live response for exact keys). In the create-document flow in `DocumentsView`,
-> add an optional "Start from template" picker that prefills title/content. If you
-> wire `POST /api/documents/from-template`, gate on `isSubscriber` and hide
-> otherwise. Add `MockURLSession` tests and a `#Preview`.
+Ordered to match the gap list. Each item lists the **endpoints + auth + gating**,
+the **models / `APIClient` methods** to add, the **UI**, and a **ready-to-paste
+prompt**. All new `APIClient` methods use `Bearer` and the camelCase helpers unless
+noted, and every one needs `MockURLSession` tests + a `#Preview`.
 
-**§2.5 Content deep links / universal links** `Small–Medium`.
-`InterlinedListApp.handleDeepLink` only routes `reset-password`, `verify-email`,
-`verify-email-change`, `oauth`. No content permalinks, no Universal Links.
-> Extend `AppRouter` + `InterlinedListApp.handleDeepLink` to route content
-> permalinks: user profiles, public lists
-> (`/api/users/:username/lists/:id` → `PublicListDetailView`), public documents,
-> single message threads. Support both `interlinedlist://…` and
-> `https://interlinedlist.com/…` via `.onOpenURL`. Mind the confirmed
-> public-browse namespace split: messages are `/api/user/:username/messages`
-> (singular) while lists/documents are `/api/users/:username/…` (plural) — the
-> wrong one 404s. Universal Links also need the backend to publish
-> `apple-app-site-association` + the Associated Domains entitlement (**record that
-> dependency in this doc, Part III**); the custom-scheme path works without it.
-> Add a share action (web permalink) on message/list/profile.
+### Tier 0 — Defect fixes (do first)
 
-**§2.8 Offline document sync** `Large` ✅ backend-ready (contract exists).
-Confirmed live: `GET /api/documents/sync` → `{ folders:[…], … }` over Bearer
-(200) — the same delta-sync contract the web's `il-sync` CLI uses.
-> Inspect the full `GET`/`POST /api/documents/sync` contracts against production
-> (revision/`updatedAt` fields, delta vs full-body, conflict signals) and record
-> in this doc (Part III). Then design (and land a minimal slice of) offline doc
-> editing: cache edits in `DataCache`, replay via the sync endpoint on reconnect,
-> resolve conflicts last-writer-wins or with a simple prompt. Feature-flag it.
-> Ship the read-then-queue slice first, then two-way sync.
+All three are verb mismatches confirmed against the route handlers today
+(`/api/user/update` → PATCH-only; `/api/messages/:id` → GET/PATCH/DELETE, no PUT;
+`/api/notifications/:id/read` → PATCH-only).
 
-#### Tier B — Backend-blocked (endpoints reject Bearer; need a backend change first)
+> **Prompt — fix D1/D2/D3 (one PR):**
+> In `InterlinedList/Services/APIClient.swift`:
+> 1. `updateProfile` and `updateUserSettings` call `post("/api/user/update", …)`.
+>    The route exports **only `PATCH`** and expects a **camelCase** body. Switch
+>    both to `patchCamel`. Keep the `{user?}`-unwrap.
+> 2. `editMessage` calls `put("/api/messages/:id", …)`; the route has no `PUT`
+>    (GET/PATCH/DELETE only). Switch to `patchCamel` with `{ content,
+>    publiclyVisible }`.
+> 3. `markNotificationRead` calls `put("/api/notifications/:id/read", …)`; route is
+>    `PATCH`-only. Switch to a `PATCH` (empty body).
+> Update `MockURLSession` tests to assert `PATCH` + camelCase keys. Do NOT touch
+> `patchScheduledMessage` (already correct) or `updateNotificationPreference`
+> (already `PATCH`). Smoke-test in the sim: edit profile, edit a message, mark one
+> notification read.
 
-**§2.1 GitHub-backed lists & GitHub integration** `Large` ⛔ BACKEND (confirmed).
-Web lists are "local or **GitHub-backed**"; `/api/github/*` covers repos, issues,
-labels, assignees. Confirmed blocker: every `/api/github/*` endpoint requires a
-session cookie — "Bearer tokens are not accepted" (F3). Biggest single parity gap.
-> Do NOT build UI yet — backend-blocked. Confirm with the backend owner when
-> `/api/github/*` will accept Bearer (Prompt A / F3). Meanwhile produce an
-> implementation plan only: models + `APIClient` methods for `GET /api/github/repos`
-> and `GET /api/github/issues?repo=owner/repo`, a repo picker in `CreateListView`
-> for GitHub-backed lists, and a read-only issues view. Escalate the Bearer-auth
-> requirement as the gating dependency.
+**Closed (no work):** D4 exports now accept Bearer (→ verify under **G8**); D5 push
+field is `token` and already matches.
 
-**§2.3 LinkedIn org/target picker** `Small` ⛔ BACKEND (confirmed).
-`GET /api/linkedin/posting-targets` → **401 to Bearer** (session-only, per docs +
-live probe). The `linkedInTargets` field on `POST /api/messages` already works; we
-just can't fetch the target list on mobile. Response shape is known:
-`{ targets:[{ kind: personal|orgPage|personalPage, label, pageId|personalPageId,
-linkedInPageId, enabled }], orgScopeMissing }`; posting uses `pageId`/
-`personalPageId` in `linkedInTargets`.
-> Backend-blocked: `/api/linkedin/posting-targets` rejects Bearer. Once the backend
-> adds Bearer support (Prompt A / F2), add `APIClient.linkedInPostingTargets()`
-> returning `[LinkedInTarget]` (map `pageId`/`personalPageId` into the existing
-> `linkedInTargets` field). In `ComposeView`, when the LinkedIn toggle is on and
-> the user is a subscriber, show a target picker + the existing "link as first
-> comment" toggle. Hide for non-subscribers / no LinkedIn identity.
+---
 
-**§2.2 Tag discovery / trending** `Small` ❓ needs discovery.
-"Hashtag organization and discovery" is marketed, but the client only supports a
-`tag` filter (`messages(tag:)`). No trending-tags endpoint is confirmed.
-> Probe for a trending/known-tags endpoint against production with the E2E `.env`
-> token (`GET /api/tags/trending`, `/api/tags`, `/api/messages/tags`). Record the
-> real path/shape in this doc (Part III). If one exists, add
-> `APIClient.trendingTags()`, a model, a "Discover" surface in `FeedView`, and make
-> in-body `#hashtags` tap through to the existing `tag:` feed. If none exists,
-> document as backend-blocked and stop. Tests + `#Preview`.
+### Tier 1
 
-**§2.7 Realtime updates** `Large` ⛔ likely BACKEND.
-No realtime endpoint appears in the docs and none was probed. Poll/refresh only.
-> Discovery only: determine whether production exposes a realtime channel
-> (`/api/stream`, `/api/events`, `/ws`, SSE `text/event-stream`). Record in this
-> doc (Part III). If present, propose a `RealtimeService` (`@MainActor`,
-> reconnect/backoff) layered on the existing cache-then-refresh model. Build
-> nothing until confirmed; feature-flag when built.
+#### G1 — Direct Messages `Large` 🟢 free, top priority
 
-#### Tier C — Smaller / investigate
+The largest single missing surface, fully Bearer-ready and free. Contract
+(`getCurrentUserOrSyncToken` on every route; participants must **mutually follow**
+and neither may block the other):
 
-**§2.6 Multi-account switching** `Small`.
-Web auth docs list `GET /api/auth/accounts`, `POST /api/auth/switch`,
-`POST /api/auth/remove-account` (and `?all=true` logout) — a cached multi-account
-switcher. iOS is single-account.
-> Confirm those three accept Bearer (probe with the E2E token). If so, add an
-> account switcher to `SettingsView`/profile: list cached accounts, switch active
-> account (swap the Keychain token + `AuthState`), remove an account. Gate behind
-> having >1 account. Tests + `#Preview`.
-
-**§2.9 Document creation gate + utility widgets** `Investigate`.
-- **Documents gate:** docs mark `POST /api/documents` **subscriber-only**, but the
-  iOS product direction assumes documents are free. Our probe account is a
-  subscriber, so unverified. Test with a **non-subscriber** account: if creation
-  403s for free users, hide the create-document UI for them; if it succeeds, the
-  docs are wrong (F13).
-- **Utility widgets:** `/help/api/utility-endpoints` exists (weather, geolocation,
-  image-proxy, oauth-metadata). Investigate whether weather/geolocation are
-  user-facing **list column types** on the web; if so, `ListSchemaEditorView` is
-  missing those column types (a real lists-parity gap). Findings only this pass.
-
-### II.4 — Suggested execution order
-
-1. **Defects D1–D5** — broken shipped features. Fix D1/D2/D3 immediately (one
-   `APIClient` PR), confirm D5 (push field), hide the export UI (D4) until the
-   backend unblocks it. Highest priority.
-2. **Backend asks** — file Prompt A with the backend team: Bearer support on
-   `/api/exports/*`, `/api/linkedin/*`, `/api/github/*`. Unblocks D4 + §2.1 + §2.3
-   in one move.
-3. **Ready-now features** — §2.4 (templates), §2.5 (deep links); then §2.8
-   (offline doc sync — contract confirmed Bearer-accessible).
-4. **After Bearer unblock** — §2.1 (GitHub-backed lists, biggest win) and §2.3
-   (LinkedIn target picker).
-5. **Discovery-dependent** — §2.2 (tags), §2.6 (multi-account), §2.7 (realtime),
-   §2.9 (doc gate + utility widgets).
-
-### II.5 — Housekeeping (doc drift, from prior assessment)
-
-Two "deferred" phases actually shipped and should read as done in the tracking
-docs (already reflected in the parity matrix above):
-
-| Phase | Old status | Reality |
+| Method | Path | Purpose |
 |---|---|---|
-| **10 — Inline document image upload** | Tier 1, unchecked | ✅ Done (`uploadDocumentImage`; `DocumentsView.swift`) |
-| **15 — Post as organization** | Tier 1, unchecked | ✅ Done (`postMessage(organizationId:)`; `ComposeView.swift`) |
+| GET | `/api/dm?folder=inbox\|sent\|deleted&cursor=` | List a DM folder (cursor paginated) |
+| POST | `/api/dm` | Send `{ recipientId, body(1–10000), imageUrls[] }` → `{ message }` |
+| GET | `/api/dm/:id` | Fetch one message |
+| POST | `/api/dm/:id/read` | Mark received message read (recipient only) → `{ updated }` |
+| POST | `/api/dm/:id/trash` · `/restore` | Soft-delete / undo (per-side) → `{ ok }` |
+| GET | `/api/dm/recipients` | Users you may DM (mutual-follow set) |
+| GET | `/api/dm/thread/:username` | Full conversation (`items`, `olderCursor`, `isMutual`, `isBlocked`, `otherUser`) |
+| GET | `/api/dm/thread/:username/updates?after=:msgId` | **Incremental poll** — new messages only; auto-marks read |
+| GET | `/api/dm/unread-count` | `{ count }` for a tab badge |
+| POST | `/api/dm/images/upload` | multipart `file` → `{ url }` (verified-email-gated, not 💲) |
 
-> Docs-only follow-up: in `App-Store-Deployment.md`, move Phase 10 and Phase 15
-> into "What's Already Shipped" and add defects D1–D5 to the tracking docs as bugs
-> (they affect already-shipped functionality).
+Error contract to surface gracefully: 400 `self_message`/`invalid_body`, 404
+`recipient_not_found`, 403 `blocked` / `not_mutual`.
 
----
+- **Models:** `DirectMessage`, `DMThread`, `DMFolder`, `DMRecipient`, `DMUnreadCount`.
+- **APIClient:** `directMessages(folder:cursor:)`, `sendDirectMessage(recipientId:body:imageUrls:)`,
+  `dmThread(username:)`, `dmThreadUpdates(username:after:)`, `markDMRead(id:)`,
+  `trashDM(id:)`, `restoreDM(id:)`, `dmRecipients()`, `dmUnreadCount()`,
+  `uploadDMImage(_:)`.
+- **UI:** new `MessagesInboxView` (a fifth tab or a Profile entry), `DMThreadView`
+  (chat bubbles, markdown, image attach), a compose-DM flow seeded from
+  `/recipients` or from a profile's "Message" button. Add a DM unread badge
+  (poll `/unread-count`; refresh on tab focus + `AppDataStore` prefetch). While a
+  thread is open, poll `/updates?after=<lastId>` on a `@MainActor` timer (~3–5 s,
+  backoff when backgrounded) — this is the "near-realtime" story (no WS to build).
+- **Add a "Message" affordance** on `UserProfileView` when `isMutual`.
 
-## Part III — Backend / API team asks
+> **Prompt — Direct Messages (ship in slices):** Slice 1 read-only: models +
+> `dmThread`/`directMessages`/`dmUnreadCount`, an inbox list, a read-only thread,
+> and an unread badge. Slice 2: `sendDirectMessage` + composer + `/updates`
+> polling. Slice 3: image attach (`uploadDMImage`), trash/restore, and the
+> profile "Message" button gated on `isMutual`. Handle the 403 `not_mutual` /
+> `blocked` states with clear empty-state copy, never a crash. Tests for every
+> `APIClient` method; `#Preview` per view.
 
-### III.0 — Findings at a glance (all CONFIRMED unless noted)
+#### G2 — Sharing: share-links + document collaborators `Medium` 🟢 (💲 create)
 
-| # | Owner | Finding | Status | Evidence |
-|---|---|---|---|---|
-| F1 | **BACKEND** | `GET /api/exports/*` rejects Bearer (session-only) | OPEN | Live: 401 w/ valid Bearer + no-auth |
-| F2 | **BACKEND** | `GET/PUT /api/linkedin/posting-targets` rejects Bearer | OPEN | Live: 401; docs say "Auth: Session" |
-| F3 | **BACKEND** | All `/api/github/*` reject Bearer | OPEN | Docs: "Bearer tokens are not accepted" |
-| F4 | **DOC** | Messages page **auth column is unreliable** — `/api/messages/:id/replies` marked "Session" but returns **200 with no auth** | OPEN | Live: 200 Bearer + 200 no-auth |
-| F5 | **DOC** | **No Moderation docs section exists**, but report/block/mute are live | OPEN | Live: `GET /api/user/blocks` & `/mutes` → 200 (Bearer) |
-| F6 | **DOC** | `POST /api/user/organizations` documented as "Create" but client uses it to **join** | OPEN | Client sends `{organizationId}`; docs say "create" |
-| F7 | **DOC** | Document **folder path-scoping** has no warning — root routes silently ignore folders | OPEN | Docs omit the caveat; causes silent data-loss |
-| F8 (↔D1) | **iOS** | Client uses `POST /api/user/update`; server allows **only `PATCH`** → 405 | iOS OPEN | Live OPTIONS `Allow: OPTIONS, PATCH` |
-| F9 (↔D2) | **iOS** | Client uses `PUT /api/messages/:id`; server allows **`PATCH`, not `PUT`** → 405 | iOS OPEN | Live OPTIONS `Allow: …, PATCH` |
-| F10 (↔D3) | **iOS** | Client uses `PUT /api/notifications/:id/read`; server allows **only `PATCH`** → 405 | iOS OPEN | Live OPTIONS `Allow: OPTIONS, PATCH` |
-| F11 (↔D4) | **iOS** | Client sends Bearer to exports (see F1) → export dead | iOS OPEN/BLOCKED | Live 401 |
-| F12 (↔D5) | **VERIFY** | Push body field: docs say **`deviceToken`**, client sends **`token`** → likely silent push failure | OPEN | Not write-tested; verb/path confirmed |
-| F13 | **VERIFY** | `POST /api/documents` documented **Subscriber-only**; iOS assumes documents **free** | OPEN | Subscriber account couldn't observe free path |
-| F14 | **DOC** | `crossPostResults[].platform` can be omitted (crashed a strict decoder) | iOS-patched; doc OPEN | Client made it optional |
-| F15 | **iOS** | `POST /api/lists` sent DSL **string** + read `list` key; server wants a DSL **object** + returns `data` | **RESOLVED 2026-07-22** | `createList` now sends object, decodes `data` (`APIClient.swift:422–427`) |
-| F16 | **DOC** | Docs previously showed `POST /api/lists` `"schema":"string"`; now corrected to object form | **RESOLVED 2026-07-22** | `/help/api/lists`, `/help/api/lists-dsl` now object; response envelope still undocumented (residual) |
+iOS ships per-person **list watchers** but nothing for **document collaborators**
+or **tokenized share-links** on either resource. Roles are uniform:
+`watcher`(Viewer) / `collaborator`(Editor) / `manager`(Admin). Only the **owner**
+may create/list/revoke links.
 
-### III.1 — [BACKEND] Endpoints that reject Bearer and block the mobile client
+| Method | Path | Auth | Gate |
+|---|---|---|---|
+| GET/POST | `/api/lists/:id/share-links` | Bearer | POST 💲 |
+| DELETE | `/api/lists/:id/share-links/:token` | Bearer | free |
+| GET/POST | `/api/documents/:id/share-links` | Bearer | POST 💲 |
+| DELETE | `/api/documents/:id/share-links/:token` | Bearer | free |
+| GET/POST/PUT/DELETE | `/api/documents/:id/collaborators[/:userId]` | Bearer | write 💲 |
+| GET | `/api/documents/:id/collaborators/users` | Bearer | free (candidate search) |
+| GET | `/api/{lists,documents}/shared/:token[/data]` | optional | anon read (resolver) |
 
-**F1 — CSV Exports are session-only (confirmed).**
-```
-GET /api/exports/messages       [Bearer]  -> 401 {"error":"Unauthorized"}
-GET /api/exports/lists          [Bearer]  -> 401
-GET /api/exports/follows        [Bearer]  -> 401
-GET /api/exports/list-data-rows [Bearer]  -> 401
-GET /api/exports/messages       [no auth] -> 401
-```
-Docs correctly state exports don't accept Bearer — so the docs are right and the
-iOS export feature is broken (it sends Bearer and always 401s). To make export
-work on mobile, **add Bearer support to `/api/exports/*`**. (Your docs also list a
-`list-data-rows` export the client doesn't know about — we may add it once auth
-works.)
+- **Models:** `ShareLink { token, role, url, expiresAt, createdAt, revokedAt }`,
+  `DocumentCollaborator`, reuse `WatcherRole`.
+- **APIClient:** `listShareLinks(kind:id:)`, `createShareLink(kind:id:role:expiresAt:)`,
+  `revokeShareLink(kind:id:token:)`; `documentCollaborators(id:)`,
+  `addDocumentCollaborator(id:userId:role:)`, `setDocumentCollaboratorRole(...)`,
+  `removeDocumentCollaborator(...)`, `searchDocumentCollaboratorCandidates(id:q:)`.
+- **UI:** a reusable `ShareSheet` (create link at a role, copy `url`, revoke) hung
+  off list detail and document detail; a `DocumentCollaboratorsView` mirroring
+  `WatchersListView`. Create actions hidden for non-subscribers; revoke stays.
+- **Also handle inbound links** in G10 (`/shared/:token` resolver → read-only
+  view + "Claim" when signed in; claim is **session-only**, so on iOS a claimed
+  Editor/Admin link may need the web — note that limitation in the UI).
 
-**F2 — LinkedIn posting-targets are session-only (confirmed).**
-```
-GET /api/linkedin/posting-targets [Bearer] -> 401
-```
-Docs (`/help/api/linkedin-integration`) confirm "Auth: Session" for
-`/api/linkedin/targets`, `/api/linkedin/posting-targets` (GET+PUT), and
-`/api/linkedin/sync-pages`. The composer's `linkedInTargets` field on
-`POST /api/messages` already works, but iOS **can't fetch the target list**.
-**Add Bearer support to the LinkedIn targets endpoints** and the picker becomes
-buildable. (Response shape `{targets:[{kind, label, pageId|personalPageId,
-linkedInPageId, enabled}], orgScopeMissing}` is documented — exactly what we need.)
+> **Prompt — Sharing:** Add the share-link `APIClient` methods + `ShareLink` model
+> and a `ShareSheet` for lists and documents (create/copy/revoke, roles). Add
+> `DocumentCollaboratorsView` modeled on `WatchersListView`. Gate create/modify on
+> `isSubscriber` (hide, don't paywall). Tests + previews.
 
-**F3 — GitHub integration is session-only.**
-Docs (`/help/api/github-integration`): every `/api/github/*` endpoint requires a
-session cookie ("Bearer tokens are not accepted") plus a linked GitHub identity,
-and these "power features like GitHub-backed lists" — a headline web feature iOS
-can't reach. **Add Bearer support to `/api/github/*`** to unblock native
-GitHub-backed lists.
+#### G3 — Document templates `Small` 🟢 (read free, create 💲)
 
-### III.2 — [DOC] Documentation fixes
+`GET /api/documents/templates` → `{ folderCreated, templatesFolderId,
+templates:[{id,title,…}] }` (free). `POST /api/documents/from-template` (💲)
+creates from one; `POST /api/documents/templates/seed-defaults` (💲) seeds the set.
 
-**F4 — Audit the Messages page auth column (it's demonstrably wrong).**
-`/help/api/messages` marks `GET /api/messages/:id/replies`, `POST /:id/dig`,
-`DELETE /:id/dig`, and `PATCH /:id` as **Session**. But live:
-```
-GET /api/messages/:id/replies [Bearer]  -> 200
-GET /api/messages/:id/replies [no auth] -> 200   (effectively public for public messages)
-```
-Re-audit the whole column against the actual middleware — where Bearer works, say
-"Session or Bearer"; where public, say "Public." Treat the whole column as suspect
-given `replies` was mislabeled.
+- **Model:** `DocumentTemplate`. **APIClient:** `documentTemplates()`,
+  `createDocumentFromTemplate(templateId:…)`, `seedDefaultTemplates()`.
+- **UI:** in the create-document flow, an optional "Start from template" picker
+  that prefills title/content; call `from-template` when chosen (hidden for free
+  users, since create itself is 💲).
 
-**F5 — Add a Moderation section (endpoints exist and are live).**
-No `/help/api/moderation` page exists. These are live and Bearer-accepted (Apple
-requires them for our app):
-```
-GET /api/user/blocks?limit=1 [Bearer] -> 200 {"blockedUsers":[],"pagination":{...}}
-GET /api/user/mutes?limit=1  [Bearer] -> 200 {"mutedUsers":[],"pagination":{...}}
-```
-The client also uses (writes, not probed): `POST /api/messages/:id/report`,
-`POST /api/users/:id/report`, `POST|DELETE /api/users/:id/block`,
-`POST|DELETE /api/users/:id/mute`. Document all of them (paths, bodies — reports
-take `{reason, detail?}` — auth, response shapes) and link from the index.
+#### G4 — GitHub integration `Large` 🟢 **now unblocked**
 
-**F6 — Clarify `POST /api/user/organizations`: create vs. join.**
-`/help/api/users-and-profile` documents it as "Create new organization." The iOS
-client calls it with `{ organizationId }` to **join** an existing org (it creates
-orgs via `POST /api/organizations`). Clarify the real semantics (create/join/
-body-dependent) and the canonical join route. `GET /api/user/organizations` (list
-my orgs) — confirmed live 200 — is documented now; good.
+Was the single biggest backend-blocked gap; `/api/github/*` now authenticates via
+`getGitHubIssuesContext` → `getCurrentUserOrSyncToken` (**Bearer OK**), requiring a
+**linked GitHub identity**.
 
-**F7 — Add a folder path-scoping warning to Documents / Document Folders.**
-Neither page warns that:
-- `GET /api/documents` returns **only root docs** and **ignores `?folderId`**.
-- `POST /api/documents` **always creates at root** (no `folderId` field).
-- Only `PATCH /api/documents/:id` accepts `folderId` (to move).
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/github/repos` | Repos for the linked account |
+| GET/POST | `/api/github/issues?repo=owner/repo` | List / create issues |
+| PATCH | `/api/github/issues/:owner/:repo/:number` | Edit labels/assignees |
+| POST | `/api/github/issues/:owner/:repo/:number/comments` | Comment |
+| GET | `/api/github/repos/:owner/:repo/{assignees,labels,next-issue-number}` | Metadata |
 
-Using the root routes for folder content **silently drops docs to root**. A
-prominent callout on both pages would save every future integrator this bug.
+**Live-confirmed:** `GET /api/github/repos` over Bearer returned **400 "GitHub
+account not linked"** (not 401) — i.e. Bearer auth *passes*; the endpoint only
+lacked a linked identity on the test account.
 
-**F14 — Document the `crossPostResults` shape (mark `platform` optional).**
-On `POST /api/messages` with cross-posting, response `crossPostResults[]` entries
-sometimes **omit `platform`** (observed with Bluesky), which crashed a strict
-decoder. Document the shape and which fields are optional, or always emit
-`platform`.
+Two sub-gaps: (a) **GitHub OAuth sign-in is still hidden** on iOS because the web
+GitHub callback sets a cookie and redirects to `/dashboard` (no custom-scheme
+handoff) — linking a GitHub identity from mobile still needs a backend mobile
+branch on the callback, so **identity-linking remains blocked even though the data
+endpoints are open**. (b) Once an identity is linked (e.g. via web), the data
+endpoints work over Bearer.
 
-### III.3 — [iOS] Verb/auth mismatches we will fix (your docs are right)
+- **Plan:** build models (`GitHubRepo`, `GitHubIssue`, `GitHubLabel`,
+  `GitHubAssignee`) + `APIClient` methods; add a **repo picker in `CreateListView`**
+  for GitHub-backed lists and a read-only **issues view**; create-issue-from-message.
+  Surface the **`githubDefaultRepo`** user setting (from `GET /api/user`, set via
+  the D1-fixed `PATCH /api/user/update`, validated `owner/repo`) as the default in
+  that picker. Guard the whole surface on "has a linked GitHub identity" (from
+  `/api/user/identities`) and show an explainer when absent.
+- **Escalate to backend:** add a mobile branch to `/auth/github/callback` (custom
+  scheme + `?token=`) so iOS users can *link* GitHub without the web — the last
+  remaining GitHub blocker.
 
-Client bugs confirmed via live `OPTIONS` `Allow` headers — fixed on our side (see
-D1–D4). Listed so you know (a) your docs are correct and (b) if you'd rather accept
-the client's verb too, that's an option.
+#### G5 — LinkedIn posting-target picker `Small` 🟢 **now unblocked**
 
-| Endpoint | Server allows | Client sends | Result | Our fix |
-|---|---|---|---|---|
-| `/api/user/update` | `OPTIONS, PATCH` | `POST` | 405 → profile/settings/avatar writes fail | switch to `patchCamel` |
-| `/api/messages/:id` (edit) | `…, PATCH` (no `PUT`) | `PUT` | 405 → message edit fails | switch to `patchCamel` |
-| `/api/notifications/:id/read` | `OPTIONS, PATCH` | `PUT` | 405 → mark-read fails | switch to `PATCH` |
-| `/api/exports/*` | session cookie only | Bearer | 401 → export dead | needs your F1 fix |
+`GET /api/linkedin/posting-targets` (Bearer, **live-confirmed 200** with real
+targets, e.g. `{ kind:"personal", label:"Adron Hall", avatarUrl, … }`) →
+`{ targets:[{ kind: personal|orgPage|personalPage, label, pageId|personalPageId,
+linkedInPageId, enabled }], orgScopeMissing }`. `PUT` updates prefs; `POST
+/sync-pages` refreshes.
+The composer's `linkedInTargets` field already posts correctly — iOS just couldn't
+*fetch* the list before.
 
-> Accepting **both** `POST` and `PATCH` on `/api/user/update`, and **both** `PUT`
-> and `PATCH` on the edit routes, would make the API more forgiving — not required;
-> we'll align the client regardless.
+- **APIClient:** `linkedInPostingTargets()`, `updateLinkedInTargets(_:)`,
+  `syncLinkedInPages()`. **Model:** `LinkedInTarget`.
+- **UI:** in `ComposeView`, when the LinkedIn cross-post toggle is on and the user
+  is a subscriber with a LinkedIn identity, show a target picker (map
+  `pageId`/`personalPageId` into `linkedInTargets`) + the existing "link as first
+  comment" toggle. Hide otherwise.
 
-### III.4 — [VERIFY] Two items we couldn't confirm read-only
+#### G6 — People search / discovery `Small` 🟢
 
-**F12 — Push registration body field (`token` vs `deviceToken`).**
-Path and verb are correct (`POST /api/push/register`, `DELETE /api/push/unregister`
-— confirmed via `Allow`). But docs show the body field as **`deviceToken`** while
-the client sends **`token`** (`APIClient.swift:1167–1170`). If the handler reads
-`deviceToken`, iOS device tokens are **silently dropped** (no error, no push).
-Confirm the handler field name (we'll rename) or accept `token` as an alias.
-Highest-impact silent-failure candidate remaining.
+Backend has `GET /api/users/search?q=` and `GET /api/users/lookup?username=`
+(Bearer). iOS only has *list-scoped* user search (`searchWatcherCandidates`) — no
+way to find or open an arbitrary user. Add `searchUsers(q:)` + a search field that
+routes results into `UserProfileView`. Small but high-utility (currently you can
+only reach a profile via the feed).
 
-**F13 — Is document creation subscriber-only or free?**
-`/help/api/documents` marks `POST /api/documents` (and image upload, template
-creation) **Subscriber only**. The iOS product direction assumes documents are
-**free**. Our test account is a subscriber, so we couldn't observe the free path.
-Confirm the real gate. If subscriber-only, free iOS users silently can't create
-docs and we must hide that UI; if free, drop the "Subscriber only" label.
+#### G7 — Muted-users management UI `XS` 🟢
 
-### III.5 — Confirmed-CORRECT (please do NOT "fix" these)
+`mutedUsers()` / `muteUser()` / `unmuteUser()` are already wired; only a screen is
+missing. Add `MutedUsersView` mirroring `BlockedUsersView` and link it from
+`SettingsView` next to Blocked Users.
 
-Live-verified that docs and client already agree:
-- `POST /api/user/delete` — `Allow: OPTIONS, POST` ✓
-- `POST /api/user/avatar/from-url`, `POST /api/user/avatar/upload` ✓
-- `POST /api/notifications/mark-all-read` ✓; `GET /api/notifications` requires
-  `scope=tray` (400 without) ✓
-- `GET /api/user/notification-preferences` + `PATCH` ✓
-- `GET /api/user/identities`, provider `status` for LinkedIn/Twitter only ✓
-- Public-browse namespace split is **real and load-bearing** (do not "normalize"):
-  - `GET /api/user/:username/messages` (singular `user`) → 200; plural form → **404**
-  - `GET /api/users/:username/lists` / `/lists/:id/data` / `/documents` (plural
-    `users`) → 200; singular form → **404**
-  - Recommend documenting the split explicitly — it's a footgun even though intentional.
-- `GET /api/documents/templates`, `GET /api/documents/sync` — live 200 over Bearer ✓
+#### G8 — Verify CSV exports now work `XS` 🟢
 
-### III.6 — Ready-to-paste prompts for the site/API team
-
-**Prompt A — Add Bearer support to the session-only feature areas (highest value).**
-> Our iOS app authenticates with Bearer tokens only (no session cookie). Live
-> probing on 2026-07-18 confirmed these return 401 to a valid Bearer:
-> `GET /api/exports/{messages,lists,follows,list-data-rows}` and
-> `GET /api/linkedin/posting-targets`; and the docs state `/api/github/*` also
-> reject Bearer. In the API, extend the auth middleware for `/api/exports/*`,
-> `/api/linkedin/*`, and `/api/github/*` to accept `Authorization: Bearer <token>`
-> the same way `/api/messages` and `/api/user` already do. If any must stay
-> session-only for a security reason, document that explicitly and tell us so we
-> can drop those features from mobile. Then update each page's Auth column.
-
-**Prompt B — Fix the Messages auth column and add a Moderation section.**
-> 1. On `/help/api/messages`, the Auth column is wrong: `GET /api/messages/:id/replies`
->    is marked "Session" but returns 200 with a Bearer token AND with no auth at
->    all. Re-audit every row against the actual middleware and correct the column
->    ("Session or Bearer" / "Public"), especially `replies`, `dig`, `undig`,
->    `PATCH /:id`.
-> 2. Add a **Moderation** docs page. These are live: `GET /api/user/blocks`,
->    `GET /api/user/mutes`, `POST /api/messages/:id/report`,
->    `POST /api/users/:id/report`, `POST|DELETE /api/users/:id/block`,
->    `POST|DELETE /api/users/:id/mute`. Document paths, bodies (reports take
->    `{reason, detail?}`), auth, and response shapes; link it from the index.
-
-**Prompt C — Clarify org-join and add the doc-folder warning.**
-> 1. `/help/api/users-and-profile` documents `POST /api/user/organizations` as
->    "Create new organization," but our client posts `{ organizationId }` to it to
->    JOIN an existing org (it creates via `POST /api/organizations`). Clarify the
->    real behavior and document the canonical join route.
-> 2. On `/help/api/documents` and `/help/api/document-folders`, add a prominent
->    warning: `GET /api/documents` ignores `?folderId` and `POST /api/documents`
->    always writes to root; to create/list inside a folder you MUST use
->    `/api/documents/folders/:id/documents`. The root routes silently drop docs to
->    root.
-
-**Prompt D — Confirm two ambiguous contracts.**
-> 1. Push: does the `POST /api/push/register` / `DELETE /api/push/unregister`
->    handler read `deviceToken` or `token`? Our client sends `token`; your docs
->    show `deviceToken`. If it reads `deviceToken`, our tokens are silently dropped
->    — accept `token` as an alias or tell us to rename.
-> 2. Documents: is `POST /api/documents` truly subscriber-only (as documented) or
->    free? It changes whether our iOS app must hide document creation from free
->    users. Confirm against the handler.
-
-**Prompt E — Document the crossPostResults response shape.**
-> On `POST /api/messages` with cross-posting, document the exact shape of
-> `crossPostResults[]` and mark optional fields — in particular `platform` is
-> sometimes omitted (observed for Bluesky), which crashed a strict client decoder.
-> Either always include `platform` or document it as optional.
-
-### III.7 — Addendum: the `POST /api/lists` schema contract (2026-07-22)
-
-A real user hit **`400 "Invalid Schema: DSL must be an object"`** creating a list.
-Root-causing surfaced one client bug (F15, fixed) and one doc problem the backend
-had already largely fixed (F16).
-
-**F15 — [iOS, RESOLVED] client sent a DSL *string* and read the wrong response key.**
-The shipped client built `schema` as the legacy comma-separated DSL **string**
-(`"Title:text, Author:text"`) and decoded the created list from a **`list`** key.
-The server (`validateDSLSchema` in `lib/lists/dsl-parser.ts`) requires `schema` to
-be a DSL **object** and returns the created list under **`data`**. Fixed
-2026-07-22 — `createList` now sends the object and decodes `data`
-(`APIClient.swift:422–427`):
-```jsonc
-// POST /api/lists — request body the client now sends
-{
-  "title": "Books to Read",
-  "isPublic": true,
-  "schema": {                      // object, NOT "Title:text, Author:text"
-    "name": "Books to Read",
-    "fields": [
-      { "key": "title", "type": "text", "label": "Title", "displayOrder": 0,
-        "required": false, "visible": true }
-    ]
-  }
-}
-// 201 response — list is under `data`
-{ "message": "List created successfully", "data": { "id": "lst_…", "properties": [ … ] } }
-```
-
-**F16 — [DOC, RESOLVED] the docs used to show the string form; residual response gap.**
-As of 2026-07-18 both `/help/api/lists` and canonical `docs/api-reference.md`
-documented `POST /api/lists` with **`"schema": "string"`** — exactly the request
-the server rejects. Re-checked 2026-07-22: fixed. `/help/api/lists`, the new
-dedicated **`/help/api/lists-dsl`** reference, and `docs/api-reference.md:2709` all
-now show the DSL **object**. Two small residuals:
-1. **Response body isn't documented.** The `POST /api/lists` section still lists
-   only status codes (201/400/401/403), so the `{ message, data: { … } }` envelope
-   is undocumented. A one-line example would prevent the next client from decoding
-   the wrong key.
-2. **Subscriber gate.** The route is `[Subscriber]`-only and returns
-   `403 "Subscribe to create lists."` for non-subscribers (same family as F13).
-   Flagged as **[VERIFY, iOS]** to confirm our app surfaces that 403 gracefully.
+`exportCSV` already sends Bearer; the four `/api/exports/*` routes now accept it —
+**live-confirmed 200 with real CSV** for all four (`messages`, `lists`,
+`list-data-rows`, `follows`) on 2026-07-31. **Un-hide the export entry point** (if
+it was hidden per the old D4 plan), remove any `// TODO: re-enable when …` note, and
+smoke-test in-app. Note the client knows only 3 of 4 — add `list-data-rows`.
 
 ---
 
-## Part IV — Coverage & method notes
+### Tier 2
 
-**Docs pages read verbatim (2026-07-18):** `/help/api` and all detail pages —
-`authentication`, `users-and-profile`, `public-profiles`, `messages`, `following`,
-`lists`, `list-folders`, `documents`, `document-folders`, `notifications`,
-`push-notifications`, `exports`, `organizations`, `github-integration`,
-`linkedin-integration`, `utility-endpoints`, `administration`. (No `moderation`
-page — that's F5.)
+#### G9 — Offline document sync `Large` 🟢
 
-**Re-review 2026-07-22 (targeted):** `/help/api`, `/help/api/lists`, the new
-`/help/api/lists-dsl` page, and `docs/api-reference.md` §`POST /api/lists`,
-prompted by a live `400 "Invalid Schema: DSL must be an object"` (Part III.7).
+`GET/POST /api/documents/sync` is a delta-sync contract (Bearer; emits
+`RateLimit-*` headers; `lastSyncAt` param) and `GET /api/documents/tree` returns
+the full hierarchy in one call. **Live-confirmed shape:** `GET /sync` →
+`{ folders, documents, lastSyncAt }`, folder/doc rows carrying `createdAt`,
+`updatedAt`, and **`deletedAt`** (soft-delete tombstones) — so `lastSyncAt` is the
+delta cursor and deletions replicate cleanly; `tree` → nested
+`{ folders:[{ …, documents:[…] }] }`. Plan: (1) confirm the `POST /sync` write
+contract (conflict signals) against production; (2) cache doc edits in `DataCache`,
+replay via `POST /sync` on reconnect,
+resolve last-writer-wins with a simple conflict prompt; (3) feature-flag it and
+ship read-then-queue first, two-way second. `documents/tree` is a cheap early win
+(fewer round-trips building the folder tree).
 
-**Live probe (read-only) on 2026-07-18, account `messenger` (subscriber):** login
-(POST sync-token), ~30 GETs, and `OPTIONS` verb-detection on 15 routes. No writes.
+#### G10 — Content deep links / Universal Links `Medium`
 
-**Not tested (would require writes or a different account):** push body-field
-behavior (F12/D5), create-vs-join semantics of `POST /api/user/organizations`
-(F6), free-user document-creation gate (F13/§2.9), `dig`/`undig` auth (F4). We're
-happy to run authorized write-tests for any of these.
+`InterlinedListApp.handleDeepLink` routes only `reset-password`, `verify-email`,
+`verify-email-change`, `oauth`. Extend `AppRouter` + `.onOpenURL` to route content
+permalinks: profiles, public lists (`/api/users/:username/lists/:id` →
+`PublicListDetailView`), public documents, message threads, **and inbound
+share-links** (`/{lists,documents}/shared/:token` → read-only resolver view from
+G2). Support both `interlinedlist://…` and `https://interlinedlist.com/…`. Add a
+"Share" action (web permalink) on message/list/doc/profile.
+**Backend dependency:** Universal Links need the site to publish
+`apple-app-site-association` + the Associated Domains entitlement — file that ask;
+the custom-scheme path works without it. Share-link **claim** is session-only, so
+Editor/Admin claims may still require web (note in UI).
 
-**Recommendation:** diff Part III against the OpenAPI/route table. The
-client-contract items (III.3) and the Bearer-rejection items (III.1) are where a
-real, shipped consumer already diverges from the platform today.
+#### G11 — Live document presence `Medium` (optional)
+
+`POST/DELETE /api/documents/:id/presence` is a heartbeat+poll cursor-sync (no WS).
+Low urgency for a phone; consider a lightweight "N people viewing" indicator before
+full collaborative cursors. Build only after G2/G9.
+
+#### G12 — Active-sessions management `Small` 🟢
+
+`GET /api/user/sessions` (list web+mobile logins) + `DELETE /api/user/sessions/:id`
+(revoke). A security-hygiene screen in `SettingsView` ("Where you're signed in" →
+revoke). Nice-to-have; pairs well with account-security UI.
+
+---
+
+## Part V — Suggested execution order
+
+1. **Tier 0 (D1–D3)** — one `APIClient` PR; broken shipped features. Same PR: run
+   the **gating audit** (Part II) so no 💲 write is exposed to free users.
+2. **G8 exports verify** + **G7 muted-users UI** — near-zero-effort wins that close
+   two matrix rows immediately.
+3. **G1 Direct Messages** — biggest new surface; ship in 3 slices (read → send →
+   attach/trash). Highest user-visible parity gain.
+4. **G3 templates**, **G5 LinkedIn picker**, **G6 people search** — small,
+   self-contained, independently shippable.
+5. **G2 Sharing** — share-links + document collaborators (pairs with G10 inbound).
+6. **G4 GitHub** — big win; data endpoints are ready now. File the
+   `/auth/github/callback` mobile-branch ask in parallel (identity-linking blocker).
+7. **G9 offline sync**, **G10 deep/universal links**, **G12 sessions**,
+   **G11 presence** — larger/infra, lower urgency.
+8. **X1/X2/X3** — no build; revisit only if the backend adds Bearer multi-account,
+   a tags endpoint, or a realtime channel.
+
+---
+
+## Part VI — Backend / API team asks (remaining)
+
+Most prior asks are done (exports/GitHub/LinkedIn Bearer, moderation docs, push
+field). What's left:
+
+- **A1 — GitHub identity linking from mobile.** Data endpoints accept Bearer, but
+  `/auth/github/callback` sets a web cookie and redirects to `/dashboard`, so iOS
+  users can't *link* a GitHub identity. Add a mobile branch (custom scheme
+  `interlinedlist://oauth/callback?token=…`) like the other providers. This is the
+  only remaining GitHub blocker (G4).
+- **A2 — Universal Links assets.** Publish `apple-app-site-association` for
+  `interlinedlist.com` so iOS can register Associated Domains and open
+  `https://` content links natively (G10).
+- **A3 — Bearer for multi-account?** `/api/auth/{accounts,switch,remove-account}`
+  are session-only. If mobile multi-account is desired, expose a Bearer-compatible
+  switch (or per-account sync-tokens the client caches). Otherwise confirm it stays
+  web-only and we'll drop it from scope (X1).
+- **A4 — Doc residuals (low priority).** `POST /api/lists` response envelope
+  (`{ message, data }`) still isn't documented; the doc-folder path-scoping caveat
+  and the public-browse singular/plural namespace split are still worth a callout
+  for future integrators.
+
+---
+
+## Part VII — Coverage & method notes
+
+- **Backend source read (2026-07-31):** enumerated `~/Codez/interlinedlist/app/api/**`
+  route handlers; auth model derived per-route from the `getCurrentUserOrSyncToken`
+  (Bearer|session) vs `getCurrentUser` (session-only) helper; subscriber gates from
+  `isSubscriber` / `forbidden("Subscribe to …")`. Verb regressions (D1–D3) and the
+  GitHub/exports/LinkedIn Bearer status were each confirmed by reading the exact
+  route exports and auth helper — not by probing.
+- **Docs read (2026-07-31):** all 21 `/help/api/*` pages, including the three new
+  ones — **Direct Messages**, **Sharing**, **Moderation**.
+- **iOS read (2026-07-31):** `APIClient.swift` (78 methods), 41 Views, 12 Models.
+- **Live probe (2026-07-31):** `messenger` (subscriber) via `POST
+  /api/auth/sync-token` + read-only GETs (no mutations). Confirmed 200/Bearer on
+  exports, DM (incl. `/thread/:username`, `/recipients`, `/unread-count`),
+  templates, sync, tree, LinkedIn targets, people search, sessions, and share-link/
+  collaborator reads; GitHub repos returned 400 "not linked" (auth passed). See
+  [Live evidence](#live-verification-evidence-2026-07-31).
+- **Still not observable (needs a write or a non-subscriber account):** the
+  **free-user gating path** — what a non-subscriber sees for list/doc create and
+  media/cross-post/schedule compose (source says 💲-gated; `messenger` is a
+  subscriber so can't see the 403 path) — plus the `POST /api/documents/sync` write/
+  conflict contract (G9) and the GitHub mobile-link OAuth flow (blocked, ask A1). No
+  mutations were performed on the live account.
 
 ## Bottom line
 
-Core product is at parity **except for the shipped features that regressed to
-broken** (Part II.0, D1–D5) — fixing those is the immediate priority and mostly a
-one-file `APIClient` change. Beyond that, full web parity needs the backend to
-**accept Bearer tokens on exports/GitHub/LinkedIn** (one systemic fix unblocking
-three features), then a handful of self-contained additions (templates, deep
-links, multi-account, tag discovery) and two larger systems (offline doc sync —
-now confirmed buildable; realtime — still needs a backend endpoint).
+The backend caught up: **exports, GitHub, and LinkedIn now accept Bearer**, and DMs
++ sharing + templates + sync shipped — all mobile-buildable. The only broken
+shipped code is three one-line verb fixes (**D1–D3**). Everything else is additive
+and self-contained. The highest-leverage new build is **Direct Messages (G1)**; the
+highest-leverage unblock is **GitHub-backed lists (G4)**. The only true dead-ends
+for mobile are **multi-account** (session-only), **tag discovery** (no endpoint),
+and a **general realtime channel** (none exists — poll instead).
