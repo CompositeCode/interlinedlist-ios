@@ -22,6 +22,7 @@ enum APIError: Error {
 
 enum ExportType: String, CaseIterable {
     case messages, lists, follows
+    case listDataRows = "list-data-rows"
 }
 
 final class APIClient {
@@ -355,7 +356,7 @@ final class APIClient {
         struct Body: Encodable { let content: String; let publiclyVisible: Bool? }
         struct Response: Decodable { let data: Message? }
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: Response = try await put("/api/messages/\(encoded)", body: Body(content: content, publiclyVisible: publiclyVisible))
+        let response: Response = try await patchCamel("/api/messages/\(encoded)", body: Body(content: content, publiclyVisible: publiclyVisible))
         guard let message = response.data else { throw APIError.noData }
         return message
     }
@@ -723,7 +724,7 @@ final class APIClient {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         struct Empty: Encodable {}
         struct OkResponse: Decodable { let ok: Bool }
-        let _: OkResponse = try await put("/api/notifications/\(encoded)/read", body: Empty())
+        let _: OkResponse = try await patch("/api/notifications/\(encoded)/read", body: Empty())
     }
 
     func markAllNotificationsRead() async throws {
@@ -786,7 +787,7 @@ final class APIClient {
         struct Body: Encodable { let displayName: String?; let bio: String?; let defaultVisibility: Bool? }
         struct WrappedResponse: Decodable { let user: User? }
         let body = Body(displayName: displayName, bio: bio, defaultVisibility: defaultVisibility)
-        let wrapped: WrappedResponse = try await post("/api/user/update", body: body)
+        let wrapped: WrappedResponse = try await patchCamel("/api/user/update", body: body)
         if let user = wrapped.user { return user }
         return try await currentUser()
     }
@@ -801,7 +802,7 @@ final class APIClient {
         }
         struct WrappedResponse: Decodable { let user: User? }
         let body = Body(theme: theme, defaultVisibility: defaultVisibility, showAdvancedPostSettings: showAdvancedPostSettings)
-        let wrapped: WrappedResponse = try await post("/api/user/update", body: body)
+        let wrapped: WrappedResponse = try await patchCamel("/api/user/update", body: body)
         if let user = wrapped.user { return user }
         return try await currentUser()
     }

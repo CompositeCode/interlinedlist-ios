@@ -202,6 +202,13 @@ final class APIClientModerationTests: XCTestCase {
 
     // MARK: mutedUsers()
 
+    func test_mutedUsers_sendsGetRequest() async throws {
+        session.stub(json: #"{"mutedUsers":[],"pagination":null}"#)
+        _ = try await sut.mutedUsers()
+        XCTAssertEqual(session.lastRequest?.httpMethod, "GET")
+        XCTAssertTrue(session.lastRequest?.url?.path.hasPrefix("/api/user/mutes") == true)
+    }
+
     func test_mutedUsers_decodesResponse() async throws {
         session.stub(json: #"{"mutedUsers":[{"id":"u2","username":"bob","displayName":null,"avatar":null}],"pagination":null}"#)
         let response = try await sut.mutedUsers()
