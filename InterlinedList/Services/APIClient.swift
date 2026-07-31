@@ -425,14 +425,32 @@ final class APIClient {
         return response.data.properties
     }
 
+    /// The structured GitHub source for a github-backed list create
+    /// (`githubSource: { owner, repo }`, camelCase). The backend also accepts an
+    /// optional `path`/`ref`, omitted here.
+    struct GitHubSource: Encodable {
+        let owner: String
+        let repo: String
+    }
+
     /// Creates a list. `schema` is the DSL object the create endpoint requires
-    /// (see `ListSchemaDSL`); pass nil to omit it. A list needs at least one column
-    /// to be usable, so the create UI always supplies one. The endpoint returns the
-    /// created list under `data`, not `list`.
-    func createList(title: String, description: String?, isPublic: Bool, schema: ListSchemaDSL? = nil) async throws -> UserList {
-        struct Body: Encodable { let title: String; let description: String?; let isPublic: Bool; let schema: ListSchemaDSL? }
+    /// for local lists (see `ListSchemaDSL`); pass nil to omit it. A local list
+    /// needs at least one column to be usable, so the create UI always supplies one.
+    /// For a GitHub-backed list pass `githubSource`; the backend ignores `schema`
+    /// in that case (issues drive the columns), so the caller should pass `schema: nil`.
+    /// The endpoint returns the created list under `data`, not `list`.
+    func createList(title: String, description: String?, isPublic: Bool, schema: ListSchemaDSL? = nil, githubSource: GitHubSource? = nil) async throws -> UserList {
+        struct Body: Encodable {
+            let title: String
+            let description: String?
+            let isPublic: Bool
+            let schema: ListSchemaDSL?
+            let githubSource: GitHubSource?
+        }
         struct Response: Decodable { let data: UserList? }
-        let response: Response = try await postCamel("/api/lists", body: Body(title: title, description: description, isPublic: isPublic, schema: schema))
+        let body = Body(title: title, description: description, isPublic: isPublic,
+                        schema: githubSource == nil ? schema : nil, githubSource: githubSource)
+        let response: Response = try await postCamel("/api/lists", body: body)
         guard let list = response.data else { throw APIError.noData }
         return list
     }
@@ -663,6 +681,37 @@ final class APIClient {
         struct Response: Decodable { let lists: [UserList]; let pagination: Pagination? }
         let response: Response = try await get("/api/lists/search?q=\(qEncoded)&limit=\(limit)&offset=\(offset)")
         return (response.lists, response.pagination)
+    }
+
+    // MARK: - GitHub-backed lists (G4)
+
+    /// Repositories the linked GitHub account can access (`GET /api/github/repos`,
+    /// Bearer). The endpoint forwards the raw GitHub REST array (not wrapped).
+    /// Returns 400 "GitHub account not linked" when no GitHub identity is linked.
+    func githubRepos() async throws -> [GitHubRepo] {
+        return try await get("/api/github/repos")
+    }
+
+    /// Open (or `state`) issues for a repo (`GET /api/github/issues?repo=owner/repo`,
+    /// Bearer). Raw GitHub REST array; decode defensively.
+    func githubIssues(repo: String, state: String = "open") async throws -> [GitHubIssue] {
+        var components = URLComponents(string: baseURL + "/api/github/issues")
+        components?.queryItems = [
+            URLQueryItem(name: "repo", value: repo),
+            URLQueryItem(name: "state", value: state),
+        ]
+        let query = components?.percentEncodedQuery.map { "?" + $0 } ?? ""
+        return try await get("/api/github/issues" + query)
+    }
+
+    /// Re-syncs a GitHub-backed list's cached rows from GitHub issues
+    /// (`POST /api/lists/:id/refresh`, Bearer). 400 if the list isn't github-backed
+    /// or its repo is missing.
+    func refreshList(id: String) async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let message: String?; let count: Int? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await postCamel("/api/lists/\(encoded)/refresh", body: Empty())
     }
 
     // MARK: - Image upload

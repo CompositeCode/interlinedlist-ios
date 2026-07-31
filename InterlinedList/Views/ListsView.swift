@@ -53,6 +53,7 @@ struct ListsView: View {
                 CreateListView { _ in
                     Task { await store.refreshLists() }
                 }
+                .environmentObject(authState)
             }
             .sheet(isPresented: $showCreateFolder) {
                 CreateListFolderView(parentId: nil) {
@@ -459,6 +460,9 @@ struct ListDetailView: View {
     @State private var deletingItem: ListItem? = nil
     @State private var showDeleteConfirm = false
     @State private var showWatchers = false
+    @State private var showShare = false
+    @State private var isRefreshingGitHub = false
+    @State private var gitHubRefreshError: String?
 
     var body: some View {
         Group {
@@ -478,11 +482,14 @@ struct ListDetailView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
+                    if list.isGitHubBacked {
+                        gitHubStatusSection
+                    }
                     if items.isEmpty && !isLoading {
                         ContentUnavailableView {
-                            Label("Empty List", systemImage: "list.bullet")
+                            Label(list.isGitHubBacked ? "No Issues" : "Empty List", systemImage: "list.bullet")
                         } description: {
-                            Text("This list has no items yet.")
+                            Text(list.isGitHubBacked ? "No issues synced from GitHub yet. Pull to refresh." : "This list has no items yet.")
                         }
                     } else {
                         ForEach(items) { item in
@@ -547,14 +554,30 @@ struct ListDetailView: View {
         .navigationTitle(list.name)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAddItem = true
-                } label: {
-                    Image(systemName: "plus")
+            if list.isGitHubBacked {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await refreshGitHub() }
+                    } label: {
+                        if isRefreshingGitHub {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(isRefreshingGitHub)
+                    .accessibilityLabel("Refresh from GitHub")
                 }
-                .disabled(schema.isEmpty)
-                .accessibilityLabel("Add item to list")
+            } else {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showAddItem = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .disabled(schema.isEmpty)
+                    .accessibilityLabel("Add item to list")
+                }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -563,6 +586,14 @@ struct ListDetailView: View {
                     Image(systemName: "person.2")
                 }
                 .accessibilityLabel("Manage watchers")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showShare = true
+                } label: {
+                    Image(systemName: "link")
+                }
+                .accessibilityLabel("Share list")
             }
         }
         .task {
@@ -573,6 +604,10 @@ struct ListDetailView: View {
         }
         .sheet(isPresented: $showWatchers) {
             WatchersListView(listId: list.id)
+                .environmentObject(authState)
+        }
+        .sheet(isPresented: $showShare) {
+            ShareLinksSheet(kind: .lists, resourceId: list.id, title: list.name)
                 .environmentObject(authState)
         }
         .sheet(isPresented: $showAddConnection) {
@@ -616,6 +651,84 @@ struct ListDetailView: View {
                 if let item = deletingItem { Task { await deleteItem(item) } }
             }
             Button("Cancel", role: .cancel) { deletingItem = nil }
+        }
+    }
+
+    @ViewBuilder
+    private var gitHubStatusSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.branch")
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    if let repo = list.githubRepo {
+                        Text(repo)
+                            .font(.ilMono())
+                    }
+                    Text(gitHubStatusText)
+                        .font(.ilBody(13))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if isRefreshingGitHub {
+                    ProgressView()
+                }
+            }
+            if let gitHubRefreshError {
+                Text(gitHubRefreshError)
+                    .font(.ilMono())
+                    .foregroundStyle(.red)
+            } else if let metaError = list.githubMeta?.refreshError, !metaError.isEmpty {
+                Text(metaError)
+                    .font(.ilMono())
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text("GitHub")
+        }
+    }
+
+    private var gitHubStatusText: String {
+        let status = (list.githubMeta?.refreshStatus ?? "").lowercased()
+        switch status {
+        case "pending", "syncing":
+            return "Syncing…"
+        case "failed", "error":
+            return "Last sync failed"
+        default:
+            if let refreshed = list.githubMeta?.lastRefreshedAt {
+                return "Last refreshed \(Self.relativeDate(refreshed))"
+            }
+            return "Not yet refreshed"
+        }
+    }
+
+    private static func relativeDate(_ iso: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var date = formatter.date(from: iso)
+        if date == nil {
+            formatter.formatOptions = [.withInternetDateTime]
+            date = formatter.date(from: iso)
+        }
+        guard let date else { return iso }
+        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
+    }
+
+    private func refreshGitHub() async {
+        guard !isRefreshingGitHub else { return }
+        isRefreshingGitHub = true
+        gitHubRefreshError = nil
+        defer { isRefreshingGitHub = false }
+        do {
+            try await APIClient.shared.refreshList(id: list.id)
+            await loadData()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.server(let msg) {
+            gitHubRefreshError = msg
+        } catch {
+            gitHubRefreshError = "Couldn't refresh from GitHub."
         }
     }
 

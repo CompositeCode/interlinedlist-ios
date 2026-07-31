@@ -128,13 +128,42 @@ struct UserList: Identifiable, Codable, Hashable {
     let createdAt: String
     let updatedAt: String?
     let itemCount: Int?
+    /// "github" for GitHub-backed lists, "local" (or nil on older data) otherwise.
+    let source: String?
+    /// "owner/repo" for a GitHub-backed list; nil for local lists.
+    let githubRepo: String?
+    /// Refresh metadata for GitHub-backed lists (only present on `GET /api/lists`).
+    let githubMeta: GitHubListMeta?
+
+    /// True when this list mirrors a GitHub repository's issues.
+    var isGitHubBacked: Bool { source == "github" }
 
     // Server sends "title" for name and "parentId" for the list-in-list hierarchy.
     // convertFromSnakeCase is bypassed when CodingKeys are present, so use exact JSON keys.
+    // source/githubRepo/githubMeta arrive camelCase (backend `serialize` preserves keys).
     enum CodingKeys: String, CodingKey {
         case id, description, createdAt, updatedAt, itemCount, isPublic
         case name = "title"
         case folderId = "parentId"
+        case source, githubRepo, githubMeta
+    }
+
+    // Explicit memberwise init keeps the GitHub fields optional at call sites
+    // (previews, tests) without forcing every constructor to pass them.
+    init(id: String, name: String, description: String?, folderId: String?,
+         isPublic: Bool?, createdAt: String, updatedAt: String?, itemCount: Int?,
+         source: String? = nil, githubRepo: String? = nil, githubMeta: GitHubListMeta? = nil) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.folderId = folderId
+        self.isPublic = isPublic
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.itemCount = itemCount
+        self.source = source
+        self.githubRepo = githubRepo
+        self.githubMeta = githubMeta
     }
 }
 
