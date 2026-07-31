@@ -41,6 +41,11 @@ struct ComposeView: View {
     @State private var allIdentities: [APIClient.LinkedIdentity] = []
     @State private var selectedMastodonIds: Set<String> = []
     @State private var identitiesLoaded = false
+    // LinkedIn posting-target picker (subscriber + LinkedIn identity only)
+    @State private var linkedInTargets: [LinkedInPostingTarget] = []
+    @State private var selectedLinkedInTargetIds: Set<String> = []
+    @State private var linkedInTargetsLoaded = false
+    @State private var linkedInLinkAsFirstComment = false
     @State private var lastCrossPostResults: [CrossPostResult] = []
     /// Destinations the server reported the message actually reached (`crossPostUrls`).
     /// Used for the post-publish confirmation when the deployment doesn't return the
@@ -178,6 +183,8 @@ struct ComposeView: View {
                     crossPostLinkedIn = false
                     crossPostTwitter = false
                     selectedMastodonIds = []
+                    selectedLinkedInTargetIds = Set(enabledLinkedInTargets.map { $0.id })
+                    linkedInLinkAsFirstComment = false
                     selectedOrgId = nil
                     applyUserDefaults()
                 }
@@ -189,6 +196,10 @@ struct ComposeView: View {
                 let picked = items
                 photoSelection = []
                 Task { await imageUploader.add(picked) }
+            }
+            .onChange(of: crossPostLinkedIn) { _, isOn in
+                guard isOn else { return }
+                Task { await loadLinkedInTargetsIfNeeded() }
             }
         }
     }
@@ -393,6 +404,9 @@ struct ComposeView: View {
                 Toggle(isOn: $crossPostLinkedIn) {
                     Label("LinkedIn", systemImage: "briefcase")
                 }
+                if crossPostLinkedIn {
+                    linkedInTargetPicker
+                }
             }
             if hasTwitter {
                 Toggle(isOn: $crossPostTwitter) {
@@ -429,6 +443,93 @@ struct ComposeView: View {
                 Text("Cross-posts are sent when this message publishes.")
                     .font(.ilMono())
             }
+        }
+    }
+
+    /// Enabled targets are the only ones the user can post to; disabled options are
+    /// hidden entirely (they were turned off in the user's web preferences).
+    private var enabledLinkedInTargets: [LinkedInPostingTarget] {
+        linkedInTargets.filter { $0.enabled }
+    }
+
+    @ViewBuilder
+    private var linkedInTargetPicker: some View {
+        if !enabledLinkedInTargets.isEmpty {
+            ForEach(enabledLinkedInTargets) { target in
+                Button {
+                    toggleLinkedInTarget(target.id)
+                } label: {
+                    HStack(spacing: 10) {
+                        linkedInAvatar(target.avatarUrl)
+                        Text(target.label)
+                            .font(.ilBody(15))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if selectedLinkedInTargetIds.contains(target.id) {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(ILColor.primary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(target.label)\(selectedLinkedInTargetIds.contains(target.id) ? ", selected" : "")")
+            }
+            Toggle(isOn: $linkedInLinkAsFirstComment) {
+                Text("Post link as first comment")
+                    .font(.ilBody(15))
+            }
+            .accessibilityLabel("Post link as first comment on LinkedIn")
+        } else if linkedInTargetsLoaded {
+            Text("Posting to your personal LinkedIn profile.")
+                .font(.ilMono())
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func linkedInAvatar(_ url: String?) -> some View {
+        if let url, let parsed = URL(string: url) {
+            AsyncImage(url: parsed) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Image(systemName: "person.crop.circle.fill").foregroundStyle(.secondary)
+            }
+            .frame(width: 24, height: 24)
+            .clipShape(Circle())
+        } else {
+            Image(systemName: "briefcase.circle.fill")
+                .resizable()
+                .frame(width: 24, height: 24)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func toggleLinkedInTarget(_ id: String) {
+        if selectedLinkedInTargetIds.contains(id) {
+            selectedLinkedInTargetIds.remove(id)
+        } else {
+            selectedLinkedInTargetIds.insert(id)
+        }
+    }
+
+    /// Selected posting union to send in the body. Falls back to personal when
+    /// nothing is selected (matches web's post-to-personal-by-default behavior).
+    private var resolvedLinkedInTargets: [LinkedInTarget] {
+        let selected = enabledLinkedInTargets.filter { selectedLinkedInTargetIds.contains($0.id) }
+        if selected.isEmpty { return [.personal()] }
+        return selected.map { $0.asTarget }
+    }
+
+    private func loadLinkedInTargetsIfNeeded() async {
+        guard !linkedInTargetsLoaded, canUseSubscriberFeatures, !isReply, hasLinkedIn else { return }
+        linkedInTargetsLoaded = true
+        do {
+            linkedInTargets = try await APIClient.shared.linkedInPostingTargets()
+            selectedLinkedInTargetIds = Set(enabledLinkedInTargets.map { $0.id })
+        } catch {
+            // Never block posting — fall back to personal-only at post time.
+            composeLog.error("linkedInPostingTargets failed: \(error)")
+            linkedInTargets = []
         }
     }
 
@@ -533,6 +634,7 @@ struct ComposeView: View {
         // Cross-post params only when the user is a subscriber and not replying.
         let crossPostEnabled = canUseSubscriberFeatures && !isReply
         let mastodonIds = crossPostEnabled && !selectedMastodonIds.isEmpty ? Array(selectedMastodonIds) : nil
+        let linkedInOn = crossPostEnabled && crossPostLinkedIn && hasLinkedIn
         do {
             let result = try await APIClient.shared.postMessage(
                 content: text,
@@ -545,7 +647,9 @@ struct ComposeView: View {
                 pushedMessageId: repostOf?.id,
                 mastodonProviderIds: mastodonIds,
                 crossPostToBluesky: crossPostEnabled && crossPostBluesky ? true : nil,
-                crossPostToLinkedIn: crossPostEnabled && crossPostLinkedIn ? true : nil,
+                crossPostToLinkedIn: linkedInOn ? true : nil,
+                linkedInTargets: linkedInOn ? resolvedLinkedInTargets : nil,
+                linkedInLinkAsFirstComment: linkedInOn && linkedInLinkAsFirstComment ? true : nil,
                 crossPostToTwitter: crossPostEnabled && crossPostTwitter ? true : nil,
                 organizationId: selectedOrgId
             )

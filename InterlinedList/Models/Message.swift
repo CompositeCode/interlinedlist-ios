@@ -118,14 +118,38 @@ struct Pagination: Codable {
     let hasMore: Bool
 }
 
-/// A single cross-post target on LinkedIn (personal profile or an organization page).
+/// A single cross-post destination on LinkedIn, encoded as the backend's
+/// discriminated union (`resolve-linkedin-target.ts`):
+///   { kind: "personal" }
+///   { kind: "orgPage", pageId }           // pageId = OrgLinkedInPage.id (uuid)
+///   { kind: "personalPage", personalPageId } // personalPageId = LinkedInPersonalPage.id (uuid)
+/// Nil page ids are omitted from the encoded body so `personal` sends only `kind`.
 struct LinkedInTarget: Codable, Equatable {
-    let kind: String          // "personal" | "organization"
-    let organizationId: String?
+    let kind: String
+    let pageId: String?
+    let personalPageId: String?
 
-    init(kind: String, organizationId: String? = nil) {
+    init(kind: String, pageId: String? = nil, personalPageId: String? = nil) {
         self.kind = kind
-        self.organizationId = organizationId
+        self.pageId = pageId
+        self.personalPageId = personalPageId
+    }
+
+    static func personal() -> LinkedInTarget { LinkedInTarget(kind: "personal") }
+    static func orgPage(pageId: String) -> LinkedInTarget { LinkedInTarget(kind: "orgPage", pageId: pageId) }
+    static func personalPage(personalPageId: String) -> LinkedInTarget {
+        LinkedInTarget(kind: "personalPage", personalPageId: personalPageId)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind, pageId, personalPageId
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encodeIfPresent(pageId, forKey: .pageId)
+        try container.encodeIfPresent(personalPageId, forKey: .personalPageId)
     }
 }
 

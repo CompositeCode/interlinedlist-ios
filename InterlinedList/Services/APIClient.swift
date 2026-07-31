@@ -191,6 +191,15 @@ final class APIClient {
         return try await get("/api/auth/twitter/status")
     }
 
+    // MARK: - LinkedIn posting targets
+
+    /// Available LinkedIn destinations (personal profile, org pages, personal company
+    /// pages) each flagged `enabled` per the user's saved preferences.
+    func linkedInPostingTargets() async throws -> [LinkedInPostingTarget] {
+        let response: LinkedInPostingTargetsResponse = try await get("/api/linkedin/posting-targets")
+        return response.targets ?? []
+    }
+
     // MARK: - Avatar upload (Phase 3 — sister agent dependency)
 
     func uploadAvatar(data: Data, mimeType: String) async throws -> User {
