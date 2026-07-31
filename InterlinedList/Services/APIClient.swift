@@ -576,6 +576,32 @@ final class APIClient {
         return (response.documents, response.pagination)
     }
 
+    // MARK: - Document templates (G3)
+
+    /// Starter templates a subscriber can copy from. Free for any authenticated
+    /// user to read; only creating from one is subscriber-gated.
+    func documentTemplates() async throws -> [DocumentTemplate] {
+        let response: DocumentTemplatesResponse = try await get("/api/documents/templates")
+        return response.templates
+    }
+
+    /// Copies a template into a new document (subscriber-only). Body is camelCase
+    /// (`templateDocumentId`, `targetFolderId`) — pass nil to create at root. The
+    /// endpoint may wrap the document or return it bare; tolerate both like createDocument.
+    func createDocumentFromTemplate(templateDocumentId: String, targetFolderId: String?) async throws -> Document {
+        struct Body: Encodable { let templateDocumentId: String; let targetFolderId: String? }
+        struct Response: Decodable { let document: Document? }
+        let body = Body(templateDocumentId: templateDocumentId, targetFolderId: targetFolderId)
+        let data = try await postCamelRawData("/api/documents/from-template", body: body)
+        if let wrapped = try? decoder.decode(Response.self, from: data), let doc = wrapped.document {
+            return doc
+        }
+        if let doc = try? decoder.decode(Document.self, from: data) {
+            return doc
+        }
+        throw APIError.noData
+    }
+
     func updateList(id: String, title: String?, description: String?, isPublic: Bool?) async throws -> UserList {
         struct Body: Encodable { let title: String?; let description: String?; let isPublic: Bool? }
         struct Response: Decodable { let list: UserList? }
@@ -712,6 +738,23 @@ final class APIClient {
         let encoded = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
         let response: ListsResponse = try await get("/api/users/\(encoded)/lists")
         return response.lists
+    }
+
+    /// Prefix search over usernames/display names (G6). The backend rejects a
+    /// blank `q` with 400 `missing_query`, so callers must not pass an empty query.
+    /// Reuses `FollowUser` — the response rows share its id/username/displayName/avatar shape.
+    func searchUsers(query: String, limit: Int = 20) async throws -> [FollowUser] {
+        struct Response: Decodable { let users: [FollowUser] }
+        var components = URLComponents(string: baseURL + "/api/users/search")
+        components?.queryItems = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+        // percentEncodedQuery escapes reserved characters (e.g. `&` in the query
+        // string) so a query like "a&b" doesn't split into spurious parameters.
+        let encodedQuery = components?.percentEncodedQuery.map { "?" + $0 } ?? ""
+        let response: Response = try await get("/api/users/search" + encodedQuery)
+        return response.users
     }
 
     // MARK: - Notifications
@@ -1286,6 +1329,19 @@ final class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+        return data
+    }
+
+    private func postCamelRawData<B: Encodable>(_ path: String, body: B) async throws -> Data {
+        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(body)
         let (data, response) = try await session.data(for: request)
         try checkResponse(data: data, response: response)
         return data

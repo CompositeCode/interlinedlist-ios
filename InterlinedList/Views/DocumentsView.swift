@@ -10,6 +10,8 @@ struct DocumentsView: View {
     @EnvironmentObject var store: AppDataStore
     @State private var showCreate = false
     @State private var showCreateFolder = false
+    @State private var showTemplatePicker = false
+    @State private var createdFromTemplate: Document?
     @State private var folderToDelete: DocumentFolder?
     @State private var showDeleteFolderConfirm = false
     @State private var searchText = ""
@@ -100,6 +102,11 @@ struct DocumentsView: View {
                         }
                         if canCreateFolders {
                             Button {
+                                showTemplatePicker = true
+                            } label: {
+                                Label("Start from Template", systemImage: "doc.on.doc")
+                            }
+                            Button {
                                 showCreateFolder = true
                             } label: {
                                 Label("New Folder", systemImage: "folder.badge.plus")
@@ -122,6 +129,19 @@ struct DocumentsView: View {
                 CreateDocumentView(folderId: nil) { newDoc in
                     store.insertDocument(newDoc)
                 }
+            }
+            .sheet(isPresented: $showTemplatePicker) {
+                TemplatePickerView(targetFolderId: nil) { newDoc in
+                    store.insertDocument(newDoc)
+                    createdFromTemplate = newDoc
+                }
+            }
+            .navigationDestination(item: $createdFromTemplate) { doc in
+                DocumentDetailView(document: doc, onUpdate: { updated in
+                    store.updateDocument(updated)
+                }, onDelete: { id in
+                    store.removeDocument(id: id)
+                })
             }
             .sheet(isPresented: $showCreateFolder) {
                 CreateDocumentFolderView(parentId: nil) { newFolder in
@@ -310,6 +330,8 @@ private struct DocumentFolderView: View {
     @State private var isLoading = false
     @State private var showCreate = false
     @State private var showCreateFolder = false
+    @State private var showTemplatePicker = false
+    @State private var createdFromTemplate: Document?
     @State private var folderToDelete: DocumentFolder?
     @State private var showDeleteFolderConfirm = false
 
@@ -332,6 +354,11 @@ private struct DocumentFolderView: View {
                         Label("New Document", systemImage: "doc.badge.plus")
                     }
                     if authState.user?.isSubscriber == true {
+                        Button {
+                            showTemplatePicker = true
+                        } label: {
+                            Label("Start from Template", systemImage: "doc.on.doc")
+                        }
                         Button {
                             showCreateFolder = true
                         } label: {
@@ -356,6 +383,21 @@ private struct DocumentFolderView: View {
             CreateDocumentView(folderId: folder.id) { newDoc in
                 documents.insert(newDoc, at: 0)
             }
+        }
+        .sheet(isPresented: $showTemplatePicker) {
+            TemplatePickerView(targetFolderId: folder.id) { newDoc in
+                documents.insert(newDoc, at: 0)
+                createdFromTemplate = newDoc
+            }
+        }
+        .navigationDestination(item: $createdFromTemplate) { doc in
+            DocumentDetailView(document: doc, onUpdate: { updated in
+                if let idx = documents.firstIndex(where: { $0.id == updated.id }) {
+                    documents[idx] = updated
+                }
+            }, onDelete: { id in
+                documents.removeAll { $0.id == id }
+            })
         }
         .sheet(isPresented: $showCreateFolder) {
             CreateDocumentFolderView(parentId: folder.id) { newFolder in
@@ -512,9 +554,12 @@ private struct DocumentDetailView: View {
     var onDelete: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authState: AuthState
     @State private var current: Document
     @State private var showEdit = false
     @State private var showDeleteConfirm = false
+    @State private var showShare = false
+    @State private var showCollaborators = false
 
     init(document: Document, onUpdate: @escaping (Document) -> Void, onDelete: @escaping (String) -> Void) {
         self.document = document
@@ -542,6 +587,8 @@ private struct DocumentDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Edit") { showEdit = true }
+                    Button("Share") { showShare = true }
+                    Button("Collaborators") { showCollaborators = true }
                     Button("Delete", role: .destructive) { showDeleteConfirm = true }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -560,6 +607,14 @@ private struct DocumentDetailView: View {
                 current = updated
                 onUpdate(updated)
             }
+        }
+        .sheet(isPresented: $showShare) {
+            ShareLinksSheet(kind: .documents, resourceId: current.id, title: current.title)
+                .environmentObject(authState)
+        }
+        .sheet(isPresented: $showCollaborators) {
+            DocumentCollaboratorsView(documentId: current.id)
+                .environmentObject(authState)
         }
         .confirmationDialog("Delete \"\(current.title)\"?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
@@ -851,6 +906,123 @@ private struct CreateDocumentFolderView: View {
             errorMessage = msg
         } catch {
             errorMessage = "Failed to create folder."
+        }
+    }
+}
+
+/// Lists document templates and, on selection, copies the chosen one into a new
+/// document under `targetFolderId` (nil = root). Subscriber-gated; the caller only
+/// presents this when the user is a subscriber.
+private struct TemplatePickerView: View {
+    let targetFolderId: String?
+    var onCreate: (Document) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authState: AuthState
+    @State private var templates: [DocumentTemplate] = []
+    @State private var isLoading = true
+    @State private var creatingId: String?
+    @State private var loadError: String?
+    @State private var createError: String?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView("Loading templates…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let loadError {
+                    ContentUnavailableView {
+                        Label("Unavailable", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(loadError)
+                    } actions: {
+                        Button("Retry") { Task { await load() } }
+                    }
+                } else if templates.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Templates", systemImage: "doc.on.doc")
+                    } description: {
+                        Text("You have no document templates yet.")
+                    }
+                } else {
+                    List(templates) { template in
+                        Button {
+                            Task { await create(from: template) }
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(template.title).font(.ilBody())
+                                    if let path = template.relativePath, !path.isEmpty {
+                                        Text(path)
+                                            .font(.ilMono())
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if creatingId == template.id {
+                                    ProgressView()
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(creatingId != nil)
+                        .accessibilityLabel("Use template \(template.title)")
+                    }
+                }
+            }
+            .navigationTitle("Templates")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .alert("Couldn't create document", isPresented: Binding(
+                get: { createError != nil },
+                set: { if !$0 { createError = nil } }
+            )) {
+                Button("OK", role: .cancel) { createError = nil }
+            } message: {
+                Text(createError ?? "")
+            }
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        loadError = nil
+        do {
+            templates = try await APIClient.shared.documentTemplates()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.server(let msg) {
+            loadError = msg
+        } catch {
+            loadError = "Failed to load templates."
+        }
+    }
+
+    private func create(from template: DocumentTemplate) async {
+        guard creatingId == nil else { return }
+        creatingId = template.id
+        defer { creatingId = nil }
+        do {
+            let doc = try await APIClient.shared.createDocumentFromTemplate(
+                templateDocumentId: template.id,
+                targetFolderId: targetFolderId
+            )
+            onCreate(doc)
+            dismiss()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.server(let msg) {
+            createError = msg
+        } catch {
+            createError = "Failed to create document from template."
         }
     }
 }
