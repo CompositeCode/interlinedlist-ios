@@ -1184,6 +1184,101 @@ final class APIClient {
         try checkResponse(data: data, response: response)
     }
 
+    // MARK: - Direct messages
+
+    /// Lists messages in a DM folder. `nextCursor` paginates further into that folder.
+    func directMessages(folder: DMFolder, cursor: String? = nil) async throws -> DMListResponse {
+        var components = URLComponents(string: baseURL + "/api/dm")
+        components?.queryItems = [URLQueryItem(name: "folder", value: folder.rawValue)]
+        if let cursor { components?.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        let query = components?.percentEncodedQuery.map { "?" + $0 } ?? ""
+        return try await get("/api/dm" + query)
+    }
+
+    /// Sends a direct message. Body is 1–10000 chars; camelCase keys (`recipientId`,
+    /// `imageUrls`) — snake_case would be dropped server-side.
+    @discardableResult
+    func sendDirectMessage(recipientId: String, body: String, imageUrls: [String] = []) async throws -> DMMessage {
+        struct Body: Encodable { let recipientId: String; let body: String; let imageUrls: [String] }
+        let response: DMMessageResponse = try await postCamel("/api/dm", body: Body(recipientId: recipientId, body: body, imageUrls: imageUrls))
+        return response.message
+    }
+
+    func directMessage(id: String) async throws -> DMMessage {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: DMMessageResponse = try await get("/api/dm/\(encoded)")
+        return response.message
+    }
+
+    @discardableResult
+    func markDMRead(id: String) async throws -> Int {
+        struct Empty: Encodable {}
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: DMUpdatedResponse = try await post("/api/dm/\(encoded)/read", body: Empty())
+        return response.updated
+    }
+
+    func trashDM(id: String) async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let ok: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await post("/api/dm/\(encoded)/trash", body: Empty())
+    }
+
+    func restoreDM(id: String) async throws {
+        struct Empty: Encodable {}
+        struct Response: Decodable { let ok: Bool? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let _: Response = try await post("/api/dm/\(encoded)/restore", body: Empty())
+    }
+
+    /// Users you may DM (mutual-follow set).
+    func dmRecipients() async throws -> [DMUser] {
+        let response: DMRecipientsResponse = try await get("/api/dm/recipients")
+        return response.recipients
+    }
+
+    /// The conversation with `username`. Opening a thread auto-marks received messages read.
+    func dmThread(username: String) async throws -> DMThread {
+        let encoded = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        return try await get("/api/dm/thread/\(encoded)")
+    }
+
+    /// New messages in the thread since `after` (the client's last known message id).
+    /// Auto-marks received messages read.
+    func dmThreadUpdates(username: String, after: String) async throws -> DMThread {
+        let encodedUser = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        let encodedAfter = after.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? after
+        return try await get("/api/dm/thread/\(encodedUser)/updates?after=\(encodedAfter)")
+    }
+
+    func dmUnreadCount() async throws -> Int {
+        let response: DMUnreadCountResponse = try await get("/api/dm/unread-count")
+        return response.count
+    }
+
+    /// Uploads a DM image (multipart field `file`). Requires a verified email — not a subscription.
+    func uploadDMImage(data: Data, mimeType: String) async throws -> String {
+        guard let url = URL(string: baseURL + "/api/dm/images/upload") else { throw APIError.invalidURL }
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let ext = mimeType == "image/png" ? "png" : "jpg"
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+        let (responseData, response) = try await session.data(for: request)
+        try checkResponse(data: responseData, response: response)
+        struct UploadResponse: Decodable { let url: String }
+        return try decoder.decode(UploadResponse.self, from: responseData).url
+    }
+
     // MARK: - Private helpers
 
     private func getRawData(_ path: String) async throws -> Data {

@@ -23,6 +23,7 @@ final class AppDataStore: ObservableObject {
 
     @Published private(set) var unreadCount = 0
     @Published private(set) var pendingRequestCount = 0
+    @Published private(set) var dmUnreadCount = 0
 
     private let cache = DataCache()
     private var userId: String?
@@ -113,6 +114,17 @@ final class AppDataStore: ObservableObject {
                     await MainActor.run { self.pendingRequestCount = requests.count }
                 }
             }
+            group.addTask {
+                if let count = try? await APIClient.shared.dmUnreadCount() {
+                    await MainActor.run { self.dmUnreadCount = count }
+                }
+            }
+        }
+    }
+
+    func refreshDMUnread() async {
+        if let count = try? await APIClient.shared.dmUnreadCount() {
+            dmUnreadCount = count
         }
     }
 
@@ -149,6 +161,7 @@ final class AppDataStore: ObservableObject {
         documentsError = nil
         unreadCount = 0
         pendingRequestCount = 0
+        dmUnreadCount = 0
         userId = nil
     }
 
