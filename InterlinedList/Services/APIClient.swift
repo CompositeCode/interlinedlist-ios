@@ -1027,6 +1027,79 @@ final class APIClient {
         try checkResponse(data: data, response: response)
     }
 
+    // MARK: - Sharing (G2): share-links & document collaborators
+
+    func shareLinks(kind: ShareResourceKind, id: String) async throws -> [ShareLink] {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: ShareLinksResponse = try await get("/api/\(kind.pathSegment)/\(encoded)/share-links")
+        return response.shareLinks
+    }
+
+    func createShareLink(kind: ShareResourceKind, id: String, role: WatcherRole = .watcher, expiresAt: String? = nil) async throws -> ShareLink {
+        struct Body: Encodable { let role: String; let expiresAt: String? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await postCamel("/api/\(kind.pathSegment)/\(encoded)/share-links", body: Body(role: role.rawValue, expiresAt: expiresAt))
+    }
+
+    func revokeShareLink(kind: ShareResourceKind, id: String, token: String) async throws {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
+        guard let url = URL(string: baseURL + "/api/\(kind.pathSegment)/\(encodedId)/share-links/\(encodedToken)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func documentCollaborators(id: String) async throws -> [DocumentCollaborator] {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: DocumentCollaboratorsResponse = try await get("/api/documents/\(encoded)/collaborators")
+        return response.collaborators
+    }
+
+    @discardableResult
+    func addDocumentCollaborator(id: String, userId: String, role: WatcherRole = .watcher, notify: Bool = false) async throws -> DocumentCollaborator {
+        struct Body: Encodable { let userId: String; let role: String; let notify: Bool }
+        struct Response: Decodable { let collaborator: DocumentCollaborator? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: Response = try await postCamel("/api/documents/\(encoded)/collaborators", body: Body(userId: userId, role: role.rawValue, notify: notify))
+        guard let collaborator = response.collaborator else {
+            return DocumentCollaborator(userId: userId, role: role.rawValue, username: nil, displayName: nil, avatar: nil)
+        }
+        return collaborator
+    }
+
+    @discardableResult
+    func setDocumentCollaboratorRole(id: String, userId: String, role: WatcherRole, notify: Bool = false) async throws -> String {
+        struct Body: Encodable { let role: String; let notify: Bool }
+        struct Response: Decodable { let role: String? }
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        let response: Response = try await putCamel("/api/documents/\(encodedId)/collaborators/\(encodedUser)", body: Body(role: role.rawValue, notify: notify))
+        return response.role ?? role.rawValue
+    }
+
+    func removeDocumentCollaborator(id: String, userId: String) async throws {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
+        guard let url = URL(string: baseURL + "/api/documents/\(encodedId)/collaborators/\(encodedUser)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    func searchDocumentCollaboratorCandidates(id: String, query: String) async throws -> [WatcherCandidate] {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        let response: WatcherCandidatesResponse = try await get("/api/documents/\(encoded)/collaborators/users?q=\(q)")
+        return response.users
+    }
+
     // MARK: - Public browse (Phase 7)
 
     func publicListDetail(username: String, listId: String) async throws -> PublicListDetail {
