@@ -1337,6 +1337,24 @@ final class APIClient {
         return try await get("/api/user/mutes?limit=\(limit)&offset=\(offset)")
     }
 
+    // MARK: - Active sessions (G12)
+
+    func userSessions() async throws -> [UserSession] {
+        let response: UserSessionsResponse = try await get("/api/user/sessions")
+        return response.sessions
+    }
+
+    func revokeSession(id: String) async throws {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        guard let url = URL(string: baseURL + "/api/user/sessions/\(encoded)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
     // MARK: - Push notifications (Phase 9)
 
     func registerPushDevice(token: String) async throws {
