@@ -29,6 +29,7 @@ struct MessageDetailView: View {
         _dugByMe = State(initialValue: message.dugByMe ?? false)
     }
 
+    private var shareURL: URL? { ILWebURL.message(message.id) }
     private var isPrivate: Bool { message.publiclyVisible == false }
     private var canReport: Bool {
         guard let uid = currentUserId else { return false }
@@ -56,6 +57,11 @@ struct MessageDetailView: View {
         }
         .navigationTitle("Post")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                shareLinkButton
+            }
+        }
         .sheet(isPresented: $showReplyCompose) {
             ComposeView(replyTo: message)
                 .environmentObject(authState)
@@ -79,6 +85,16 @@ struct MessageDetailView: View {
         .sheet(item: $reportTarget) { target in
             ReportSheet(target: target, onDismiss: { reportTarget = nil })
                 .environmentObject(authState)
+        }
+    }
+
+    @ViewBuilder
+    private var shareLinkButton: some View {
+        if let url = shareURL {
+            SwiftUI.ShareLink(item: url) {
+                Label("Share link", systemImage: "square.and.arrow.up")
+            }
+            .accessibilityLabel("Share link")
         }
     }
 

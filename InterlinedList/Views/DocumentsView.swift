@@ -588,6 +588,12 @@ private struct DocumentDetailView: View {
                 Menu {
                     Button("Edit") { showEdit = true }
                     Button("Share") { showShare = true }
+                    if let url = ILWebURL.document(current.id) {
+                        SwiftUI.ShareLink(item: url) {
+                            Label("Share link", systemImage: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share link")
+                    }
                     Button("Collaborators") { showCollaborators = true }
                     Button("Delete", role: .destructive) { showDeleteConfirm = true }
                 } label: {

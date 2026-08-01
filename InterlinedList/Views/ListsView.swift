@@ -595,6 +595,14 @@ struct ListDetailView: View {
                 }
                 .accessibilityLabel("Share list")
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                if let url = ILWebURL.list(list.id) {
+                    SwiftUI.ShareLink(item: url) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share link")
+                }
+            }
         }
         .task {
             await loadData()

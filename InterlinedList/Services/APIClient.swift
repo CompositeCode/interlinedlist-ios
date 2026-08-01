@@ -276,6 +276,25 @@ final class APIClient {
         return (response.messages, response.pagination)
     }
 
+    /// Fetches a single message by id (for content deep links). The endpoint may
+    /// wrap the message under `message`/`data` or return it bare; tolerate all three.
+    func message(id: String) async throws -> Message {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        struct WrappedMessage: Decodable { let message: Message? }
+        struct WrappedData: Decodable { let data: Message? }
+        let data = try await getRawData("/api/messages/\(encoded)")
+        if let wrapped = try? decoder.decode(WrappedMessage.self, from: data), let msg = wrapped.message {
+            return msg
+        }
+        if let wrapped = try? decoder.decode(WrappedData.self, from: data), let msg = wrapped.data {
+            return msg
+        }
+        if let msg = try? decoder.decode(Message.self, from: data) {
+            return msg
+        }
+        throw APIError.noData
+    }
+
     /// Result of creating a message — the created message plus any cross-post
     /// outcomes the server reported (empty when cross-posting wasn't requested or
     /// the deployment doesn't echo results).

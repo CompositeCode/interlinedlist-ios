@@ -74,6 +74,14 @@ struct UserProfileView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if let url = ILWebURL.profile(username) {
+                        SwiftUI.ShareLink(item: url) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share link")
+                    }
+                }
                 if authState.user?.username != username {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {

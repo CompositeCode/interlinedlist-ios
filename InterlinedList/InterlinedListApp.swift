@@ -46,38 +46,43 @@ struct InterlinedListApp: App {
         switch link {
         case .resetPassword(let token):
             ResetPasswordView(token: token)
+        case .userProfile(let username):
+            NavigationStack {
+                UserProfileView(username: username)
+            }
+            .environmentObject(authState)
+            .environmentObject(store)
+        case .message(let id):
+            MessageLinkView(messageId: id)
+                .environmentObject(authState)
+                .environmentObject(store)
+        case .verifyEmail, .verifyEmailChange:
+            // These never present a sheet — they run an async side effect in
+            // handleDeepLink and are never assigned to pendingDeepLink.
+            EmptyView()
         }
     }
 
+    // TODO(A2): Universal Links (a tapped https://interlinedlist.com link opening the
+    // app directly) need the backend to publish apple-app-site-association plus the
+    // Associated Domains entitlement. `parse` already accepts https permalinks, so
+    // onOpenURL will route them once that server asset ships.
     private func handleDeepLink(_ url: URL) {
-        guard url.scheme == "interlinedlist" else { return }
-        // Token query items are read but never logged — they're sensitive bearer
-        // material handed off to KeychainService / OAuthCoordinator.
-        let host = url.host ?? ""
-        let path = url.path
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        let token = components?.queryItems?.first(where: { $0.name == "token" })?.value
-
-        switch (host, path) {
-        case ("reset-password", _), ("", "/reset-password"):
-            if let token, !token.isEmpty {
-                router.pendingDeepLink = .resetPassword(token: token)
-            }
-        case ("verify-email", _), ("", "/verify-email"):
-            if let token, !token.isEmpty {
-                Task { await verifyEmail(token: token) }
-            }
-        case ("verify-email-change", _), ("", "/verify-email-change"):
-            if let token, !token.isEmpty {
-                Task { await verifyEmailChange(token: token) }
-            }
-        case ("oauth", _):
-            // ASWebAuthenticationSession captures the callback automatically; the
-            // app-level handler is a fallback for when the session has been torn
-            // down (rare; safe to ignore the token rather than re-exchange it).
-            break
-        default:
-            break
+        // OAuth callbacks are captured by ASWebAuthenticationSession itself; the
+        // app-level handler is a fallback for a torn-down session (safe to ignore).
+        if url.scheme == "interlinedlist" && (url.host == "oauth" || url.path.hasPrefix("/oauth")) {
+            return
+        }
+        // Token query items are read via AppDeepLink.parse but never logged — they're
+        // sensitive bearer material handed off to KeychainService / OAuthCoordinator.
+        guard let link = AppDeepLink.parse(url) else { return }
+        switch link {
+        case .verifyEmail(let token):
+            Task { await verifyEmail(token: token) }
+        case .verifyEmailChange(let token):
+            Task { await verifyEmailChange(token: token) }
+        case .resetPassword, .userProfile, .message:
+            router.pendingDeepLink = link
         }
     }
 
@@ -124,10 +129,73 @@ struct InterlinedListApp: App {
 
 enum AppDeepLink: Identifiable, Hashable {
     case resetPassword(token: String)
+    case verifyEmail(token: String)
+    case verifyEmailChange(token: String)
+    case userProfile(username: String)
+    case message(id: String)
 
     var id: String {
         switch self {
         case .resetPassword(let token): return "reset:" + token
+        case .verifyEmail(let token): return "verify:" + token
+        case .verifyEmailChange(let token): return "verify-change:" + token
+        case .userProfile(let username): return "profile:" + username
+        case .message(let id): return "message:" + id
+        }
+    }
+
+    /// Parses both the custom scheme (`interlinedlist://…`, where the target is the
+    /// URL host or first path segment) and canonical web permalinks
+    /// (`https://interlinedlist.com/…` / `https://www.interlinedlist.com/…`). Content
+    /// links map to `.userProfile` / `.message`; auth links preserve their `?token`.
+    /// Returns nil for unknown targets or web hosts other than interlinedlist.com.
+    static func parse(_ url: URL) -> AppDeepLink? {
+        let scheme = url.scheme?.lowercased()
+        let host = url.host?.lowercased() ?? ""
+
+        let target: String
+        let segments: [String]
+        if scheme == "interlinedlist" {
+            let pathSegments = url.path.split(separator: "/").map(String.init)
+            // The custom scheme puts the target in either the host (interlinedlist://user/bob)
+            // or the first path segment (interlinedlist:///user/bob), so try the host first.
+            if host.isEmpty {
+                target = pathSegments.first ?? ""
+                segments = Array(pathSegments.dropFirst())
+            } else {
+                target = host
+                segments = pathSegments
+            }
+        } else if scheme == "https" || scheme == "http" {
+            guard host == "interlinedlist.com" || host == "www.interlinedlist.com" else { return nil }
+            let pathSegments = url.path.split(separator: "/").map(String.init)
+            target = pathSegments.first ?? ""
+            segments = Array(pathSegments.dropFirst())
+        } else {
+            return nil
+        }
+
+        let token = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "token" })?.value
+
+        switch target {
+        case "user":
+            guard let username = segments.first, !username.isEmpty else { return nil }
+            return .userProfile(username: username)
+        case "message":
+            guard let id = segments.first, !id.isEmpty else { return nil }
+            return .message(id: id)
+        case "reset-password":
+            guard let token, !token.isEmpty else { return nil }
+            return .resetPassword(token: token)
+        case "verify-email":
+            guard let token, !token.isEmpty else { return nil }
+            return .verifyEmail(token: token)
+        case "verify-email-change":
+            guard let token, !token.isEmpty else { return nil }
+            return .verifyEmailChange(token: token)
+        default:
+            return nil
         }
     }
 }
