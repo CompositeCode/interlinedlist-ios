@@ -96,10 +96,13 @@ Live implementation status — updated as work lands on `dev` (uncommitted unles
 | **5 — Sharing (G2)** | `ShareLink` + reusable `ShareLinksSheet` (create/copy/revoke, roles) for lists & documents; `DocumentCollaborator` + `DocumentCollaboratorsView` (reused `WatcherRole`); 8 `APIClient` methods wired into list + document detail | ✅ **Done** 2026-07-31 — build green; 26 sharing tests + full suite (604) pass, no regressions |
 | **6 — GitHub-backed lists (G4)** | `UserList`+`source`/`githubRepo`/`githubMeta`; `GitHubRepo`/`GitHubIssue`; `githubRepos()`/`githubIssues()`/`refreshList()`/`createList(githubSource:)`; repo picker in `CreateListView` (gated on `AuthState.hasGitHubIdentity` + subscriber) + Refresh/meta on list detail | ✅ **Done** 2026-07-31 — build green; 50 tests pass. Residual: in-app GitHub *linking* still blocked (backend ask **A1**), so path verified via unit tests, not live |
 | **7 — Active sessions (G12)** | `UserSession` + `userSessions()`/`revokeSession()`; `SessionsView` ("Where you're signed in") in Settings | ✅ **Done** 2026-07-31 — build green; 9 tests pass |
-| — | **G9 offline sync** *(Large — needs design decision)* · **G10 deep/universal links** *(needs backend AASA — ask A2)* · **G11 presence** *(optional)* | ⏸ checkpoint w/ user |
+| **8 — Offline doc sync, Slice 1 (G9)** | `documentSync(lastSyncAt:)` delta pull + pure `DocumentSyncMerge` (upsert/tombstone) + `SyncCache` + flag-gated `AppDataStore` path (`ILOfflineDocSync`, default on); online path untouched when off. **Read-only slice** — write/push (Slice 2) + conflict-copy (Slice 3) deferred | ✅ **Done** 2026-07-31 — build green; 649-test suite passes. Design in `Offline-Document-Sync-Design.md` |
+| — | **G9 Slice 2** offline edit queue + push *(chosen policy: conflict-copy; needs a write-test account)* · **G10 deep/universal links** *(custom-scheme slice buildable now; Universal Links need backend AASA — ask A2)* · **G11 presence** *(optional)* | ⏳ next |
 
-**Whole-tree gate (2026-07-31, after Phase 7):** full unit suite **622 tests, 0 failures**
-(E2E excluded). All 7 phases build and pass together on `dev` (uncommitted).
+**Whole-tree gate (2026-07-31, after Phase 8):** full unit suite **649 tests, 0 failures**
+(E2E excluded). All work builds and passes together; Phases 1–7 committed as clean
+per-feature commits (`APIClient.swift` hunk-split per phase; `project.pbxproj`
+registration consolidated in one `build:` commit), G9 Slice 1 as its own commit.
 
 **Shipped this session (parity closed):** defects **D1/D2/D3** · **G1** Direct
 Messages · **G2** Sharing · **G3** Templates · **G4** GitHub-backed lists · **G5**

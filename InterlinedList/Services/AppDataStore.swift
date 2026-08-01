@@ -28,6 +28,23 @@ final class AppDataStore: ObservableObject {
     private let cache = DataCache()
     private var userId: String?
 
+    /// G9 Slice 1. When true, documents load from a persisted `DocumentSyncState`
+    /// and refresh via `GET /api/documents/sync` (delta pull + tombstones) instead
+    /// of `GET /api/documents` + `documentFolders()`. Defaults true — one call
+    /// returns the whole tree vs. the root-only documents endpoint. Overridable
+    /// via Info.plist key `ILOfflineDocSync` (set to NO to keep the online path).
+    private let offlineDocSyncEnabled: Bool = {
+        if let flag = Bundle.main.infoDictionary?["ILOfflineDocSync"] as? Bool {
+            return flag
+        }
+        if let str = Bundle.main.infoDictionary?["ILOfflineDocSync"] as? String {
+            return (str as NSString).boolValue
+        }
+        return true
+    }()
+
+    private var docSyncCursor: String?
+
     func prefetchAll(userId: String?) async {
         if let uid = userId, self.userId != uid {
             self.userId = uid
@@ -83,6 +100,10 @@ final class AppDataStore: ObservableObject {
     }
 
     func refreshDocuments() async {
+        if offlineDocSyncEnabled {
+            await refreshDocumentsViaSync()
+            return
+        }
         documentsLoading = documents.isEmpty
         documentsError = nil
         defer { documentsLoading = false }
@@ -99,6 +120,28 @@ final class AppDataStore: ObservableObject {
             // 403 here would be an unexpected case. Surface it as a generic
             // load failure rather than subscription copy.
             if documents.isEmpty { documentsError = "Failed to load documents." }
+        }
+    }
+
+    private func refreshDocumentsViaSync() async {
+        documentsLoading = documents.isEmpty
+        documentsError = nil
+        defer { documentsLoading = false }
+        do {
+            let delta = try await APIClient.shared.documentSync(lastSyncAt: docSyncCursor)
+            let current = DocumentSyncState(folders: documentFolders, documents: documents, lastSyncAt: docSyncCursor)
+            let merged = DocumentSyncMerge.apply(delta: delta, to: current)
+            documentFolders = merged.folders
+            documents = merged.documents
+            docSyncCursor = merged.lastSyncAt
+            saveDocsSyncCache()
+        } catch APIError.status(401) {
+        } catch APIError.status(429) {
+            // Rate limited — keep cached state and skip this cycle.
+        } catch {
+            if documents.isEmpty && documentFolders.isEmpty {
+                documentsError = "Failed to load documents."
+            }
         }
     }
 
@@ -138,14 +181,22 @@ final class AppDataStore: ObservableObject {
     func removeList(id: String) { userLists.removeAll { $0.id == id }; saveListsCache() }
     func removeListFolder(id: String) { listFolders.removeAll { $0.id == id }; saveListsCache() }
 
-    func insertDocument(_ doc: Document) { documents.insert(doc, at: 0); saveDocsCache() }
+    func insertDocument(_ doc: Document) { documents.insert(doc, at: 0); persistDocs() }
     func updateDocument(_ doc: Document) {
         if let idx = documents.firstIndex(where: { $0.id == doc.id }) { documents[idx] = doc }
-        saveDocsCache()
+        persistDocs()
     }
-    func removeDocument(id: String) { documents.removeAll { $0.id == id }; saveDocsCache() }
-    func insertDocumentFolder(_ folder: DocumentFolder) { documentFolders.append(folder); saveDocsCache() }
-    func removeDocumentFolder(id: String) { documentFolders.removeAll { $0.id == id }; saveDocsCache() }
+    func removeDocument(id: String) { documents.removeAll { $0.id == id }; persistDocs() }
+    func insertDocumentFolder(_ folder: DocumentFolder) { documentFolders.append(folder); persistDocs() }
+    func removeDocumentFolder(id: String) { documentFolders.removeAll { $0.id == id }; persistDocs() }
+
+    private func persistDocs() {
+        if offlineDocSyncEnabled {
+            saveDocsSyncCache()
+        } else {
+            saveDocsCache()
+        }
+    }
 
     func reset() {
         feedMessages = []
@@ -162,6 +213,7 @@ final class AppDataStore: ObservableObject {
         unreadCount = 0
         pendingRequestCount = 0
         dmUnreadCount = 0
+        docSyncCursor = nil
         userId = nil
     }
 
@@ -173,7 +225,13 @@ final class AppDataStore: ObservableObject {
             listFolders = cached.folders
             userLists = cached.lists
         }
-        if let cached: DocsCache = await cache.load(key: "\(userId)_docs") {
+        if offlineDocSyncEnabled {
+            if let state: DocumentSyncState = await cache.load(key: "\(userId)_docsync") {
+                documentFolders = state.folders
+                documents = state.documents
+                docSyncCursor = state.lastSyncAt
+            }
+        } else if let cached: DocsCache = await cache.load(key: "\(userId)_docs") {
             documentFolders = cached.folders
             documents = cached.documents
         }
@@ -195,6 +253,12 @@ final class AppDataStore: ObservableObject {
         guard let uid = userId else { return }
         let snapshot = DocsCache(folders: documentFolders, documents: documents)
         Task { await cache.save(snapshot, key: "\(uid)_docs") }
+    }
+
+    private func saveDocsSyncCache() {
+        guard let uid = userId else { return }
+        let snapshot = DocumentSyncState(folders: documentFolders, documents: documents, lastSyncAt: docSyncCursor)
+        Task { await cache.save(snapshot, key: "\(uid)_docsync") }
     }
 }
 

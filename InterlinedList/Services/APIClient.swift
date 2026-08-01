@@ -524,6 +524,21 @@ final class APIClient {
         return response.documents
     }
 
+    /// Offline sync pull. With `lastSyncAt` it returns a **delta** since that
+    /// cursor; without it, the **full** folder/document state. Rows may carry a
+    /// non-nil `deletedAt` tombstone. The response `lastSyncAt` is the next cursor.
+    func documentSync(lastSyncAt: String? = nil) async throws -> DocumentSyncResponse {
+        var path = "/api/documents/sync"
+        if let cursor = lastSyncAt, !cursor.isEmpty {
+            var components = URLComponents()
+            components.queryItems = [URLQueryItem(name: "lastSyncAt", value: cursor)]
+            if let query = components.percentEncodedQuery {
+                path += "?" + query
+            }
+        }
+        return try await get(path)
+    }
+
     func createDocument(title: String, content: String?, isPublic: Bool, folderId: String?) async throws -> Document {
         // The folder is chosen by the *path*, not a body field: `POST /api/documents` always
         // creates at root (it has no folderId field), so a document "created in a folder" via
