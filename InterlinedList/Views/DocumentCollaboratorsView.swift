@@ -224,7 +224,7 @@ private struct AddDocumentCollaboratorView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    Text(role.detail).font(.ilMono()).foregroundStyle(.secondary)
+                    Text(role.detail(for: "document")).font(.ilMono()).foregroundStyle(.secondary)
                 }
 
                 Section("People") {

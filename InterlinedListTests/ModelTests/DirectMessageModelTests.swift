@@ -143,4 +143,33 @@ final class DirectMessageModelTests: XCTestCase {
         XCTAssertEqual(DMFolder.deleted.rawValue, "deleted")
         XCTAssertEqual(DMFolder.allCases.count, 3)
     }
+
+    // MARK: DMRecipientFilter
+
+    private func user(_ username: String, _ displayName: String? = nil) -> DMUser {
+        DMUser(id: username, username: username, displayName: displayName, avatar: nil)
+    }
+
+    func test_recipientFilter_blankQuery_returnsEveryone() {
+        let people = [user("alice"), user("bob")]
+        XCTAssertEqual(DMRecipientFilter.matches(people, query: "").count, 2)
+        XCTAssertEqual(DMRecipientFilter.matches(people, query: "   ").count, 2)
+    }
+
+    func test_recipientFilter_matchesUsernameCaseInsensitively() {
+        let people = [user("alice"), user("bob")]
+        let result = DMRecipientFilter.matches(people, query: "ALI")
+        XCTAssertEqual(result.map(\.username), ["alice"])
+    }
+
+    func test_recipientFilter_matchesDisplayName() {
+        let people = [user("alice", "Alice Anderson"), user("bob", "Bob Brown")]
+        let result = DMRecipientFilter.matches(people, query: "brown")
+        XCTAssertEqual(result.map(\.username), ["bob"])
+    }
+
+    func test_recipientFilter_noMatch_returnsEmpty() {
+        let people = [user("alice"), user("bob")]
+        XCTAssertTrue(DMRecipientFilter.matches(people, query: "zzz").isEmpty)
+    }
 }

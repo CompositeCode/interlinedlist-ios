@@ -100,7 +100,7 @@ struct ShareLinksSheet: View {
                 }
             }
             .pickerStyle(.segmented)
-            Text(newRole.detail).font(.ilMono()).foregroundStyle(.secondary)
+            Text(newRole.detail(for: kind.singularLabel)).font(.ilMono()).foregroundStyle(.secondary)
 
             Toggle("Set expiry", isOn: $useExpiry)
                 .accessibilityLabel("Set an expiry date for the link")

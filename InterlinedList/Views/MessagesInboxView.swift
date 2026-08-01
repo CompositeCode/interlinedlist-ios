@@ -47,7 +47,7 @@ struct MessagesInboxView: View {
             .sheet(isPresented: $showRecipientPicker) {
                 DMRecipientPickerView { user in
                     showRecipientPicker = false
-                    pendingRecipient = user
+                    selectedThreadUser = user
                 }
                 .environmentObject(authState)
             }
@@ -55,20 +55,11 @@ struct MessagesInboxView: View {
                 DMThreadView(username: user.username, initialUser: user)
                     .environmentObject(authState)
             }
-            .onChange(of: showRecipientPicker) { _, isShowing in
-                // Push the thread only after the picker sheet has fully dismissed,
-                // otherwise the push and the dismiss animation collide.
-                if !isShowing, let user = pendingRecipient {
-                    pendingRecipient = nil
-                    selectedThreadUser = user
-                }
-            }
         }
         .task(id: folder) { await load() }
     }
 
     @State private var selectedThreadUser: DMUser?
-    @State private var pendingRecipient: DMUser?
 
     @ViewBuilder
     private var content: some View {
@@ -242,12 +233,7 @@ private struct DMRecipientPickerView: View {
     @State private var query = ""
 
     private var filtered: [DMUser] {
-        guard !query.isEmpty else { return recipients }
-        let lower = query.lowercased()
-        return recipients.filter {
-            $0.username.lowercased().contains(lower) ||
-            ($0.displayName?.lowercased().contains(lower) ?? false)
-        }
+        DMRecipientFilter.matches(recipients, query: query)
     }
 
     var body: some View {
@@ -284,7 +270,9 @@ private struct DMRecipientPickerView: View {
                                         .font(.ilMono(10))
                                         .foregroundStyle(.secondary)
                                 }
+                                Spacer()
                             }
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Message @\(user.username)")

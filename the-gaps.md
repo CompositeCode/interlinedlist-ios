@@ -100,10 +100,25 @@ Live implementation status — updated as work lands on `dev` (uncommitted unles
 | **9 — Deep links + share actions (G10)** | `ILWebURL` canonical permalinks; pure `AppDeepLink.parse` (custom-scheme + `https://interlinedlist.com`); `message(id:)` + `MessageLinkView`; "Share link" on message/profile/list/document; auth links preserved | ✅ **Done** 2026-07-31 — build green; 681-test suite passes. Inbound routing for profiles+messages; **Universal Links (https→app) still need backend AASA (ask A2)**; list/doc inbound + shared-token resolution are follow-ons |
 | — | **G9 Slice 2** offline edit queue + push *(policy: conflict-copy; needs a write-test account)* · **G10 follow-ons** *(list/doc inbound, shared-token resolve, Universal-Links activation via A2)* · **G11 presence** *(optional)* | ⏳ remaining |
 
-**Whole-tree gate (2026-07-31, after Phase 8):** full unit suite **649 tests, 0 failures**
-(E2E excluded). All work builds and passes together; Phases 1–7 committed as clean
-per-feature commits (`APIClient.swift` hunk-split per phase; `project.pbxproj`
-registration consolidated in one `build:` commit), G9 Slice 1 as its own commit.
+**Whole-tree gate (2026-07-31, after the fix pass):** full unit suite **694 tests,
+0 failures** (E2E excluded). All work builds and passes together; Phases 1–9
+committed as clean per-feature commits (`APIClient.swift` hunk-split per phase;
+`project.pbxproj` registration consolidated in one `build:` commit), G9 Slice 1 and
+G10 each their own commit, plus a fix commit.
+
+**Interactive smoke-test (2026-07-31):** logged in as `@messenger` (subscriber) and
+exercised all new surfaces. **6/7 PASS** (DM inbox, people search, sessions, muted
+users, share actions, GitHub-list gating, document sharing — no crashes). Two real
+defects found and **fixed**: **D-1** DM new-message recipient tap didn't open the
+thread (fragile `onChange`-after-dismiss nav → now `navigationDestination(item:)` +
+full-width tappable row, matching the verified-good `FindPeopleView` pattern);
+**D-2** (pre-existing) `FollowStatus` decode mismatch — API returns
+`{status,isFollowing,isPending}`, client wanted `{following,followedBy,pendingRequest}`
+→ remapped defensively (also fixed the latent nested `follow.status` shape on
+`POST /api/follow/:id`). Plus a resource-aware share-copy nit. **D-1's literal
+runtime tap wasn't re-driven** — the UI-automation tooling wasn't available in the
+re-check session — but the fix mirrors the interactively-confirmed people-search
+flow and is unit-/build-verified; a manual tap-test is the one residual check.
 
 **Shipped this session (parity closed):** defects **D1/D2/D3** · **G1** Direct
 Messages · **G2** Sharing · **G3** Templates · **G4** GitHub-backed lists · **G5**

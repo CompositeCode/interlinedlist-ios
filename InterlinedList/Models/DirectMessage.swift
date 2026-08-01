@@ -18,6 +18,20 @@ struct DMUser: Codable, Identifiable, Hashable {
     }
 }
 
+/// Pure recipient-search filtering, extracted so the picker's list logic can be
+/// unit-tested without SwiftUI. A blank query returns everyone unchanged.
+enum DMRecipientFilter {
+    static func matches(_ recipients: [DMUser], query: String) -> [DMUser] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return recipients }
+        let lower = trimmed.lowercased()
+        return recipients.filter {
+            $0.username.lowercased().contains(lower) ||
+            ($0.displayName?.lowercased().contains(lower) ?? false)
+        }
+    }
+}
+
 /// A single direct message. `sender`/`recipient` may be absent on some payloads
 /// (e.g. thread updates), so both are optional and the view falls back to ids.
 struct DMMessage: Codable, Identifiable, Hashable {

@@ -50,6 +50,21 @@ final class GapModelsTests: XCTestCase {
         XCTAssertFalse(WatcherRole.collaborator.canManage)
     }
 
+    func test_watcherRole_detail_defaultUsesListNoun() {
+        XCTAssertEqual(WatcherRole.watcher.detail, "Can view this list")
+    }
+
+    func test_watcherRole_detail_watcherIsResourceAware() {
+        XCTAssertEqual(WatcherRole.watcher.detail(for: "document"), "Can view this document")
+        XCTAssertEqual(WatcherRole.watcher.detail(for: "list"), "Can view this list")
+    }
+
+    func test_watcherRole_detail_nonWatcherRolesIgnoreNoun() {
+        XCTAssertEqual(WatcherRole.collaborator.detail(for: "document"), "Can add and edit rows")
+        XCTAssertEqual(WatcherRole.manager.detail(for: "document"),
+                       "Can edit the schema and manage access")
+    }
+
     // MARK: - OrgRole
 
     func test_orgRole_ordering() {

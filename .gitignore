@@ -15,3 +15,5 @@ DerivedData/
 build/
 
 .env
+# Local QA smoke-test screenshot artifacts
+QA/

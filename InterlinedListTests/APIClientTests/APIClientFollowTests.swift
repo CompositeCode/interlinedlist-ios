@@ -5,7 +5,8 @@ final class APIClientFollowTests: XCTestCase {
     var sut: APIClient!
     var session: MockURLSession!
 
-    private let statusJSON = #"{"following":true,"followed_by":false,"pending_request":false}"#
+    private let statusJSON = #"{"status":"approved","isFollowing":true,"isPending":false}"#
+    private let followActionJSON = #"{"follow":{"id":"f1","status":"approved","followerId":"me","followingId":"u1"}}"#
     private let countsJSON = #"{"followers":10,"following":5}"#
 
     override func setUp() {
@@ -18,7 +19,7 @@ final class APIClientFollowTests: XCTestCase {
     // MARK: followUser()
 
     func test_followUser_sendsPostToCorrectPath() async throws {
-        session.stub(json: statusJSON)
+        session.stub(json: followActionJSON)
         let status = try await sut.followUser(userId: "u1")
         XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
         XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/follow/u1") == true)
