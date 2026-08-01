@@ -38,11 +38,12 @@ struct MainTabView: View {
 
     private var topBar: some View {
         HStack(spacing: 0) {
-            ForEach([MainSection.home, .lists, .documents, .profile], id: \.rawValue) { section in
+            ForEach([MainSection.home, .lists, .documents], id: \.rawValue) { section in
                 topBarButton(section: section)
             }
             envelopeButton
             bellButton
+            topBarButton(section: .profile)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 10)
