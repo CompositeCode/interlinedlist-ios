@@ -107,7 +107,10 @@
       "mcp__xcodebuildmcp__build_sim",
       "Bash(grep -E \"\\\\.swift$\")",
       "Bash(/usr/bin/env bash --version)",
-      "Bash(./run-iphone.sh)"
+      "Bash(./run-iphone.sh)",
+      "Bash(chmod +x /private/tmp/claude-501/-Users-adron-Codez-interlinedlist-ios/e4665075-8f75-4abb-9a63-f2a985cfcbab/scratchpad/extract_routes.sh)",
+      "Bash(bash /private/tmp/claude-501/-Users-adron-Codez-interlinedlist-ios/e4665075-8f75-4abb-9a63-f2a985cfcbab/scratchpad/extract_routes.sh)",
+      "mcp__xcodebuildmcp__session_set_defaults"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"
