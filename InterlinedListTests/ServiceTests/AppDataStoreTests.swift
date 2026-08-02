@@ -161,6 +161,82 @@ final class AppDataStoreTests: XCTestCase {
         XCTAssertTrue(store.documents.isEmpty)
     }
 
+    // MARK: - Slice 3: pull-first conflict-copy cycle
+
+    func test_syncCycle_dirtyDocWithNewerServer_keepsLocalAndCreatesConflictCopy() async {
+        let api = ControllableSyncAPI()
+
+        // Cycle 1: a clean pull seeds document d1 and records its baseline (T1).
+        api.nextPull = DocumentSyncResponse(
+            documents: [makeSyncedDoc(id: "d1", title: "server v1", updatedAt: "2026-08-01T00:00:00Z")],
+            lastSyncAt: "cursor-1")
+        let store = AppDataStore(syncAPI: api)
+        await store.pushOutbox()
+        XCTAssertTrue(store.documents.contains { $0.id == "d1" })
+        XCTAssertTrue(store.syncConflicts.isEmpty, "clean pull is not a conflict")
+
+        // A pull that throws keeps the debounced push (from the edit below) a no-op
+        // while we stage the divergent server state deterministically.
+        api.nextPull = nil
+        _ = store.updateDocumentOffline(id: "d1", title: "my local edit",
+                                        content: "local body", isPublic: false, folderId: nil)
+        XCTAssertTrue(store.pendingSyncDocIds.contains("d1"))
+
+        // Cycle 2: the server has a NEWER version of d1 → conflict-copy.
+        api.nextPull = DocumentSyncResponse(
+            documents: [makeSyncedDoc(id: "d1", title: "server v2", content: "server body",
+                                      updatedAt: "2026-08-02T00:00:00Z")],
+            lastSyncAt: "cursor-2")
+        api.nextPushCursor = "2026-08-02T12:00:00Z"
+        await store.pushOutbox()
+
+        // Local doc stays live (protected from the merge).
+        let live = store.documents.first { $0.id == "d1" }
+        XCTAssertEqual(live?.title, "my local edit")
+
+        // A conflict copy of the SERVER version was created as a new doc.
+        let copy = store.documents.first { $0.id != "d1" && $0.title.contains("conflicted copy") }
+        XCTAssertNotNil(copy, "a conflict copy document exists")
+        XCTAssertTrue(copy?.title.hasPrefix("server v2") == true)
+        XCTAssertEqual(copy?.content, "server body")
+
+        // Banner notice recorded for the conflicting doc.
+        XCTAssertEqual(store.syncConflicts.count, 1)
+        XCTAssertEqual(store.syncConflicts.first?.id, "d1")
+
+        // Push drained both the local update and the new conflict-copy create.
+        let pushedIds = Set(api.lastPushedOps.map { $0.data.id })
+        XCTAssertTrue(pushedIds.contains("d1"), "local edit pushed")
+        XCTAssertTrue(copy.map { pushedIds.contains($0.id) } ?? false, "conflict copy pushed")
+        // Outbox cleared after the successful push.
+        XCTAssertFalse(store.pendingSyncDocIds.contains("d1"))
+    }
+
+    func test_dismissSyncConflicts_clearsBanner() async {
+        let api = ControllableSyncAPI()
+        api.nextPull = DocumentSyncResponse(
+            documents: [makeSyncedDoc(id: "d1", title: "v1", updatedAt: "2026-08-01T00:00:00Z")],
+            lastSyncAt: "c1")
+        let store = AppDataStore(syncAPI: api)
+        await store.pushOutbox()
+        api.nextPull = nil
+        _ = store.updateDocumentOffline(id: "d1", title: "local", content: nil, isPublic: false, folderId: nil)
+        api.nextPull = DocumentSyncResponse(
+            documents: [makeSyncedDoc(id: "d1", title: "v2", updatedAt: "2026-08-02T00:00:00Z")],
+            lastSyncAt: "c2")
+        api.nextPushCursor = "2026-08-02T12:00:00Z"
+        await store.pushOutbox()
+        XCTAssertFalse(store.syncConflicts.isEmpty)
+        store.dismissSyncConflicts()
+        XCTAssertTrue(store.syncConflicts.isEmpty)
+    }
+
+    private func makeSyncedDoc(id: String, title: String, content: String? = nil,
+                               updatedAt: String) -> Document {
+        Document(id: id, title: title, content: content, folderId: nil, isPublic: false,
+                 createdAt: "2026-07-01T00:00:00Z", updatedAt: updatedAt)
+    }
+
     // MARK: - Helpers
 
     private func makeMessage(id: String) -> Message {
@@ -216,5 +292,26 @@ private final class RecordingSyncAPI: DocumentSyncAPI, @unchecked Sendable {
     func documentSync(lastSyncAt: String?) async throws -> DocumentSyncResponse {
         pullCalled = true
         return pullResponse
+    }
+}
+
+/// A sequenceable mock: `nextPull` is served on the next pull (nil → throws, so a
+/// stray debounced push is a harmless no-op); `nextPushCursor` is returned on the
+/// next push, and the pushed ops are captured.
+private final class ControllableSyncAPI: DocumentSyncAPI, @unchecked Sendable {
+    var nextPull: DocumentSyncResponse?
+    var nextPushCursor: String = "cursor-push"
+    private(set) var lastPushedOps: [SyncOperation] = []
+
+    func documentSync(lastSyncAt: String?) async throws -> DocumentSyncResponse {
+        guard let pull = nextPull else {
+            throw APIError.network(URLError(.notConnectedToInternet))
+        }
+        return pull
+    }
+
+    func pushDocumentSync(operations: [SyncOperation]) async throws -> String {
+        lastPushedOps = operations
+        return nextPushCursor
     }
 }

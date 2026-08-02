@@ -120,6 +120,34 @@ final class DocumentSyncModelTests: XCTestCase {
         XCTAssertTrue(decoded.localStates.isEmpty)
     }
 
+    // MARK: - Slice 3: baselines persistence
+
+    func test_syncState_baselinesRoundTrip() throws {
+        var state = DocumentSyncState(documents: [Document(id: "d1", title: "D")], lastSyncAt: "c1")
+        state.baselines = ["d1": "2026-08-01T00:00:00Z", "d2": "2026-08-02T00:00:00Z"]
+        let data = try JSONEncoder().encode(state)
+        let decoded = try JSONDecoder().decode(DocumentSyncState.self, from: data)
+        XCTAssertEqual(decoded.baselines["d1"], "2026-08-01T00:00:00Z")
+        XCTAssertEqual(decoded.baselines["d2"], "2026-08-02T00:00:00Z")
+    }
+
+    func test_syncState_slice2CacheWithoutBaselines_stillDecodes() throws {
+        // A Slice-1/2 cache has no baselines key.
+        let json = #"{"folders":[],"documents":[{"id":"d1","title":"D"}],"lastSyncAt":"c1","outbox":[],"localStates":{}}"#
+        let decoded = try JSONDecoder().decode(DocumentSyncState.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.documents.first?.id, "d1")
+        XCTAssertTrue(decoded.baselines.isEmpty)
+    }
+
+    // MARK: - SyncConflictNotice
+
+    func test_syncConflictNotice_equatableByFields() {
+        let a = SyncConflictNotice(id: "d1", originalTitle: "Live", copyTitle: "Live (conflicted copy 2026-08-02)")
+        let b = SyncConflictNotice(id: "d1", originalTitle: "Live", copyTitle: "Live (conflicted copy 2026-08-02)")
+        XCTAssertEqual(a, b)
+        XCTAssertEqual(a.id, "d1")
+    }
+
     // MARK: - SyncOpData encodes only non-nil keys
 
     func test_syncOpData_deleteEncodesOnlyId() throws {

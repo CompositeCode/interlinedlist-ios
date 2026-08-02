@@ -117,14 +117,22 @@ struct DocumentSyncState: Codable {
     var lastSyncAt: String?
     var outbox: [SyncOperation]
     var localStates: [String: LocalSyncState]
+    /// Per-doc server `updatedAt` recorded whenever a doc last became `.synced`
+    /// (a clean pull, or after a successful push). Slice-3 conflict detection
+    /// compares a delta row's `updatedAt` against this baseline: a locally
+    /// `.dirty` doc whose server `updatedAt` moved past its baseline was edited
+    /// elsewhere and is a conflict.
+    var baselines: [String: String]
 
     init(folders: [DocumentFolder] = [], documents: [Document] = [], lastSyncAt: String? = nil,
-         outbox: [SyncOperation] = [], localStates: [String: LocalSyncState] = [:]) {
+         outbox: [SyncOperation] = [], localStates: [String: LocalSyncState] = [:],
+         baselines: [String: String] = [:]) {
         self.folders = folders
         self.documents = documents
         self.lastSyncAt = lastSyncAt
         self.outbox = outbox
         self.localStates = localStates
+        self.baselines = baselines
     }
 
     init(from decoder: Decoder) throws {
@@ -135,6 +143,8 @@ struct DocumentSyncState: Codable {
         // Tolerate a Slice-1 cache written before these fields existed.
         outbox = try container.decodeIfPresent([SyncOperation].self, forKey: .outbox) ?? []
         localStates = try container.decodeIfPresent([String: LocalSyncState].self, forKey: .localStates) ?? [:]
+        // Tolerate a Slice-1/2 cache written before baselines existed.
+        baselines = try container.decodeIfPresent([String: String].self, forKey: .baselines) ?? [:]
     }
 
     /// Ids that have un-pushed create/update edits (helper for the UI's
@@ -142,4 +152,16 @@ struct DocumentSyncState: Codable {
     var dirtyIds: Set<String> {
         Set(localStates.filter { $0.value == .dirty }.keys)
     }
+}
+
+/// A user-facing record that a document was edited elsewhere while we held
+/// un-pushed local edits, so the server version was preserved as a **conflict
+/// copy** rather than being clobbered. Drives the dismissible banner.
+struct SyncConflictNotice: Identifiable, Equatable {
+    /// The conflicting (still-live, locally edited) document's id.
+    let id: String
+    /// Title of the document the user kept editing (the live/local copy).
+    let originalTitle: String
+    /// Title of the newly created conflict copy holding the server's version.
+    let copyTitle: String
 }

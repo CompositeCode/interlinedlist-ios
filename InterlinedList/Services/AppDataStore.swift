@@ -60,9 +60,20 @@ final class AppDataStore: ObservableObject {
     private var docSyncOutbox: [SyncOperation] = []
     private var docLocalStates: [String: LocalSyncState] = [:]
 
+    /// Slice 3 baselines: per-doc server `updatedAt` at the last point the doc was
+    /// `.synced`. Conflict detection compares a pull row's `updatedAt` to this.
+    private var docBaselines: [String: String] = [:]
+
     /// Ids of documents with un-pushed edits — drives the optional "pending sync"
     /// affordance in the UI.
     @Published private(set) var pendingSyncDocIds: Set<String> = []
+
+    /// Slice 3. Documents edited elsewhere while we held un-pushed local edits;
+    /// their server version was kept as a conflict copy. Drives a dismissible
+    /// banner in `DocumentsView`. Empty when there are no unresolved conflicts.
+    @Published private(set) var syncConflicts: [SyncConflictNotice] = []
+
+    func dismissSyncConflicts() { syncConflicts = [] }
 
     private var reachability: NetworkReachability?
     private var pushInFlight = false
@@ -160,14 +171,16 @@ final class AppDataStore: ObservableObject {
         documentsLoading = documents.isEmpty
         documentsError = nil
         defer { documentsLoading = false }
-        // A refresh runs the full cycle: push any queued edits first (so local
-        // intent isn't clobbered by the pull merge), then pull to reconcile.
         await syncCycle()
     }
 
-    /// One sync cycle: **push** the outbox (if any), then **pull** the delta and
-    /// merge (last-writer-wins). Serialized via `pushInFlight` so overlapping
-    /// triggers (foreground + reconnect + edit) don't double-push.
+    /// One sync cycle (Slice 3, **pull-first**): pull the delta, detect and
+    /// resolve conflicts (conflict-copy), merge while protecting the conflicting
+    /// dirty docs, **then** push the outbox (local edits + new conflict copies).
+    /// Pull-first is required so the server's newer version is seen and preserved
+    /// *before* a local push (which is last-writer-wins) could clobber it.
+    /// Serialized via `pushInFlight` so overlapping triggers (foreground +
+    /// reconnect + edit) don't overlap.
     private func syncCycle() async {
         guard offlineDocSyncEnabled else { return }
         if pushInFlight {
@@ -182,14 +195,89 @@ final class AppDataStore: ObservableObject {
                 Task { await syncCycle() }
             }
         }
-        await drainOutbox()
         await pullDocuments()
+        await drainOutbox()
     }
 
     /// Trigger point exposed to the app (foreground / reconnect / after a local
-    /// edit). Runs a full push-then-pull cycle.
+    /// edit). Runs a full pull-then-push cycle.
     func pushOutbox() async {
         await syncCycle()
+    }
+
+    private func pullDocuments() async {
+        do {
+            let delta = try await syncAPI.documentSync(lastSyncAt: docSyncCursor)
+            var state = currentSyncState()
+
+            let conflicts = DocumentSyncConflict.detectConflicts(
+                delta: delta, dirtyIds: state.dirtyIds, baselines: state.baselines)
+            resolveConflicts(conflicts, into: &state)
+
+            let protectedIds = Set(conflicts.map { $0.id })
+            let merged = DocumentSyncMerge.apply(delta: delta, to: state, protectingIds: protectedIds)
+            state.folders = merged.folders
+            state.documents = merged.documents
+            state.lastSyncAt = merged.lastSyncAt
+
+            recordBaselines(from: delta, protectedIds: protectedIds, into: &state)
+
+            applySyncState(state)
+            saveDocsSyncCache()
+        } catch APIError.status(401) {
+        } catch APIError.status(429) {
+            // Rate limited — keep cached state and skip this cycle.
+        } catch APIError.rateLimited {
+            // Rate limited — keep cached state and skip this cycle.
+        } catch {
+            if documents.isEmpty && documentFolders.isEmpty {
+                documentsError = "Failed to load documents."
+            }
+        }
+    }
+
+    /// For each conflict, keep the local (dirty) doc live and preserve the SERVER
+    /// version as a new conflict-copy document: insert it, enqueue its `create`
+    /// op, and record a banner notice. Real `Date()`/`UUID()` live here; the pure
+    /// shape is built by `DocumentSyncConflict`.
+    private func resolveConflicts(_ conflicts: [ConflictInfo], into state: inout DocumentSyncState) {
+        guard !conflicts.isEmpty else { return }
+        let now = Date()
+        var notices: [SyncConflictNotice] = []
+        for conflict in conflicts {
+            let copy = DocumentSyncConflict.makeConflictCopy(
+                server: conflict.serverDocument, date: now, newId: UUID().uuidString)
+            if !state.documents.contains(where: { $0.id == copy.document.id }) {
+                state.documents.insert(copy.document, at: 0)
+            }
+            DocumentSyncOutbox.enqueue(copy.operation, into: &state)
+            let liveTitle = state.documents.first { $0.id == conflict.id }?.title
+                ?? conflict.serverDocument.title
+            notices.append(SyncConflictNotice(id: conflict.id,
+                                              originalTitle: liveTitle,
+                                              copyTitle: copy.document.title))
+        }
+        syncConflicts.append(contentsOf: notices)
+    }
+
+    /// After a pull, baseline every delta document (conflicting or not) at the
+    /// server `updatedAt` we just saw. Non-conflicting rows were merged in;
+    /// conflicting rows kept their local copy live but we advance their baseline
+    /// to the now-seen server version so the *same* server edit isn't detected as
+    /// a conflict twice (only a genuinely newer server edit re-triggers). Deletes
+    /// drop the baseline.
+    private func recordBaselines(from delta: DocumentSyncResponse,
+                                 protectedIds: Set<String>,
+                                 into state: inout DocumentSyncState) {
+        for document in delta.documents {
+            if document.deletedAt != nil {
+                if !protectedIds.contains(document.id) {
+                    state.baselines[document.id] = nil
+                }
+            } else if let updatedAt = document.updatedAt {
+                state.baselines[document.id] = updatedAt
+            }
+        }
     }
 
     private func drainOutbox() async {
@@ -200,6 +288,7 @@ final class AppDataStore: ObservableObject {
             var state = currentSyncState()
             DocumentSyncOutbox.clearOutbox(payload, from: &state)
             state.lastSyncAt = cursor
+            recordPushBaselines(payload, cursor: cursor, into: &state)
             applySyncState(state)
             saveDocsSyncCache()
         } catch APIError.status(401) {
@@ -211,26 +300,17 @@ final class AppDataStore: ObservableObject {
         }
     }
 
-    private func pullDocuments() async {
-        do {
-            let delta = try await syncAPI.documentSync(lastSyncAt: docSyncCursor)
-            var state = currentSyncState()
-            let merged = DocumentSyncMerge.apply(delta: delta, to: state)
-            // TODO(slice 3): before overwriting, detect a conflict — a locally
-            // `.dirty` id whose server `updatedAt` is newer than our baseline —
-            // and preserve the server row as a "conflict copy" instead of the
-            // pure last-writer-wins merge used here.
-            state.folders = merged.folders
-            state.documents = merged.documents
-            state.lastSyncAt = merged.lastSyncAt
-            applySyncState(state)
-            saveDocsSyncCache()
-        } catch APIError.status(401) {
-        } catch APIError.status(429) {
-            // Rate limited — keep cached state and skip this cycle.
-        } catch {
-            if documents.isEmpty && documentFolders.isEmpty {
-                documentsError = "Failed to load documents."
+    /// After a successful push, baseline each pushed create/update at the push
+    /// cursor (the server's post-push `updatedAt` for those rows) and drop the
+    /// baseline for deletes. Keeps conflict detection accurate on the next pull.
+    private func recordPushBaselines(_ pushed: [SyncOperation], cursor: String,
+                                     into state: inout DocumentSyncState) {
+        for op in pushed {
+            switch op.op {
+            case .create, .update:
+                state.baselines[op.data.id] = cursor
+            case .delete:
+                state.baselines[op.data.id] = nil
             }
         }
     }
@@ -359,7 +439,8 @@ final class AppDataStore: ObservableObject {
 
     private func currentSyncState() -> DocumentSyncState {
         DocumentSyncState(folders: documentFolders, documents: documents,
-                          lastSyncAt: docSyncCursor, outbox: docSyncOutbox, localStates: docLocalStates)
+                          lastSyncAt: docSyncCursor, outbox: docSyncOutbox,
+                          localStates: docLocalStates, baselines: docBaselines)
     }
 
     private func applySyncState(_ state: DocumentSyncState) {
@@ -368,6 +449,7 @@ final class AppDataStore: ObservableObject {
         docSyncCursor = state.lastSyncAt
         docSyncOutbox = state.outbox
         docLocalStates = state.localStates
+        docBaselines = state.baselines
         pendingSyncDocIds = state.dirtyIds
     }
 
@@ -428,7 +510,9 @@ final class AppDataStore: ObservableObject {
         docSyncCursor = nil
         docSyncOutbox = []
         docLocalStates = [:]
+        docBaselines = [:]
         pendingSyncDocIds = []
+        syncConflicts = []
         reachability?.stop()
         reachability = nil
         userId = nil
@@ -449,6 +533,7 @@ final class AppDataStore: ObservableObject {
                 docSyncCursor = state.lastSyncAt
                 docSyncOutbox = state.outbox
                 docLocalStates = state.localStates
+                docBaselines = state.baselines
                 pendingSyncDocIds = state.dirtyIds
             }
         } else if let cached: DocsCache = await cache.load(key: "\(userId)_docs") {

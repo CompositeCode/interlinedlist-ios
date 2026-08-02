@@ -48,27 +48,42 @@ struct DocumentsView: View {
             : allDocuments
     }
 
+    private var showConflictBanner: Bool {
+        store.offlineDocumentWritesEnabled && !store.syncConflicts.isEmpty
+    }
+
+    private var conflictBannerText: String {
+        let count = store.syncConflicts.count
+        let noun = count == 1 ? "document" : "documents"
+        return "\(count) \(noun) were edited elsewhere — a conflicted copy was kept."
+    }
+
     var body: some View {
         NavigationStack {
-            Group {
-                if !searchText.isEmpty {
-                    searchResultsList
-                } else if store.documentsLoading && allFolders.isEmpty && allDocuments.isEmpty {
-                    DocumentSkeletonView()
-                } else if let error = store.documentsError {
-                    ContentUnavailableView {
-                        Label("Unavailable", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(error)
+            VStack(spacing: 0) {
+                if showConflictBanner {
+                    conflictBanner
+                }
+                Group {
+                    if !searchText.isEmpty {
+                        searchResultsList
+                    } else if store.documentsLoading && allFolders.isEmpty && allDocuments.isEmpty {
+                        DocumentSkeletonView()
+                    } else if let error = store.documentsError {
+                        ContentUnavailableView {
+                            Label("Unavailable", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(error)
+                        }
+                    } else if rootFolders.isEmpty && rootDocuments.isEmpty {
+                        ContentUnavailableView {
+                            Label("No Documents", systemImage: "doc.text")
+                        } description: {
+                            Text("Tap + to create your first document.")
+                        }
+                    } else {
+                        documentList
                     }
-                } else if rootFolders.isEmpty && rootDocuments.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Documents", systemImage: "doc.text")
-                    } description: {
-                        Text("Tap + to create your first document.")
-                    }
-                } else {
-                    documentList
                 }
             }
             .navigationTitle("Documents")
@@ -177,6 +192,34 @@ struct DocumentsView: View {
             // Re-sync so a failed delete doesn't leave the folder missing from the UI.
             await store.refreshDocuments()
         }
+    }
+
+    private var conflictBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color(ILColor.primary))
+            Text(conflictBannerText)
+                .font(.footnote)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button {
+                store.dismissSyncConflicts()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss conflict notice")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(ILColor.primary).opacity(0.10))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(conflictBannerText)
     }
 
     @ViewBuilder
