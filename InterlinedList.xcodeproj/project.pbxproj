@@ -99,6 +99,7 @@
 		C8AFF749A154E5F96FB77DE2 /* APIClientSessionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E8D880C1D849E2E67C36116 /* APIClientSessionsTests.swift */; };
 		CB45081F767583424D54523C /* APIClientPushTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09470364B5A0A559FDE3215F /* APIClientPushTests.swift */; };
 		CE93B45A2285EF8FD995D9FE /* OrganizationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0041BEAB46F9186FB5BF907 /* OrganizationsView.swift */; };
+		D00510C1491A00AD0A77370B /* DocumentSyncOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CF8FDEBF56E4CAB421FD811 /* DocumentSyncOutbox.swift */; };
 		D0A1D0A1D0A10001 /* OAuthCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10002 /* OAuthCoordinator.swift */; };
 		D0A1D0A1D0A10003 /* ChangeEmailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10004 /* ChangeEmailView.swift */; };
 		D0A1D0A1D0A10005 /* ForgotPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A10006 /* ForgotPasswordView.swift */; };
@@ -111,6 +112,8 @@
 		DD652FF47D5509B976706914 /* DocumentSyncMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD5DCAF4C97D6B577F52527 /* DocumentSyncMerge.swift */; };
 		E1642E8329DC145DA96584D4 /* LinkedInTargetModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C9FAA36F8413788E1776C7 /* LinkedInTargetModelTests.swift */; };
 		E1F7D081DC89245C81E2047C /* AppDataStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EE76647702E9C83B941FA2C /* AppDataStoreTests.swift */; };
+		E21121B51C15922CFBF92C43 /* DocumentSyncOutboxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D42A88BDF9EB795F41CF2F64 /* DocumentSyncOutboxTests.swift */; };
+		E64747D9845D6726CC1A1485 /* NetworkReachability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F99C1D56FFD08CBD36F2273 /* NetworkReachability.swift */; };
 		EA48487E20A6BECF67D3C060 /* ILWebURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B06F2D2448FDFA3D1FCDC4A /* ILWebURL.swift */; };
 		EC636FE56A7CC64D7D01F64B /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5569B56DBD6747BB9587870 /* SessionsView.swift */; };
 		F211AD1D4EB93B9258F88CAC /* APIClientLinkedInTargetsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC17A8A26D35CC755EE5988 /* APIClientLinkedInTargetsTests.swift */; };
@@ -186,6 +189,7 @@
 		2DD102A0D8ECD7CFC11DBD4A /* SettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		32C2904D262C0859FD38A830 /* DirectMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectMessage.swift; sourceTree = "<group>"; };
 		3CD5DCAF4C97D6B577F52527 /* DocumentSyncMerge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentSyncMerge.swift; sourceTree = "<group>"; };
+		3F99C1D56FFD08CBD36F2273 /* NetworkReachability.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NetworkReachability.swift; sourceTree = "<group>"; };
 		468BAE51289ECDF42B84CE8B /* APIClientDocumentSyncTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientDocumentSyncTests.swift; sourceTree = "<group>"; };
 		489C4E80A2217A0B4D20B08A /* ILWebURLTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ILWebURLTests.swift; sourceTree = "<group>"; };
 		4B06F2D2448FDFA3D1FCDC4A /* ILWebURL.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ILWebURL.swift; sourceTree = "<group>"; };
@@ -196,6 +200,7 @@
 		544F68F263670763D5E23C59 /* MessageDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDetailView.swift; sourceTree = "<group>"; };
 		5802D2FF0552D510BB51D636 /* GitHub.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = GitHub.swift; path = GitHub.swift; sourceTree = "<group>"; };
 		5A04FF25F89FC0E5253896FD /* ImageUploadProcessor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageUploadProcessor.swift; sourceTree = "<group>"; };
+		5CF8FDEBF56E4CAB421FD811 /* DocumentSyncOutbox.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentSyncOutbox.swift; sourceTree = "<group>"; };
 		644B1B09F84332A794680ED7 /* APIClientMessageByIdTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientMessageByIdTests.swift; sourceTree = "<group>"; };
 		6A569D8DB8DFD3CC59072FDB /* APIClientModerationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientModerationTests.swift; sourceTree = "<group>"; };
 		74B5AC4D76899CEAF620E402 /* PublicBrowse.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicBrowse.swift; sourceTree = "<group>"; };
@@ -271,6 +276,7 @@
 		D0A1D0A1D0A1000A /* EmailVerificationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationBanner.swift; sourceTree = "<group>"; };
 		D0A1D0A1D0A1000C /* LinkedIdentitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkedIdentitiesView.swift; sourceTree = "<group>"; };
 		D0A1D0A1D0A1000E /* OAuthSignInButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthSignInButton.swift; sourceTree = "<group>"; };
+		D42A88BDF9EB795F41CF2F64 /* DocumentSyncOutboxTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentSyncOutboxTests.swift; sourceTree = "<group>"; };
 		D4C3953B4568AA7A2EA19EED /* ComposeImageUploaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComposeImageUploaderTests.swift; sourceTree = "<group>"; };
 		E32E0E59381D02A8A4E0A247 /* BlockedUsersView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
 		E5828367E38948582EF1DF2A /* WatchersListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchersListView.swift; sourceTree = "<group>"; };
@@ -428,6 +434,8 @@
 				7F7063C59228E7D97A16B17D /* ComposeImageUploader.swift */,
 				3CD5DCAF4C97D6B577F52527 /* DocumentSyncMerge.swift */,
 				4B06F2D2448FDFA3D1FCDC4A /* ILWebURL.swift */,
+				5CF8FDEBF56E4CAB421FD811 /* DocumentSyncOutbox.swift */,
+				3F99C1D56FFD08CBD36F2273 /* NetworkReachability.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -578,6 +586,7 @@
 				78BDFABB1D991EB98BFEC2AA /* ImageUploadProcessorTests.swift */,
 				D4C3953B4568AA7A2EA19EED /* ComposeImageUploaderTests.swift */,
 				8E384ED04860E87973898F89 /* DocumentSyncMergeTests.swift */,
+				D42A88BDF9EB795F41CF2F64 /* DocumentSyncOutboxTests.swift */,
 			);
 			path = ServiceTests;
 			sourceTree = "<group>";
@@ -763,6 +772,8 @@
 				DD652FF47D5509B976706914 /* DocumentSyncMerge.swift in Sources */,
 				EA48487E20A6BECF67D3C060 /* ILWebURL.swift in Sources */,
 				0B87CBFA04966C5AB9F5932C /* MessageLinkView.swift in Sources */,
+				D00510C1491A00AD0A77370B /* DocumentSyncOutbox.swift in Sources */,
+				E64747D9845D6726CC1A1485 /* NetworkReachability.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -834,6 +845,7 @@
 				213A17C03007A464190DB5D6 /* APIClientMessageByIdTests.swift in Sources */,
 				C6197F8F1B52DAE1B1D4A2F1 /* AppDeepLinkParseTests.swift in Sources */,
 				7CD66F2490C7D2D4A3227E6A /* ILWebURLTests.swift in Sources */,
+				E21121B51C15922CFBF92C43 /* DocumentSyncOutboxTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -87,5 +87,72 @@ final class DocumentSyncModelTests: XCTestCase {
         XCTAssertTrue(decoded.folders.isEmpty)
         XCTAssertTrue(decoded.documents.isEmpty)
         XCTAssertNil(decoded.lastSyncAt)
+        XCTAssertTrue(decoded.outbox.isEmpty)
+        XCTAssertTrue(decoded.localStates.isEmpty)
+    }
+
+    // MARK: - Slice 2: outbox + localStates persistence
+
+    func test_syncState_withOutboxAndStates_roundTrips() throws {
+        var state = DocumentSyncState(documents: [Document(id: "d1", title: "D")], lastSyncAt: "c1")
+        state.outbox = [
+            SyncOperation(op: .create, type: .document,
+                          data: SyncOpData(id: "d1", title: "D", content: "x", isPublic: false)),
+            SyncOperation(op: .delete, type: .folder, data: SyncOpData(id: "f9")),
+        ]
+        state.localStates = ["d1": .dirty, "f9": .deleted]
+        let data = try JSONEncoder().encode(state)
+        let decoded = try JSONDecoder().decode(DocumentSyncState.self, from: data)
+        XCTAssertEqual(decoded.outbox.count, 2)
+        XCTAssertEqual(decoded.outbox.first?.op, .create)
+        XCTAssertEqual(decoded.outbox.first?.data.content, "x")
+        XCTAssertEqual(decoded.outbox.last?.type, .folder)
+        XCTAssertEqual(decoded.localStates["d1"], .dirty)
+        XCTAssertEqual(decoded.localStates["f9"], .deleted)
+    }
+
+    func test_syncState_slice1CacheWithoutOutbox_stillDecodes() throws {
+        // A cache written by Slice 1 has no outbox/localStates keys.
+        let json = #"{"folders":[],"documents":[{"id":"d1","title":"D"}],"lastSyncAt":"c1"}"#
+        let decoded = try JSONDecoder().decode(DocumentSyncState.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.documents.first?.id, "d1")
+        XCTAssertTrue(decoded.outbox.isEmpty)
+        XCTAssertTrue(decoded.localStates.isEmpty)
+    }
+
+    // MARK: - SyncOpData encodes only non-nil keys
+
+    func test_syncOpData_deleteEncodesOnlyId() throws {
+        let data = SyncOpData(id: "d1")
+        let json = try JSONEncoder().encode(data)
+        let obj = try JSONSerialization.jsonObject(with: json) as? [String: Any]
+        XCTAssertEqual(obj?.keys.sorted(), ["id"])
+        XCTAssertEqual(obj?["id"] as? String, "d1")
+    }
+
+    func test_syncOpData_encodesCamelCaseAndDropsNilKeys() throws {
+        let data = SyncOpData(id: "d1", folderId: "f1", title: "T", content: "C", isPublic: true)
+        let json = try JSONEncoder().encode(data)
+        let obj = try JSONSerialization.jsonObject(with: json) as? [String: Any]
+        XCTAssertEqual(obj?["folderId"] as? String, "f1")
+        XCTAssertEqual(obj?["title"] as? String, "T")
+        XCTAssertEqual(obj?["isPublic"] as? Bool, true)
+        // Untouched fields are absent, not null.
+        XCTAssertNil(obj?["name"])
+        XCTAssertNil(obj?["parentId"])
+        XCTAssertNil(obj?["relativePath"])
+    }
+
+    func test_syncOperation_encodesCamelCaseOpTypeAndData() throws {
+        let op = SyncOperation(op: .create, type: .document, path: "notes.md",
+                               data: SyncOpData(id: "d1", title: "Notes"))
+        let json = try JSONEncoder().encode(op)
+        let obj = try JSONSerialization.jsonObject(with: json) as? [String: Any]
+        XCTAssertEqual(obj?["op"] as? String, "create")
+        XCTAssertEqual(obj?["type"] as? String, "document")
+        XCTAssertEqual(obj?["path"] as? String, "notes.md")
+        let dataObj = obj?["data"] as? [String: Any]
+        XCTAssertEqual(dataObj?["id"] as? String, "d1")
+        XCTAssertEqual(dataObj?["title"] as? String, "Notes")
     }
 }

@@ -164,6 +164,10 @@ struct DocumentsView: View {
     }
 
     private func deleteFolder(_ folder: DocumentFolder) async {
+        if store.offlineDocumentWritesEnabled {
+            store.deleteDocumentFolderOffline(id: folder.id)
+            return
+        }
         do {
             try await APIClient.shared.deleteDocumentFolder(id: folder.id)
             store.removeDocumentFolder(id: folder.id)
@@ -301,7 +305,7 @@ struct DocumentsView: View {
                         }, onDelete: { id in
                             store.removeDocument(id: id)
                         })) {
-                            DocumentRow(document: doc)
+                            DocumentRow(document: doc, pendingSync: store.pendingSyncDocIds.contains(doc.id))
                         }
                     }
                     .onDelete { offsets in
@@ -314,6 +318,10 @@ struct DocumentsView: View {
 
     private func deleteDocuments(at offsets: IndexSet, from list: [Document]) async {
         let toDelete = offsets.map { list[$0] }
+        if store.offlineDocumentWritesEnabled {
+            toDelete.forEach { store.deleteDocumentOffline(id: $0.id) }
+            return
+        }
         toDelete.forEach { store.removeDocument(id: $0.id) }
         for doc in toDelete {
             try? await APIClient.shared.deleteDocument(id: doc.id)
@@ -325,6 +333,7 @@ private struct DocumentFolderView: View {
     let folder: DocumentFolder
 
     @EnvironmentObject var authState: AuthState
+    @EnvironmentObject var store: AppDataStore
     @State private var subfolders: [DocumentFolder] = []
     @State private var documents: [Document] = []
     @State private var isLoading = false
@@ -454,7 +463,7 @@ private struct DocumentFolderView: View {
                     }, onDelete: { id in
                         documents.removeAll { $0.id == id }
                     })) {
-                        DocumentRow(document: doc)
+                        DocumentRow(document: doc, pendingSync: store.pendingSyncDocIds.contains(doc.id))
                     }
                 }
                 .onDelete { offsets in
@@ -470,6 +479,13 @@ private struct DocumentFolderView: View {
     }
 
     private func load() async {
+        if store.offlineDocumentWritesEnabled {
+            // The sync path keeps the store's full tree current; derive this
+            // folder's contents from it rather than the online endpoints.
+            subfolders = store.documentFolders.filter { $0.parentId == folder.id }
+            documents = store.documents.filter { $0.folderId == folder.id }
+            return
+        }
         isLoading = true
         defer { isLoading = false }
         do {
@@ -486,12 +502,21 @@ private struct DocumentFolderView: View {
     private func deleteDocuments(at offsets: IndexSet) async {
         let toDelete = offsets.map { documents[$0] }
         documents.remove(atOffsets: offsets)
+        if store.offlineDocumentWritesEnabled {
+            toDelete.forEach { store.deleteDocumentOffline(id: $0.id) }
+            return
+        }
         for doc in toDelete {
             try? await APIClient.shared.deleteDocument(id: doc.id)
         }
     }
 
     private func deleteFolder(_ sub: DocumentFolder) async {
+        if store.offlineDocumentWritesEnabled {
+            store.deleteDocumentFolderOffline(id: sub.id)
+            subfolders.removeAll { $0.id == sub.id }
+            return
+        }
         do {
             try await APIClient.shared.deleteDocumentFolder(id: sub.id)
             subfolders.removeAll { $0.id == sub.id }
@@ -506,11 +531,20 @@ private struct DocumentFolderView: View {
 
 private struct DocumentRow: View {
     let document: Document
+    var pendingSync: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(document.title)
-                .font(.ilBody())
+            HStack(spacing: 6) {
+                Text(document.title)
+                    .font(.ilBody())
+                if pendingSync {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Pending sync")
+                }
+            }
             if let updatedAt = document.updatedAt, let date = parseISODate(updatedAt) {
                 Text(date, style: .relative)
                     .font(.ilMono())
@@ -555,6 +589,7 @@ private struct DocumentDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authState: AuthState
+    @EnvironmentObject private var store: AppDataStore
     @State private var current: Document
     @State private var showEdit = false
     @State private var showDeleteConfirm = false
@@ -625,7 +660,11 @@ private struct DocumentDetailView: View {
         .confirmationDialog("Delete \"\(current.title)\"?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task {
-                    try? await APIClient.shared.deleteDocument(id: current.id)
+                    if store.offlineDocumentWritesEnabled {
+                        store.deleteDocumentOffline(id: current.id)
+                    } else {
+                        try? await APIClient.shared.deleteDocument(id: current.id)
+                    }
                     onDelete(current.id)
                     dismiss()
                 }
@@ -640,6 +679,7 @@ private struct CreateDocumentView: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authState: AuthState
+    @EnvironmentObject private var store: AppDataStore
     @State private var title = ""
     @State private var content = ""
     @State private var isPublic = false
@@ -717,6 +757,19 @@ private struct CreateDocumentView: View {
         isLoading = true
         defer { isLoading = false }
         errorMessage = nil
+        // A `draftId` means an image was auto-saved online (network was required),
+        // so keep that document server-coherent via the online update. Otherwise a
+        // plain text create can go through the offline outbox when the flag is on.
+        if store.offlineDocumentWritesEnabled && draftId == nil {
+            let saved = store.createDocumentOffline(
+                title: trimmedTitle,
+                content: content.isEmpty ? nil : content,
+                isPublic: isPublic,
+                folderId: folderId)
+            onSave(saved)
+            dismiss()
+            return
+        }
         do {
             let saved: Document
             if let draftId {
@@ -763,6 +816,7 @@ private struct EditDocumentView: View {
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authState: AuthState
+    @EnvironmentObject private var store: AppDataStore
     @State private var title: String
     @State private var content: String
     @State private var isPublic: Bool
@@ -830,7 +884,9 @@ private struct EditDocumentView: View {
                 }
             }
             .task {
-                if let folders = try? await APIClient.shared.documentFolders() {
+                if store.offlineDocumentWritesEnabled {
+                    availableFolders = store.documentFolders
+                } else if let folders = try? await APIClient.shared.documentFolders() {
                     availableFolders = folders
                 }
             }
@@ -841,11 +897,20 @@ private struct EditDocumentView: View {
         isLoading = true
         defer { isLoading = false }
         errorMessage = nil
+        let folderIdToSend: String? = selectedFolderId.flatMap { $0.isEmpty ? nil : $0 }
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if store.offlineDocumentWritesEnabled {
+            let updated = store.updateDocumentOffline(
+                id: document.id, title: trimmedTitle,
+                content: content.isEmpty ? nil : content, isPublic: isPublic, folderId: folderIdToSend)
+            onSave(updated)
+            dismiss()
+            return
+        }
         do {
-            let folderIdToSend: String? = selectedFolderId.flatMap { $0.isEmpty ? nil : $0 }
             let updated = try await APIClient.shared.updateDocument(
                 id: document.id,
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                title: trimmedTitle,
                 content: content.isEmpty ? nil : content,
                 isPublic: isPublic,
                 folderId: folderIdToSend
@@ -867,6 +932,7 @@ private struct CreateDocumentFolderView: View {
     var onSave: (DocumentFolder) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: AppDataStore
     @State private var name = ""
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -901,9 +967,16 @@ private struct CreateDocumentFolderView: View {
         isLoading = true
         defer { isLoading = false }
         errorMessage = nil
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if store.offlineDocumentWritesEnabled {
+            let folder = store.createDocumentFolderOffline(name: trimmed, parentId: parentId)
+            onSave(folder)
+            dismiss()
+            return
+        }
         do {
             let folder = try await APIClient.shared.createDocumentFolder(
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                name: trimmed,
                 parentId: parentId
             )
             onSave(folder)

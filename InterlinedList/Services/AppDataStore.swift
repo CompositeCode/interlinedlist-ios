@@ -28,6 +28,15 @@ final class AppDataStore: ObservableObject {
     private let cache = DataCache()
     private var userId: String?
 
+    /// Narrow API surface for the offline document sync cycle (push + pull), so
+    /// the store can be unit-tested with a mock without touching the singleton's
+    /// feed/lists/counts paths. Defaults to `APIClient.shared`.
+    private let syncAPI: DocumentSyncAPI
+
+    init(syncAPI: DocumentSyncAPI = APIClient.shared) {
+        self.syncAPI = syncAPI
+    }
+
     /// G9 Slice 1. When true, documents load from a persisted `DocumentSyncState`
     /// and refresh via `GET /api/documents/sync` (delta pull + tombstones) instead
     /// of `GET /api/documents` + `documentFolders()`. Defaults true — one call
@@ -45,17 +54,41 @@ final class AppDataStore: ObservableObject {
 
     private var docSyncCursor: String?
 
+    /// Slice 2 offline write path. Pending create/update/delete ops (coalesced
+    /// one-per-id) and the per-id local sync state, persisted alongside the
+    /// documents so edits survive an app restart while offline.
+    private var docSyncOutbox: [SyncOperation] = []
+    private var docLocalStates: [String: LocalSyncState] = [:]
+
+    /// Ids of documents with un-pushed edits — drives the optional "pending sync"
+    /// affordance in the UI.
+    @Published private(set) var pendingSyncDocIds: Set<String> = []
+
+    private var reachability: NetworkReachability?
+    private var pushInFlight = false
+    private var pushRequested = false
+
     func prefetchAll(userId: String?) async {
         if let uid = userId, self.userId != uid {
             self.userId = uid
             await loadFromCache(userId: uid)
         }
+        startReachabilityIfNeeded()
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.refreshFeed() }
             group.addTask { await self.refreshLists() }
             group.addTask { await self.refreshDocuments() }
             group.addTask { await self.refreshCounts() }
         }
+    }
+
+    private func startReachabilityIfNeeded() {
+        guard offlineDocSyncEnabled, reachability == nil else { return }
+        let monitor = NetworkReachability()
+        monitor.start { [weak self] in
+            Task { @MainActor [weak self] in await self?.pushOutbox() }
+        }
+        reachability = monitor
     }
 
     func onUserIdAvailable(_ id: String) {
@@ -127,13 +160,70 @@ final class AppDataStore: ObservableObject {
         documentsLoading = documents.isEmpty
         documentsError = nil
         defer { documentsLoading = false }
+        // A refresh runs the full cycle: push any queued edits first (so local
+        // intent isn't clobbered by the pull merge), then pull to reconcile.
+        await syncCycle()
+    }
+
+    /// One sync cycle: **push** the outbox (if any), then **pull** the delta and
+    /// merge (last-writer-wins). Serialized via `pushInFlight` so overlapping
+    /// triggers (foreground + reconnect + edit) don't double-push.
+    private func syncCycle() async {
+        guard offlineDocSyncEnabled else { return }
+        if pushInFlight {
+            pushRequested = true
+            return
+        }
+        pushInFlight = true
+        defer {
+            pushInFlight = false
+            if pushRequested {
+                pushRequested = false
+                Task { await syncCycle() }
+            }
+        }
+        await drainOutbox()
+        await pullDocuments()
+    }
+
+    /// Trigger point exposed to the app (foreground / reconnect / after a local
+    /// edit). Runs a full push-then-pull cycle.
+    func pushOutbox() async {
+        await syncCycle()
+    }
+
+    private func drainOutbox() async {
+        guard !docSyncOutbox.isEmpty else { return }
+        let payload = docSyncOutbox
         do {
-            let delta = try await APIClient.shared.documentSync(lastSyncAt: docSyncCursor)
-            let current = DocumentSyncState(folders: documentFolders, documents: documents, lastSyncAt: docSyncCursor)
-            let merged = DocumentSyncMerge.apply(delta: delta, to: current)
-            documentFolders = merged.folders
-            documents = merged.documents
-            docSyncCursor = merged.lastSyncAt
+            let cursor = try await syncAPI.pushDocumentSync(operations: payload)
+            var state = currentSyncState()
+            DocumentSyncOutbox.clearOutbox(payload, from: &state)
+            state.lastSyncAt = cursor
+            applySyncState(state)
+            saveDocsSyncCache()
+        } catch APIError.status(401) {
+            // Auth is handled elsewhere; keep the outbox for replay.
+        } catch APIError.rateLimited {
+            // Back off: keep the outbox and skip the pull this cycle.
+        } catch {
+            // Offline / server error: keep the outbox for the next trigger.
+        }
+    }
+
+    private func pullDocuments() async {
+        do {
+            let delta = try await syncAPI.documentSync(lastSyncAt: docSyncCursor)
+            var state = currentSyncState()
+            let merged = DocumentSyncMerge.apply(delta: delta, to: state)
+            // TODO(slice 3): before overwriting, detect a conflict — a locally
+            // `.dirty` id whose server `updatedAt` is newer than our baseline —
+            // and preserve the server row as a "conflict copy" instead of the
+            // pure last-writer-wins merge used here.
+            state.folders = merged.folders
+            state.documents = merged.documents
+            state.lastSyncAt = merged.lastSyncAt
+            applySyncState(state)
             saveDocsSyncCache()
         } catch APIError.status(401) {
         } catch APIError.status(429) {
@@ -171,6 +261,116 @@ final class AppDataStore: ObservableObject {
         }
     }
 
+    // MARK: - Offline-aware document mutations (Slice 2)
+
+    /// True when writes should route through the outbox rather than the online
+    /// document endpoints. Views branch on this to keep the flag-OFF path byte-for-byte.
+    var offlineDocumentWritesEnabled: Bool { offlineDocSyncEnabled }
+
+    /// Applies a create optimistically to `documents`, enqueues a `create` op, and
+    /// triggers a push. Returns the client-synthesized `Document` (with a
+    /// client-generated `id`) for the UI to navigate to. Flag-ON only.
+    func createDocumentOffline(title: String, content: String?, isPublic: Bool, folderId: String?) -> Document {
+        let normalizedFolderId = (folderId?.isEmpty == true) ? nil : folderId
+        let now = ISO8601DateFormatter().string(from: Date())
+        let doc = Document(id: UUID().uuidString, title: title, content: content,
+                           folderId: normalizedFolderId, isPublic: isPublic,
+                           createdAt: now, updatedAt: now)
+        documents.insert(doc, at: 0)
+        enqueue(SyncOperation(op: .create, type: .document,
+                              data: SyncOpData(id: doc.id, folderId: normalizedFolderId,
+                                               title: title, content: content, isPublic: isPublic)))
+        return doc
+    }
+
+    /// Applies an edit optimistically to `documents` and enqueues an `update` op.
+    func updateDocumentOffline(id: String, title: String, content: String?, isPublic: Bool, folderId: String?) -> Document {
+        let normalizedFolderId = (folderId?.isEmpty == true) ? nil : folderId
+        let now = ISO8601DateFormatter().string(from: Date())
+        let existing = documents.first { $0.id == id }
+        let updated = Document(id: id, title: title, content: content,
+                               folderId: normalizedFolderId, isPublic: isPublic,
+                               createdAt: existing?.createdAt, updatedAt: now)
+        if let idx = documents.firstIndex(where: { $0.id == id }) {
+            documents[idx] = updated
+        } else {
+            documents.insert(updated, at: 0)
+        }
+        enqueue(SyncOperation(op: .update, type: .document,
+                              data: SyncOpData(id: id, folderId: normalizedFolderId,
+                                               title: title, content: content, isPublic: isPublic)))
+        return updated
+    }
+
+    func deleteDocumentOffline(id: String) {
+        documents.removeAll { $0.id == id }
+        enqueue(SyncOperation(op: .delete, type: .document, data: SyncOpData(id: id)))
+    }
+
+    func createDocumentFolderOffline(name: String, parentId: String?) -> DocumentFolder {
+        let normalizedParentId = (parentId?.isEmpty == true) ? nil : parentId
+        let now = ISO8601DateFormatter().string(from: Date())
+        let folder = DocumentFolder(id: UUID().uuidString, name: name,
+                                    parentId: normalizedParentId, updatedAt: now)
+        documentFolders.append(folder)
+        enqueue(SyncOperation(op: .create, type: .folder,
+                              data: SyncOpData(id: folder.id, parentId: normalizedParentId, name: name)))
+        return folder
+    }
+
+    func deleteDocumentFolderOffline(id: String) {
+        // Cascade locally the way the server would (subfolders + docs inside).
+        let removedFolderIds = descendantFolderIds(of: id)
+        documentFolders.removeAll { removedFolderIds.contains($0.id) }
+        documents.removeAll { doc in
+            guard let fid = doc.folderId, !fid.isEmpty else { return false }
+            return removedFolderIds.contains(fid)
+        }
+        enqueue(SyncOperation(op: .delete, type: .folder, data: SyncOpData(id: id)))
+    }
+
+    private func descendantFolderIds(of rootId: String) -> Set<String> {
+        var result: Set<String> = [rootId]
+        var changed = true
+        while changed {
+            changed = false
+            for folder in documentFolders {
+                if let parent = folder.parentId, result.contains(parent), !result.contains(folder.id) {
+                    result.insert(folder.id)
+                    changed = true
+                }
+            }
+        }
+        return result
+    }
+
+    private func enqueue(_ op: SyncOperation) {
+        var state = currentSyncState()
+        DocumentSyncOutbox.enqueue(op, into: &state)
+        applySyncState(state)
+        saveDocsSyncCache()
+        Task { await debouncedPush() }
+    }
+
+    private func debouncedPush() async {
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        await pushOutbox()
+    }
+
+    private func currentSyncState() -> DocumentSyncState {
+        DocumentSyncState(folders: documentFolders, documents: documents,
+                          lastSyncAt: docSyncCursor, outbox: docSyncOutbox, localStates: docLocalStates)
+    }
+
+    private func applySyncState(_ state: DocumentSyncState) {
+        documentFolders = state.folders
+        documents = state.documents
+        docSyncCursor = state.lastSyncAt
+        docSyncOutbox = state.outbox
+        docLocalStates = state.localStates
+        pendingSyncDocIds = state.dirtyIds
+    }
+
     // MARK: - Optimistic mutations
 
     func insertFeedMessage(_ message: Message) {
@@ -181,13 +381,25 @@ final class AppDataStore: ObservableObject {
     func removeList(id: String) { userLists.removeAll { $0.id == id }; saveListsCache() }
     func removeListFolder(id: String) { listFolders.removeAll { $0.id == id }; saveListsCache() }
 
-    func insertDocument(_ doc: Document) { documents.insert(doc, at: 0); persistDocs() }
+    /// Idempotent upsert by id — safe to call after `createDocumentOffline`
+    /// (which already inserted the row) so the flag-ON callbacks don't duplicate.
+    func insertDocument(_ doc: Document) {
+        if let idx = documents.firstIndex(where: { $0.id == doc.id }) {
+            documents[idx] = doc
+        } else {
+            documents.insert(doc, at: 0)
+        }
+        persistDocs()
+    }
     func updateDocument(_ doc: Document) {
         if let idx = documents.firstIndex(where: { $0.id == doc.id }) { documents[idx] = doc }
         persistDocs()
     }
     func removeDocument(id: String) { documents.removeAll { $0.id == id }; persistDocs() }
-    func insertDocumentFolder(_ folder: DocumentFolder) { documentFolders.append(folder); persistDocs() }
+    func insertDocumentFolder(_ folder: DocumentFolder) {
+        if !documentFolders.contains(where: { $0.id == folder.id }) { documentFolders.append(folder) }
+        persistDocs()
+    }
     func removeDocumentFolder(id: String) { documentFolders.removeAll { $0.id == id }; persistDocs() }
 
     private func persistDocs() {
@@ -214,6 +426,11 @@ final class AppDataStore: ObservableObject {
         pendingRequestCount = 0
         dmUnreadCount = 0
         docSyncCursor = nil
+        docSyncOutbox = []
+        docLocalStates = [:]
+        pendingSyncDocIds = []
+        reachability?.stop()
+        reachability = nil
         userId = nil
     }
 
@@ -230,6 +447,9 @@ final class AppDataStore: ObservableObject {
                 documentFolders = state.folders
                 documents = state.documents
                 docSyncCursor = state.lastSyncAt
+                docSyncOutbox = state.outbox
+                docLocalStates = state.localStates
+                pendingSyncDocIds = state.dirtyIds
             }
         } else if let cached: DocsCache = await cache.load(key: "\(userId)_docs") {
             documentFolders = cached.folders
@@ -257,10 +477,19 @@ final class AppDataStore: ObservableObject {
 
     private func saveDocsSyncCache() {
         guard let uid = userId else { return }
-        let snapshot = DocumentSyncState(folders: documentFolders, documents: documents, lastSyncAt: docSyncCursor)
+        let snapshot = currentSyncState()
         Task { await cache.save(snapshot, key: "\(uid)_docsync") }
     }
 }
+
+/// The two `/api/documents/sync` calls the offline cycle needs. Kept narrow (ISP)
+/// so `AppDataStore` can be tested against a mock without the full `APIClient`.
+protocol DocumentSyncAPI {
+    func documentSync(lastSyncAt: String?) async throws -> DocumentSyncResponse
+    func pushDocumentSync(operations: [SyncOperation]) async throws -> String
+}
+
+extension APIClient: DocumentSyncAPI {}
 
 private struct ListsCache: Codable {
     let folders: [ListFolder]

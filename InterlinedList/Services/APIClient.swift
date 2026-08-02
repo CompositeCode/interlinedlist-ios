@@ -18,6 +18,10 @@ enum APIError: Error {
     /// 409 — the request conflicts with existing data (e.g. deleting a list
     /// property that still has row values without `?force=true`).
     case conflict(String)
+    /// 429 — rate limited. Distinct from `.status(429)` so callers (e.g. the
+    /// document sync push) can back off and **retry** rather than surface a hard
+    /// failure. `retryAfter` is the `Retry-After` header in seconds when present.
+    case rateLimited(retryAfter: TimeInterval?)
 }
 
 enum ExportType: String, CaseIterable {
@@ -556,6 +560,32 @@ final class APIClient {
             }
         }
         return try await get(path)
+    }
+
+    /// Offline sync push. Sends the queued `operations` (camelCase body
+    /// `{ "operations": [...] }`) and returns the response `lastSyncAt` cursor.
+    /// Per-op errors are swallowed server-side (the response only echoes the
+    /// cursor), so callers must PULL afterwards to reconcile. Maps 429 to
+    /// `APIError.rateLimited` so the caller can back off and keep the outbox.
+    func pushDocumentSync(operations: [SyncOperation]) async throws -> String {
+        struct Body: Encodable { let operations: [SyncOperation] }
+        struct Response: Decodable { let lastSyncAt: String? }
+        guard let url = URL(string: baseURL + "/api/documents/sync") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try camelCaseEncoder.encode(Body(operations: operations))
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode == 429 {
+            let retryAfter = (http.value(forHTTPHeaderField: "Retry-After")).flatMap(TimeInterval.init)
+            throw APIError.rateLimited(retryAfter: retryAfter)
+        }
+        try checkResponse(data: data, response: response)
+        let decoded = try decoder.decode(Response.self, from: data)
+        guard let cursor = decoded.lastSyncAt else { throw APIError.noData }
+        return cursor
     }
 
     func createDocument(title: String, content: String?, isPublic: Bool, folderId: String?) async throws -> Document {

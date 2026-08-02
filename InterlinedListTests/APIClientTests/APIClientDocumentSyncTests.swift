@@ -117,4 +117,96 @@ final class APIClientDocumentSyncTests: XCTestCase {
             XCTAssertEqual(code, 429)
         }
     }
+
+    // MARK: - pushDocumentSync (Slice 2)
+
+    private func opsBody(from request: URLRequest?) throws -> [[String: Any]] {
+        let body = try XCTUnwrap(request?.httpBody)
+        let obj = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+        return try XCTUnwrap(obj?["operations"] as? [[String: Any]])
+    }
+
+    func test_pushDocumentSync_postsToSyncPath() async throws {
+        session.stub(json: #"{"lastSyncAt":"2026-08-01T00:00:00Z"}"#)
+        _ = try await sut.pushDocumentSync(operations: [
+            SyncOperation(op: .create, type: .document, data: SyncOpData(id: "d1", title: "T"))
+        ])
+        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents/sync")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+    }
+
+    func test_pushDocumentSync_returnsLastSyncAt() async throws {
+        session.stub(json: #"{"lastSyncAt":"2026-08-01T12:00:00Z"}"#)
+        let cursor = try await sut.pushDocumentSync(operations: [
+            SyncOperation(op: .update, type: .document, data: SyncOpData(id: "d1", title: "T"))
+        ])
+        XCTAssertEqual(cursor, "2026-08-01T12:00:00Z")
+    }
+
+    func test_pushDocumentSync_bodyIsCamelCaseOperationsArray() async throws {
+        session.stub(json: #"{"lastSyncAt":"c"}"#)
+        _ = try await sut.pushDocumentSync(operations: [
+            SyncOperation(op: .create, type: .document,
+                          data: SyncOpData(id: "d1", folderId: "f1", title: "Notes",
+                                           content: "# Hi", isPublic: true))
+        ])
+        let ops = try opsBody(from: session.lastRequest)
+        XCTAssertEqual(ops.count, 1)
+        XCTAssertEqual(ops[0]["op"] as? String, "create")
+        XCTAssertEqual(ops[0]["type"] as? String, "document")
+        let data = try XCTUnwrap(ops[0]["data"] as? [String: Any])
+        XCTAssertEqual(data["id"] as? String, "d1")
+        XCTAssertEqual(data["folderId"] as? String, "f1")
+        XCTAssertEqual(data["title"] as? String, "Notes")
+        XCTAssertEqual(data["isPublic"] as? Bool, true)
+    }
+
+    func test_pushDocumentSync_deleteOp_carriesOnlyId() async throws {
+        session.stub(json: #"{"lastSyncAt":"c"}"#)
+        _ = try await sut.pushDocumentSync(operations: [
+            SyncOperation(op: .delete, type: .document, data: SyncOpData(id: "d9"))
+        ])
+        let ops = try opsBody(from: session.lastRequest)
+        XCTAssertEqual(ops[0]["op"] as? String, "delete")
+        let data = try XCTUnwrap(ops[0]["data"] as? [String: Any])
+        XCTAssertEqual(data.keys.sorted(), ["id"])
+        XCTAssertEqual(data["id"] as? String, "d9")
+    }
+
+    func test_pushDocumentSync_429_throwsRateLimited() async throws {
+        session.stub(data: Data(), statusCode: 429)
+        do {
+            _ = try await sut.pushDocumentSync(operations: [
+                SyncOperation(op: .create, type: .document, data: SyncOpData(id: "d1", title: "T"))
+            ])
+            XCTFail("Expected rateLimited")
+        } catch APIError.rateLimited {
+            // expected — distinct retryable error, not a hard .status(429)
+        }
+    }
+
+    func test_pushDocumentSync_401_throwsStatus() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            _ = try await sut.pushDocumentSync(operations: [
+                SyncOperation(op: .create, type: .document, data: SyncOpData(id: "d1", title: "T"))
+            ])
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
+
+    func test_pushDocumentSync_missingCursor_throwsNoData() async throws {
+        session.stub(json: #"{}"#)
+        do {
+            _ = try await sut.pushDocumentSync(operations: [
+                SyncOperation(op: .create, type: .document, data: SyncOpData(id: "d1", title: "T"))
+            ])
+            XCTFail("Expected noData")
+        } catch APIError.noData {
+            // expected
+        }
+    }
 }

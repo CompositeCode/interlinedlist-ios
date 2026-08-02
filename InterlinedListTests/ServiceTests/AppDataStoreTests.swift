@@ -112,6 +112,55 @@ final class AppDataStoreTests: XCTestCase {
         XCTAssertTrue(sut.documents.contains { $0.id == "d2" })
     }
 
+    // MARK: - Offline document write cycle (Slice 2)
+
+    func test_createDocumentOffline_insertsOptimisticallyAndMarksPending() {
+        let store = AppDataStore(syncAPI: FailingSyncAPI())
+        let doc = store.createDocumentOffline(title: "Draft", content: "hi", isPublic: false, folderId: nil)
+        XCTAssertEqual(store.documents.first?.id, doc.id)
+        XCTAssertEqual(store.documents.first?.title, "Draft")
+        XCTAssertTrue(store.pendingSyncDocIds.contains(doc.id))
+    }
+
+    func test_pushOutbox_failure_keepsPendingState() async {
+        let api = FailingSyncAPI()
+        let store = AppDataStore(syncAPI: api)
+        let doc = store.createDocumentOffline(title: "Draft", content: nil, isPublic: false, folderId: nil)
+        await store.pushOutbox()
+        // Push failed (offline): the doc is still optimistically present and pending.
+        XCTAssertTrue(store.documents.contains { $0.id == doc.id })
+        XCTAssertTrue(store.pendingSyncDocIds.contains(doc.id))
+        XCTAssertTrue(api.pushCalled)
+    }
+
+    func test_pushOutbox_success_clearsPendingAndPulls() async {
+        let api = RecordingSyncAPI(pushCursor: "2026-08-02T00:00:00Z",
+                                   pullResponse: DocumentSyncResponse(lastSyncAt: "2026-08-02T00:00:00Z"))
+        let store = AppDataStore(syncAPI: api)
+        let doc = store.createDocumentOffline(title: "Draft", content: nil, isPublic: false, folderId: nil)
+        await store.pushOutbox()
+        // On success the outbox is cleared → no longer pending, and the doc stays.
+        XCTAssertFalse(store.pendingSyncDocIds.contains(doc.id))
+        XCTAssertTrue(store.documents.contains { $0.id == doc.id })
+        XCTAssertTrue(api.pushCalled, "push runs first")
+        XCTAssertTrue(api.pullCalled, "then pull reconciles")
+    }
+
+    func test_deleteDocumentOffline_removesOptimistically() {
+        let store = AppDataStore(syncAPI: FailingSyncAPI())
+        let doc = store.createDocumentOffline(title: "D", content: nil, isPublic: false, folderId: nil)
+        store.deleteDocumentOffline(id: doc.id)
+        XCTAssertFalse(store.documents.contains { $0.id == doc.id })
+    }
+
+    func test_reset_clearsPendingSyncState() {
+        let store = AppDataStore(syncAPI: FailingSyncAPI())
+        _ = store.createDocumentOffline(title: "D", content: nil, isPublic: false, folderId: nil)
+        store.reset()
+        XCTAssertTrue(store.pendingSyncDocIds.isEmpty)
+        XCTAssertTrue(store.documents.isEmpty)
+    }
+
     // MARK: - Helpers
 
     private func makeMessage(id: String) -> Message {
@@ -126,5 +175,46 @@ final class AppDataStoreTests: XCTestCase {
         Document(id: id, title: "Doc \(id)", content: nil,
                  folderId: nil, isPublic: false,
                  createdAt: "2026-01-01T00:00:00Z", updatedAt: nil)
+    }
+}
+
+/// Every sync call throws — simulates being offline.
+private final class FailingSyncAPI: DocumentSyncAPI, @unchecked Sendable {
+    private(set) var pushCalled = false
+    private(set) var pullCalled = false
+
+    func documentSync(lastSyncAt: String?) async throws -> DocumentSyncResponse {
+        pullCalled = true
+        throw APIError.network(URLError(.notConnectedToInternet))
+    }
+
+    func pushDocumentSync(operations: [SyncOperation]) async throws -> String {
+        pushCalled = true
+        throw APIError.network(URLError(.notConnectedToInternet))
+    }
+}
+
+/// Records calls and returns canned success responses.
+private final class RecordingSyncAPI: DocumentSyncAPI, @unchecked Sendable {
+    let pushCursor: String
+    let pullResponse: DocumentSyncResponse
+    private(set) var pushCalled = false
+    private(set) var pullCalled = false
+    private(set) var pushedOperations: [SyncOperation] = []
+
+    init(pushCursor: String, pullResponse: DocumentSyncResponse) {
+        self.pushCursor = pushCursor
+        self.pullResponse = pullResponse
+    }
+
+    func pushDocumentSync(operations: [SyncOperation]) async throws -> String {
+        pushCalled = true
+        pushedOperations = operations
+        return pushCursor
+    }
+
+    func documentSync(lastSyncAt: String?) async throws -> DocumentSyncResponse {
+        pullCalled = true
+        return pullResponse
     }
 }

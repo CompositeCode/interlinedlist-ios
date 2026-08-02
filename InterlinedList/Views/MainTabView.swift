@@ -16,6 +16,7 @@ private enum MainSection: Int, CaseIterable {
 struct MainTabView: View {
     @EnvironmentObject var authState: AuthState
     @EnvironmentObject var store: AppDataStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedSection: MainSection = .home
     @State private var showNotifications = false
     @State private var showMessages = false
@@ -33,6 +34,12 @@ struct MainTabView: View {
         }
         .onChange(of: authState.user?.id) { _, id in
             if let id { store.onUserIdAvailable(id) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Replay any queued offline document edits when returning to the app.
+            if phase == .active {
+                Task { await store.pushOutbox() }
+            }
         }
     }
 
