@@ -35,12 +35,11 @@ enum OAuthProvider: String, CaseIterable {
     }
 
     /// Whether this provider's OAuth callback supports the native custom-scheme
-    /// token handoff. GitHub's callback has no mobile branch — it sets a web
-    /// session cookie and redirects to /dashboard, so it never returns
-    /// `interlinedlist://oauth/callback?token=…` and can't complete inside
-    /// `ASWebAuthenticationSession`. Hidden until the backend adds that branch.
-    /// (Backend auth contract — Open Dependency #1.)
-    var supportsNativeAuth: Bool { self != .github }
+    /// token handoff. All providers now return `interlinedlist://oauth/callback?token=…`
+    /// and complete inside `ASWebAuthenticationSession`. GitHub is enabled pending
+    /// the backend A1 deploy that adds its mobile branch; until that ships the
+    /// GitHub button will 401. (Backend auth contract — A1.)
+    var supportsNativeAuth: Bool { true }
 }
 
 enum OAuthError: Error {

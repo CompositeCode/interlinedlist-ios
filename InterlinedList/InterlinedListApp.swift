@@ -63,10 +63,11 @@ struct InterlinedListApp: App {
         }
     }
 
-    // TODO(A2): Universal Links (a tapped https://interlinedlist.com link opening the
-    // app directly) need the backend to publish apple-app-site-association plus the
-    // Associated Domains entitlement. `parse` already accepts https permalinks, so
-    // onOpenURL will route them once that server asset ships.
+    // A2: Universal Links (a tapped https://interlinedlist.com link opening the app
+    // directly). The Associated Domains entitlement (applinks:interlinedlist.com) is now
+    // in place and `parse` already accepts https permalinks, so onOpenURL will route them
+    // once the backend publishes apple-app-site-association and the Associated Domains
+    // capability is enabled for the App ID / provisioning profile.
     private func handleDeepLink(_ url: URL) {
         // OAuth callbacks are captured by ASWebAuthenticationSession itself; the
         // app-level handler is a fallback for a torn-down session (safe to ignore).
