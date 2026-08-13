@@ -54,6 +54,7 @@ struct ListsView: View {
                     Task { await store.refreshLists() }
                 }
                 .environmentObject(authState)
+                .environmentObject(store)
             }
             .sheet(isPresented: $showCreateFolder) {
                 CreateListFolderView(parentId: nil) {
@@ -98,7 +99,8 @@ struct ListsView: View {
                         node: node,
                         onDeleteList: { list in Task { await deleteList(list) } },
                         onDeleteFolder: { folder in Task { await deleteFolder(folder) } },
-                        onUpdateList: { _ in Task { await store.refreshLists() } }
+                        onUpdateList: { _ in Task { await store.refreshLists() } },
+                        onRenameFolder: { _ in Task { await store.refreshLists() } }
                     )
                 }
             }
@@ -244,15 +246,85 @@ private struct CreateListFolderView: View {
     }
 }
 
+// MARK: - Rename folder sheet
+
+private struct RenameFolderView: View {
+    let folder: ListFolder
+    let onSave: () -> Void
+
+    @EnvironmentObject private var authState: AuthState
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    init(folder: ListFolder, onSave: @escaping () -> Void) {
+        self.folder = folder
+        self.onSave = onSave
+        _name = State(initialValue: folder.name)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Folder Name") {
+                    TextField("Name", text: $name)
+                }
+                if let error = errorMessage {
+                    Section {
+                        Text(error).foregroundStyle(.red).font(.ilMono())
+                    }
+                }
+            }
+            .navigationTitle("Rename Folder")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") { Task { await save() } }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        isLoading = true
+        defer { isLoading = false }
+        errorMessage = nil
+        do {
+            _ = try await APIClient.shared.updateListFolder(
+                id: folder.id,
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                parentId: nil
+            )
+            onSave()
+            dismiss()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+            errorMessage = "Session expired. Please try again."
+        } catch APIError.server(let msg) {
+            errorMessage = msg
+        } catch {
+            errorMessage = "Failed to rename folder."
+        }
+    }
+}
+
 // MARK: - Rename list sheet
 
 private struct RenameListView: View {
     let list: UserList
     let onSave: (UserList) -> Void
 
+    @EnvironmentObject private var authState: AuthState
+    @EnvironmentObject private var store: AppDataStore
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var isPublic: Bool
+    @State private var selectedFolderId: String?
     @State private var isLoading = false
     @State private var errorMessage: String?
 
@@ -261,6 +333,13 @@ private struct RenameListView: View {
         self.onSave = onSave
         _title = State(initialValue: list.name)
         _isPublic = State(initialValue: list.isPublic ?? false)
+        // Empty-string folderId means "root" (CLAUDE.md gotcha) — normalize to nil.
+        let current = list.folderId ?? ""
+        _selectedFolderId = State(initialValue: current.isEmpty ? nil : current)
+    }
+
+    private var canFileInFolder: Bool {
+        authState.user?.isSubscriber == true && !store.listFolders.isEmpty
     }
 
     var body: some View {
@@ -271,6 +350,17 @@ private struct RenameListView: View {
                 }
                 Section {
                     Toggle("Public", isOn: $isPublic)
+                }
+                if canFileInFolder {
+                    Section("Folder") {
+                        Picker("Folder", selection: $selectedFolderId) {
+                            Text("None / Root").tag(String?.none)
+                            ForEach(store.listFolders) { folder in
+                                Text(folder.name).tag(String?.some(folder.id))
+                            }
+                        }
+                        .accessibilityLabel("Move to folder")
+                    }
                 }
                 if let error = errorMessage {
                     Section {
@@ -292,6 +382,13 @@ private struct RenameListView: View {
         }
     }
 
+    /// nil selection (root) is sent as an empty string, which the backend reads as
+    /// root (`folderId || null`). When the folder gate is off, don't touch folderId.
+    private var folderIdForUpdate: String? {
+        guard canFileInFolder else { return nil }
+        return selectedFolderId ?? ""
+    }
+
     private func save() async {
         isLoading = true
         defer { isLoading = false }
@@ -302,10 +399,14 @@ private struct RenameListView: View {
                 id: list.id,
                 title: trimmed,
                 description: list.description,
-                isPublic: isPublic
+                isPublic: isPublic,
+                folderId: folderIdForUpdate
             )
             onSave(updated)
             dismiss()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+            errorMessage = "Session expired. Please try again."
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {
@@ -321,8 +422,10 @@ struct ListTreeNodeRow: View {
     let onDeleteList: (UserList) -> Void
     let onDeleteFolder: (ListFolder) -> Void
     let onUpdateList: (UserList) -> Void
+    let onRenameFolder: (ListFolder) -> Void
     @State private var isExpanded = true
     @State private var showRename = false
+    @State private var showFolderRename = false
     @State private var schemaEditorList: UserList?
     @State private var schemaEditorSchema: [ListPropertyDef] = []
     @State private var isLoadingSchema = false
@@ -331,7 +434,7 @@ struct ListTreeNodeRow: View {
         if let children = node.children, let list = node.list {
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
-                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList)
+                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList, onRenameFolder: onRenameFolder)
                 }
             } label: {
                 NavigationLink(value: list) {
@@ -359,11 +462,17 @@ struct ListTreeNodeRow: View {
         } else if let children = node.children {
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
-                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList)
+                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList, onRenameFolder: onRenameFolder)
                 }
             } label: {
                 Label(node.name, systemImage: "folder.fill")
                     .foregroundStyle(.primary)
+                    .contextMenu {
+                        Button("Rename Folder") { showFolderRename = true }
+                        Button("Delete", role: .destructive) {
+                            if let folder = folderFromNode(node) { onDeleteFolder(folder) }
+                        }
+                    }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
@@ -372,6 +481,17 @@ struct ListTreeNodeRow: View {
                     }
                 } label: {
                     Label("Delete", systemImage: "trash")
+                }
+                Button {
+                    showFolderRename = true
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
+                .tint(ILColor.primary)
+            }
+            .sheet(isPresented: $showFolderRename) {
+                if let folder = folderFromNode(node) {
+                    RenameFolderView(folder: folder) { onRenameFolder(folder) }
                 }
             }
         } else if let list = node.list {
@@ -1044,6 +1164,7 @@ struct FieldValueView: View {
 #Preview("Lists view") {
     ListsView()
         .environmentObject(AuthState())
+        .environmentObject(AppDataStore())
 }
 
 #Preview("Dynamic row — multi-column") {

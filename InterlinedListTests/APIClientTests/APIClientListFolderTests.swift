@@ -111,6 +111,18 @@ final class APIClientListFolderTests: XCTestCase {
         XCTAssertEqual(json["parent_id"] as? String, "p1")
     }
 
+    func test_updateListFolder_rename_sendsNameAndDecodes() async throws {
+        // The rename affordance calls updateListFolder(name:, parentId: nil).
+        session.stub(json: #"{"folder":{"id":"f1","name":"Renamed Folder","created_at":"2024-01-01T00:00:00Z"}}"#)
+        let folder = try await sut.updateListFolder(id: "f1", name: "Renamed Folder", parentId: nil)
+        XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
+        XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/folders/f1") == true)
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["name"] as? String, "Renamed Folder")
+        XCTAssertEqual(folder.name, "Renamed Folder")
+    }
+
     func test_updateListFolder_409_throwsStatusError() async throws {
         session.stub(data: Data(), statusCode: 409)
         do {
@@ -182,7 +194,8 @@ final class APIClientListFolderTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(json["title"] as? String, "Renamed")
         XCTAssertEqual(json["description"] as? String, "Desc")
-        XCTAssertEqual(json["is_public"] as? Bool, true)
+        // camelCase: the backend reads `isPublic` (see updateList encoder choice).
+        XCTAssertEqual(json["isPublic"] as? Bool, true)
     }
 
     func test_updateList_bodyContainsIsPublic() async throws {
@@ -190,7 +203,7 @@ final class APIClientListFolderTests: XCTestCase {
         _ = try await sut.updateList(id: "l1", title: "T", description: nil, isPublic: true)
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["is_public"] as? Bool, true)
+        XCTAssertEqual(json["isPublic"] as? Bool, true)
     }
 
     func test_updateList_bodyContainsDescription() async throws {

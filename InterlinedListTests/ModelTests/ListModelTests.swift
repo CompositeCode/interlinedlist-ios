@@ -10,18 +10,28 @@ final class UserListCodableTests: XCTestCase {
         XCTAssertEqual(list.name, "My List")
     }
 
-    func test_decode_mapsParentIdToFolderId() throws {
-        let json = #"{"id":"1","title":"L","parentId":"folder-99","createdAt":"2024-01-01T00:00:00Z"}"#
+    func test_decode_parentIdKey_populatesParentId_notFolderId() throws {
+        // parentId is list-in-list nesting; it must NOT bleed into folderId.
+        let json = #"{"id":"1","title":"L","parentId":"list-99","createdAt":"2024-01-01T00:00:00Z"}"#
         let list = try decoder.decode(UserList.self, from: Data(json.utf8))
-        XCTAssertEqual(list.folderId, "folder-99")
+        XCTAssertEqual(list.parentId, "list-99")
+        XCTAssertNil(list.folderId)
+    }
+
+    func test_decode_folderIdKey_populatesFolderId() throws {
+        // folderId is folder membership (backend ask A5 to surface it in the list GET).
+        let json = #"{"id":"1","title":"L","folderId":"folder-7","createdAt":"2024-01-01T00:00:00Z"}"#
+        let list = try decoder.decode(UserList.self, from: Data(json.utf8))
+        XCTAssertEqual(list.folderId, "folder-7")
+        XCTAssertNil(list.parentId)
     }
 
     func test_decode_emptyParentIdPreservedAsEmptyString() throws {
         let json = #"{"id":"1","title":"L","parentId":"","createdAt":"2024-01-01T00:00:00Z"}"#
         let list = try decoder.decode(UserList.self, from: Data(json.utf8))
-        XCTAssertEqual(list.folderId, "")
+        XCTAssertEqual(list.parentId, "")
         // The tree-builder treats "" same as nil — guard this invariant
-        XCTAssertTrue((list.folderId ?? "").isEmpty)
+        XCTAssertTrue((list.parentId ?? "").isEmpty)
     }
 }
 
@@ -48,15 +58,39 @@ final class ListTreeNodeTests: XCTestCase {
         XCTAssertEqual(nodes.first?.children?.first?.id, "l1")
     }
 
-    func test_buildTree_orphanedParentIdAppearsAtRoot() {
+    func test_buildTree_orphanedFolderIdAppearsAtRoot() {
         let list = makeList(id: "1", folderId: "nonexistent-folder")
         let nodes = ListTreeNode.buildTree(folders: [], lists: [list])
         XCTAssertEqual(nodes.count, 1)
     }
 
-    private func makeList(id: String, folderId: String?) -> UserList {
-        UserList(id: id, name: "List \(id)", description: nil, folderId: folderId,
-                 isPublic: nil, createdAt: "2024-01-01T00:00:00Z", updatedAt: nil, itemCount: nil)
+    func test_buildTree_listNestedUnderParentList() {
+        let parent = makeList(id: "a")
+        let child = makeList(id: "b", parentId: "a")
+        let nodes = ListTreeNode.buildTree(folders: [], lists: [parent, child])
+        XCTAssertEqual(nodes.count, 1)
+        XCTAssertEqual(nodes.first?.id, "a")
+        XCTAssertEqual(nodes.first?.children?.count, 1)
+        XCTAssertEqual(nodes.first?.children?.first?.id, "b")
+    }
+
+    func test_buildTree_folderMembershipWinsOverParentNesting() {
+        // A list with both a known folder and a parent list is rendered under the
+        // folder, and must not also appear nested under its parent.
+        let folder = ListFolder(id: "f1", name: "Folder", parentId: nil, createdAt: nil)
+        let parent = makeList(id: "a")
+        let child = makeList(id: "b", folderId: "f1", parentId: "a")
+        let nodes = ListTreeNode.buildTree(folders: [folder], lists: [parent, child])
+        let folderNode = nodes.first { $0.id == "f1" }
+        let parentNode = nodes.first { $0.id == "a" }
+        XCTAssertEqual(folderNode?.children?.first?.id, "b")
+        XCTAssertNil(parentNode?.children)
+    }
+
+    private func makeList(id: String, folderId: String? = nil, parentId: String? = nil) -> UserList {
+        UserList(id: id, name: "List \(id)", description: nil, parentId: parentId,
+                 folderId: folderId, isPublic: nil, createdAt: "2024-01-01T00:00:00Z",
+                 updatedAt: nil, itemCount: nil)
     }
 }
 

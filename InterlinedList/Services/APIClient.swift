@@ -462,17 +462,36 @@ final class APIClient {
     /// For a GitHub-backed list pass `githubSource`; the backend ignores `schema`
     /// in that case (issues drive the columns), so the caller should pass `schema: nil`.
     /// The endpoint returns the created list under `data`, not `list`.
-    func createList(title: String, description: String?, isPublic: Bool, schema: ListSchemaDSL? = nil, githubSource: GitHubSource? = nil) async throws -> UserList {
+    /// `folderId` files the new list into a folder (camelCase, per the backend).
+    /// Pass `nil` to omit it (root); an empty string is also read as root by the
+    /// backend (`folderId || null`).
+    func createList(title: String, description: String?, isPublic: Bool, schema: ListSchemaDSL? = nil, githubSource: GitHubSource? = nil, folderId: String? = nil) async throws -> UserList {
         struct Body: Encodable {
             let title: String
             let description: String?
             let isPublic: Bool
             let schema: ListSchemaDSL?
             let githubSource: GitHubSource?
+            let folderId: String?
+
+            enum CodingKeys: String, CodingKey {
+                case title, description, isPublic, schema, githubSource, folderId
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(title, forKey: .title)
+                try c.encode(description, forKey: .description)
+                try c.encode(isPublic, forKey: .isPublic)
+                try c.encodeIfPresent(schema, forKey: .schema)
+                try c.encodeIfPresent(githubSource, forKey: .githubSource)
+                if let folderId { try c.encode(folderId, forKey: .folderId) }
+            }
         }
         struct Response: Decodable { let data: UserList? }
         let body = Body(title: title, description: description, isPublic: isPublic,
-                        schema: githubSource == nil ? schema : nil, githubSource: githubSource)
+                        schema: githubSource == nil ? schema : nil, githubSource: githubSource,
+                        folderId: folderId)
         let response: Response = try await postCamel("/api/lists", body: body)
         guard let list = response.data else { throw APIError.noData }
         return list
@@ -693,11 +712,32 @@ final class APIClient {
         throw APIError.noData
     }
 
-    func updateList(id: String, title: String?, description: String?, isPublic: Bool?) async throws -> UserList {
-        struct Body: Encodable { let title: String?; let description: String?; let isPublic: Bool? }
+    /// The backend reads camelCase (`isPublic`, `folderId`) directly from the body,
+    /// so this uses the camelCase encoder. `folderId == nil` omits the field (the
+    /// list stays where it is); pass an empty string to move it to root (the backend
+    /// treats `""` and `null` identically), or a folder id to file it there.
+    func updateList(id: String, title: String?, description: String?, isPublic: Bool?, folderId: String? = nil) async throws -> UserList {
+        struct Body: Encodable {
+            let title: String?
+            let description: String?
+            let isPublic: Bool?
+            let folderId: String?
+
+            enum CodingKeys: String, CodingKey {
+                case title, description, isPublic, folderId
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encodeIfPresent(title, forKey: .title)
+                try c.encodeIfPresent(description, forKey: .description)
+                try c.encodeIfPresent(isPublic, forKey: .isPublic)
+                if let folderId { try c.encode(folderId, forKey: .folderId) }
+            }
+        }
         struct Response: Decodable { let list: UserList? }
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: Response = try await put("/api/lists/\(encoded)", body: Body(title: title, description: description, isPublic: isPublic))
+        let response: Response = try await putCamel("/api/lists/\(encoded)", body: Body(title: title, description: description, isPublic: isPublic, folderId: folderId))
         guard let list = response.list else { throw APIError.noData }
         return list
     }

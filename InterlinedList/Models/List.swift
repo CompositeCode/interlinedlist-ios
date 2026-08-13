@@ -123,6 +123,10 @@ struct UserList: Identifiable, Codable, Hashable {
     let id: String
     let name: String
     let description: String?
+    /// Parent list id for list-in-list nesting (backend `parentId` column).
+    let parentId: String?
+    /// Owning folder id for list-in-folder membership (backend `folderId` column).
+    /// Distinct from `parentId`; may be nil until the list GET returns it (ask A5).
     let folderId: String?
     let isPublic: Bool?
     let createdAt: String
@@ -138,24 +142,29 @@ struct UserList: Identifiable, Codable, Hashable {
     /// True when this list mirrors a GitHub repository's issues.
     var isGitHubBacked: Bool { source == "github" }
 
-    // Server sends "title" for name and "parentId" for the list-in-list hierarchy.
-    // convertFromSnakeCase is bypassed when CodingKeys are present, so use exact JSON keys.
+    // Server sends "title" for name, "parentId" for list-in-list nesting, and
+    // "folderId" for folder membership — two distinct columns. convertFromSnakeCase
+    // is bypassed when CodingKeys are present, so spell the exact JSON keys (the
+    // bare cases resolve to their own names, i.e. "parentId"/"folderId").
     // source/githubRepo/githubMeta arrive camelCase (backend `serialize` preserves keys).
     enum CodingKeys: String, CodingKey {
         case id, description, createdAt, updatedAt, itemCount, isPublic
         case name = "title"
-        case folderId = "parentId"
+        case parentId, folderId
         case source, githubRepo, githubMeta
     }
 
     // Explicit memberwise init keeps the GitHub fields optional at call sites
     // (previews, tests) without forcing every constructor to pass them.
-    init(id: String, name: String, description: String?, folderId: String?,
-         isPublic: Bool?, createdAt: String, updatedAt: String?, itemCount: Int?,
-         source: String? = nil, githubRepo: String? = nil, githubMeta: GitHubListMeta? = nil) {
+    // `parentId` defaults to nil so existing folderId-only call sites still compile.
+    init(id: String, name: String, description: String?, parentId: String? = nil,
+         folderId: String?, isPublic: Bool?, createdAt: String, updatedAt: String?,
+         itemCount: Int?, source: String? = nil, githubRepo: String? = nil,
+         githubMeta: GitHubListMeta? = nil) {
         self.id = id
         self.name = name
         self.description = description
+        self.parentId = parentId
         self.folderId = folderId
         self.isPublic = isPublic
         self.createdAt = createdAt
@@ -204,11 +213,13 @@ struct ListTreeNode: Identifiable {
         }
 
         // Builds a node for a list, recursing into child lists (parentId → this list's id).
-        // API data is assumed acyclic; guard against any circular edge by ignoring a child
-        // whose id equals the ancestor's id.
+        // A list that lives in a known folder is rendered under that folder, not nested
+        // here, so folder membership wins over list nesting. API data is assumed acyclic;
+        // guard against any circular edge by ignoring a child whose id equals the ancestor's.
         func listNode(_ list: UserList) -> ListTreeNode {
             let children = lists.filter { child in
-                guard let pid = child.folderId, !pid.isEmpty else { return false }
+                if let fid = child.folderId, !fid.isEmpty, knownFolderIds.contains(fid) { return false }
+                guard let pid = child.parentId, !pid.isEmpty else { return false }
                 return pid == list.id && child.id != list.id
             }.map { listNode($0) }
             return ListTreeNode(id: list.id, name: list.name,
@@ -217,13 +228,12 @@ struct ListTreeNode: Identifiable {
         }
 
         let rootFolders = folders.filter { ($0.parentId ?? "").isEmpty }.map { folderNode($0) }
-        // Root lists: no parentId, orphaned parent (parent not in this response),
-        // or parentId points to a folder (handled by folderNode above).
-        let rootLists = lists.filter {
-            let fid = $0.folderId ?? ""
-            if fid.isEmpty { return true }
-            if knownFolderIds.contains(fid) { return false }
-            return !knownListIds.contains(fid)
+        // A list shows at root unless it lives in a known folder or nests under a known
+        // list; orphaned folder/parent references fall through to root.
+        let rootLists = lists.filter { list in
+            if let fid = list.folderId, !fid.isEmpty, knownFolderIds.contains(fid) { return false }
+            if let pid = list.parentId, !pid.isEmpty, knownListIds.contains(pid) { return false }
+            return true
         }.map { listNode($0) }
         return rootFolders + rootLists
     }

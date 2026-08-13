@@ -568,6 +568,16 @@ field). What's left:
   (`{ message, data }`) still isn't documented; the doc-folder path-scoping caveat
   and the public-browse singular/plural namespace split are still worth a callout
   for future integrators.
+- **A5 — List GET must return `folderId`.** The `List` model has distinct
+  `parentId` (list-in-list nesting) and `folderId` (folder membership) columns, and
+  `PUT /api/lists/:id` writes both — but the list **GET** query (`getUserLists` /
+  `lib/lists/queries.ts`) selects only `id, title, parentId`, so `folderId` never
+  reaches any client. Consequently a list moved into a folder saves server-side but
+  no client (web or iOS) can display it nested under that folder; the web has no
+  folder UI at all. Add `folderId` to the list GET select (and document it). iOS is
+  already prepped: `UserList` now decodes a separate `folderId` and the tree groups
+  by it, so folder display lights up the moment the GET returns the field. **This is
+  the one remaining blocker for the "folders for lists" feature to work end-to-end.**
 
 ---
 
