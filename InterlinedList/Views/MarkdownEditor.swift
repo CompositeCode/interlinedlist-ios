@@ -28,7 +28,7 @@ final class MarkdownEditorController: ObservableObject {
     func italic() { handler?(.wrap(prefix: "_", suffix: "_", placeholder: "italic")) }
     func code() { handler?(.wrap(prefix: "`", suffix: "`", placeholder: "code")) }
     func link() { handler?(.wrap(prefix: "[", suffix: "](https://)", placeholder: "text")) }
-    func heading() { handler?(.linePrefix("## ")) }
+    func heading(level: Int) { handler?(.linePrefix(String(repeating: "#", count: level) + " ")) }
     func bullet() { handler?(.linePrefix("- ")) }
     func quote() { handler?(.linePrefix("> ")) }
     func focus() { handler?(.focus) }
@@ -166,6 +166,94 @@ struct MarkdownTextView: UIViewRepresentable {
     }
 }
 
+/// A horizontally-scrolling formatting toolbar (Bold, Italic, H1–H6 dropdown,
+/// Bullet, Quote, Inline-code, Link) driving a `MarkdownEditorController`.
+///
+/// The image button is only rendered when `imageButton` is supplied, so the same
+/// bar serves both the document editor (with image upload) and lighter contexts
+/// like a list long-text field (formatting only).
+struct MarkdownFormatToolbar<ImageButton: View>: View {
+    let controller: MarkdownEditorController
+    @ViewBuilder let imageButton: () -> ImageButton
+
+    // A persistent toolbar (rather than a `.keyboard`-placement one) so it works
+    // reliably above the UIKit-backed text view and stays reachable in Write mode.
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                formatButton("bold", "Bold") { controller.bold() }
+                formatButton("italic", "Italic") { controller.italic() }
+                headingMenu
+                formatButton("list.bullet", "Bullet list") { controller.bullet() }
+                formatButton("text.quote", "Quote") { controller.quote() }
+                formatButton("chevron.left.forwardslash.chevron.right", "Inline code") { controller.code() }
+                formatButton("link", "Link") { controller.link() }
+                let button = imageButton()
+                if ImageButton.self != EmptyView.self {
+                    Divider().frame(height: 22).padding(.horizontal, 4)
+                    button
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+    }
+
+    private var headingMenu: some View {
+        Menu {
+            ForEach(1...6, id: \.self) { level in
+                Button("Heading \(level)") { controller.heading(level: level) }
+            }
+        } label: {
+            Image(systemName: "textformat.size")
+                .font(.system(size: 16))
+                .foregroundStyle(ILColor.primary)
+                .frame(width: 40, height: 34)
+        }
+        .accessibilityLabel("Heading")
+    }
+
+    private func formatButton(_ systemImage: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16))
+                .foregroundStyle(ILColor.primary)
+                .frame(width: 40, height: 34)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+}
+
+extension MarkdownFormatToolbar where ImageButton == EmptyView {
+    init(controller: MarkdownEditorController) {
+        self.init(controller: controller) { EmptyView() }
+    }
+}
+
+/// A compact, reusable markdown editing surface: the `MarkdownFormatToolbar`
+/// above a `MarkdownTextView`, for use outside documents (e.g. a list's
+/// long-text field). No image button, no Write/Preview toggle.
+struct MarkdownFieldEditor: View {
+    @Binding var text: String
+    var minHeight: CGFloat = 120
+
+    @StateObject private var controller = MarkdownEditorController()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MarkdownFormatToolbar(controller: controller)
+            Divider()
+            MarkdownTextView(text: $text, controller: controller)
+                .frame(minHeight: minHeight)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.separator), lineWidth: 1)
+        )
+    }
+}
+
 /// Full editing surface for a document's markdown: a Write/Preview toggle, the
 /// `UITextView` editor with a keyboard formatting toolbar, and image insertion
 /// (upload progress inline, markdown written at the caret). Image upload is
@@ -185,20 +273,18 @@ struct DocumentContentEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Editing mode", selection: $mode) {
-                Text("Write").tag(Mode.write)
-                Text("Preview").tag(Mode.preview)
+            HStack {
+                Spacer()
+                modeToggle
             }
-            .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.vertical, 8)
-            .accessibilityLabel("Editing mode")
 
             Divider()
 
             switch mode {
             case .write:
-                formatBar
+                MarkdownFormatToolbar(controller: controller) { imageButton }
                 Divider()
                 MarkdownTextView(text: $content, controller: controller)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -232,24 +318,30 @@ struct DocumentContentEditor: View {
         }
     }
 
-    // A persistent toolbar (rather than a `.keyboard`-placement one) so it works
-    // reliably above the UIKit-backed text view and stays reachable in Write mode.
-    private var formatBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                formatButton("bold", "Bold") { controller.bold() }
-                formatButton("italic", "Italic") { controller.italic() }
-                formatButton("number", "Heading") { controller.heading() }
-                formatButton("list.bullet", "Bullet list") { controller.bullet() }
-                formatButton("text.quote", "Quote") { controller.quote() }
-                formatButton("chevron.left.forwardslash.chevron.right", "Inline code") { controller.code() }
-                formatButton("link", "Link") { controller.link() }
-                Divider().frame(height: 22).padding(.horizontal, 4)
-                imageButton
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+    private var modeToggle: some View {
+        HStack(spacing: 0) {
+            modeButton(.write, systemImage: "square.and.pencil", label: "Write")
+            modeButton(.preview, systemImage: "eye", label: "Preview")
         }
+        .background(Color(.tertiarySystemFill))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func modeButton(_ target: Mode, systemImage: String, label: String) -> some View {
+        Button {
+            mode = target
+        } label: {
+            Image(systemName: systemImage)
+                .font(.system(size: 16))
+                .foregroundStyle(mode == target ? ILColor.primary : .secondary)
+                .frame(width: 44, height: 30)
+                .background(mode == target ? Color(.systemBackground) : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .padding(2)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(mode == target ? [.isSelected] : [])
     }
 
     private var imageButton: some View {
@@ -267,17 +359,6 @@ struct DocumentContentEditor: View {
         }
         .disabled(isUploadingImage)
         .accessibilityLabel(isUploadingImage ? "Uploading image" : "Insert image")
-    }
-
-    private func formatButton(_ systemImage: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 16))
-                .foregroundStyle(ILColor.primary)
-                .frame(width: 40, height: 34)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 
     private func uploadPhoto(_ item: PhotosPickerItem) async {
@@ -311,7 +392,7 @@ struct DocumentContentEditor: View {
     }
 }
 
-#Preview {
+#Preview("Document editor") {
     struct PreviewHost: View {
         @State private var content = "# Title\n\nSome **markdown** text."
         var body: some View {
@@ -321,6 +402,20 @@ struct DocumentContentEditor: View {
                 }
                 .navigationTitle("Editor")
                 .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+    }
+    return PreviewHost()
+}
+
+#Preview("Field editor") {
+    struct PreviewHost: View {
+        @State private var text = "Some **notes** with a\n- bullet"
+        var body: some View {
+            Form {
+                Section("Notes") {
+                    MarkdownFieldEditor(text: $text)
+                }
             }
         }
     }

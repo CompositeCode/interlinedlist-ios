@@ -113,11 +113,15 @@ struct ListItemFormView: View {
             ))
 
         case "textarea":
-            TextEditor(text: Binding(
-                get: { fieldValues[prop.propertyKey] ?? "" },
-                set: { fieldValues[prop.propertyKey] = $0 }
-            ))
-            .frame(minHeight: 80)
+            MarkdownFieldEditor(
+                text: Binding(
+                    get: { fieldValues[prop.propertyKey] ?? "" },
+                    set: { fieldValues[prop.propertyKey] = $0 }
+                ),
+                minHeight: 120
+            )
+            .listRowInsets(EdgeInsets())
+            .padding(.vertical, 4)
 
         case "email":
             TextField(prop.placeholder ?? prop.propertyName, text: Binding(
