@@ -1005,12 +1005,13 @@ final class APIClient {
         return response.connections
     }
 
-    func createListConnection(sourceListId: String, targetListId: String) async throws -> ListConnection {
-        struct Body: Encodable { let sourceListId: String; let targetListId: String }
-        struct R: Decodable { let connection: ListConnection? }
-        let r: R = try await postCamel("/api/lists/connections",
-                                       body: Body(sourceListId: sourceListId, targetListId: targetListId))
-        guard let conn = r.connection else { throw APIError.noData }
+    /// Creates a directed connection `fromList → toList`. By convention the
+    /// `fromList` is the parent of the `toList`. The backend responds with the
+    /// raw connection object (not wrapped).
+    func createListConnection(fromListId: String, toListId: String) async throws -> ListConnection {
+        struct Body: Encodable { let fromListId: String; let toListId: String }
+        let conn: ListConnection = try await postCamel("/api/lists/connections",
+                                                       body: Body(fromListId: fromListId, toListId: toListId))
         return conn
     }
 

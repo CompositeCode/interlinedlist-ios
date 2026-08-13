@@ -455,6 +455,7 @@ struct ListDetailView: View {
     @State private var connections: [ListConnection] = []
     @State private var allLists: [UserList] = []
     @State private var showAddConnection = false
+    @State private var addRelationshipRole: ListRelationship = .parent
     @State private var showAddItem = false
     @State private var editingItem: ListItem? = nil
     @State private var deletingItem: ListItem? = nil
@@ -513,18 +514,26 @@ struct ListDetailView: View {
                     }
                     Section {
                         if connections.isEmpty {
-                            Text("No connections yet")
+                            Text("No parent or child lists yet")
                                 .foregroundStyle(.secondary)
                                 .font(.ilBody(15))
                         } else {
                             ForEach(connections) { conn in
-                                let otherListId = conn.sourceListId == list.id ? conn.targetListId : conn.sourceListId
+                                let role = conn.relationship(relativeTo: list.id)
+                                let otherListId = conn.otherListId(relativeTo: list.id)
                                 let otherList = allLists.first { $0.id == otherListId }
+                                let roleLabel = role == .parent ? "Parent" : "Child"
                                 HStack {
-                                    Image(systemName: "link")
+                                    Image(systemName: role == .parent ? "arrow.up.forward.circle" : "arrow.down.forward.circle")
                                         .foregroundStyle(.secondary)
-                                    Text(otherList?.name ?? otherListId)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(otherList?.name ?? otherListId)
+                                        Text(roleLabel)
+                                            .font(.ilBody(13))
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
+                                .accessibilityLabel("\(roleLabel) list: \(otherList?.name ?? otherListId)")
                             }
                             .onDelete { indexSet in
                                 Task {
@@ -538,15 +547,26 @@ struct ListDetailView: View {
                         }
                     } header: {
                         HStack {
-                            Text("Connections")
+                            Text("Parents & Children")
                             Spacer()
-                            Button {
-                                showAddConnection = true
+                            Menu {
+                                Button {
+                                    addRelationshipRole = .parent
+                                    showAddConnection = true
+                                } label: {
+                                    Label("Add Parent…", systemImage: "arrow.up")
+                                }
+                                Button {
+                                    addRelationshipRole = .child
+                                    showAddConnection = true
+                                } label: {
+                                    Label("Add Child…", systemImage: "arrow.down")
+                                }
                             } label: {
                                 Image(systemName: "plus")
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("Add connection")
+                            .accessibilityLabel("Add a parent or child list")
                         }
                     }
                 }
@@ -632,23 +652,34 @@ struct ListDetailView: View {
                 .environmentObject(authState)
         }
         .sheet(isPresented: $showAddConnection) {
+            let role = addRelationshipRole
+            let connectedIds = Set(connections.map { $0.otherListId(relativeTo: list.id) })
+            let candidates = allLists.filter { $0.id != list.id && !connectedIds.contains($0.id) }
             NavigationStack {
                 List {
-                    ForEach(allLists.filter { $0.id != list.id }) { candidate in
-                        Button(candidate.name) {
-                            Task {
-                                if let conn = try? await APIClient.shared.createListConnection(
-                                    sourceListId: list.id,
-                                    targetListId: candidate.id
-                                ) {
-                                    connections.append(conn)
+                    if candidates.isEmpty {
+                        Text("No other lists available to link.")
+                            .foregroundStyle(.secondary)
+                            .font(.ilBody(15))
+                    } else {
+                        ForEach(candidates) { candidate in
+                            Button(candidate.name) {
+                                Task {
+                                    let fromId = role == .parent ? candidate.id : list.id
+                                    let toId = role == .parent ? list.id : candidate.id
+                                    if let conn = try? await APIClient.shared.createListConnection(
+                                        fromListId: fromId,
+                                        toListId: toId
+                                    ) {
+                                        connections.append(conn)
+                                    }
+                                    showAddConnection = false
                                 }
-                                showAddConnection = false
                             }
                         }
                     }
                 }
-                .navigationTitle("Connect to List")
+                .navigationTitle(role == .parent ? "Choose a Parent List" : "Choose a Child List")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -818,7 +849,7 @@ struct ListDetailView: View {
             pendingUpdates = [:]
             let listId = list.id
             connections = (try? await connectionsTask)?
-                .filter { $0.sourceListId == listId || $0.targetListId == listId } ?? []
+                .filter { $0.fromListId == listId || $0.toListId == listId } ?? []
             allLists = (try? await allListsTask)?.lists ?? []
         } catch APIError.status(401) {
             authState.handleUnauthorized()

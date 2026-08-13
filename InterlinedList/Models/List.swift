@@ -241,11 +241,32 @@ struct FoldersResponse: Decodable {
 
 // MARK: - List connections
 
+/// A list's relationship to another list, from the perspective of one side of a
+/// connection. The backend stores a directed edge `fromList → toList`; by
+/// convention (matching the web ERD) the `fromList` is the parent of the `toList`.
+enum ListRelationship: Equatable {
+    case parent
+    case child
+}
+
 struct ListConnection: Identifiable, Codable {
     let id: String
-    let sourceListId: String
-    let targetListId: String
+    let fromListId: String
+    let toListId: String
+    let label: String?
     let createdAt: String?
+
+    /// The id of the list on the other end of this connection, relative to `listId`.
+    func otherListId(relativeTo listId: String) -> String {
+        fromListId == listId ? toListId : fromListId
+    }
+
+    /// From `listId`'s perspective, is the other list its parent or its child?
+    /// `fromList` is the parent, so if `listId` is the `fromList` the other side
+    /// is its child; otherwise the other side is its parent.
+    func relationship(relativeTo listId: String) -> ListRelationship {
+        fromListId == listId ? .child : .parent
+    }
 }
 
 struct ConnectionsResponse: Decodable {

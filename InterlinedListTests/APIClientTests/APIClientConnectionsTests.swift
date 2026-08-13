@@ -14,7 +14,7 @@ final class APIClientConnectionsTests: XCTestCase {
 
     func test_listConnections_sendsGetToCorrectPath() async throws {
         let json = #"""
-        {"connections":[{"id":"c1","sourceListId":"s1","targetListId":"t1","createdAt":"2024-01-01T00:00:00Z"}]}
+        {"connections":[{"id":"c1","fromListId":"s1","toListId":"t1","label":null,"createdAt":"2024-01-01T00:00:00Z"}]}
         """#
         session.stub(json: json)
         let result = try await sut.listConnections()
@@ -22,21 +22,26 @@ final class APIClientConnectionsTests: XCTestCase {
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/lists/connections")
         XCTAssertEqual(result.count, 1)
         XCTAssertEqual(result.first?.id, "c1")
+        XCTAssertEqual(result.first?.fromListId, "s1")
+        XCTAssertEqual(result.first?.toListId, "t1")
     }
 
-    func test_createListConnection_sendsPostWithSourceAndTarget() async throws {
+    func test_createListConnection_sendsPostWithFromAndTo() async throws {
+        // Backend responds with the raw connection object (not wrapped).
         let json = #"""
-        {"connection":{"id":"c2","sourceListId":"src","targetListId":"tgt","createdAt":null}}
+        {"id":"c2","fromListId":"src","toListId":"tgt","label":null,"createdAt":null}
         """#
         session.stub(json: json)
-        let conn = try await sut.createListConnection(sourceListId: "src", targetListId: "tgt")
+        let conn = try await sut.createListConnection(fromListId: "src", toListId: "tgt")
         XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/lists/connections")
         let bodyData = try XCTUnwrap(session.lastRequest?.httpBody)
         let bodyJSON = try JSONSerialization.jsonObject(with: bodyData) as? [String: String]
-        XCTAssertEqual(bodyJSON?["sourceListId"], "src")
-        XCTAssertEqual(bodyJSON?["targetListId"], "tgt")
+        XCTAssertEqual(bodyJSON?["fromListId"], "src")
+        XCTAssertEqual(bodyJSON?["toListId"], "tgt")
         XCTAssertEqual(conn.id, "c2")
+        XCTAssertEqual(conn.fromListId, "src")
+        XCTAssertEqual(conn.toListId, "tgt")
     }
 
     func test_deleteListConnection_sendsDeleteToCorrectPath() async throws {
