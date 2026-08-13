@@ -461,6 +461,7 @@ struct ListDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var showWatchers = false
     @State private var showShare = false
+    @State private var showInvites = false
     @State private var isRefreshingGitHub = false
     @State private var gitHubRefreshError: String?
 
@@ -596,6 +597,14 @@ struct ListDetailView: View {
                 .accessibilityLabel("Share list")
             }
             ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showInvites = true
+                } label: {
+                    Image(systemName: "envelope")
+                }
+                .accessibilityLabel("Invite by email")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 if let url = ILWebURL.list(list.id) {
                     SwiftUI.ShareLink(item: url) {
                         Image(systemName: "square.and.arrow.up")
@@ -616,6 +625,10 @@ struct ListDetailView: View {
         }
         .sheet(isPresented: $showShare) {
             ShareLinksSheet(kind: .lists, resourceId: list.id, title: list.name)
+                .environmentObject(authState)
+        }
+        .sheet(isPresented: $showInvites) {
+            ShareInvitesSheet(kind: .lists, resourceId: list.id, title: list.name)
                 .environmentObject(authState)
         }
         .sheet(isPresented: $showAddConnection) {

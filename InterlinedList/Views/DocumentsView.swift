@@ -637,6 +637,7 @@ private struct DocumentDetailView: View {
     @State private var showEdit = false
     @State private var showDeleteConfirm = false
     @State private var showShare = false
+    @State private var showInvites = false
     @State private var showCollaborators = false
 
     init(document: Document, onUpdate: @escaping (Document) -> Void, onDelete: @escaping (String) -> Void) {
@@ -666,6 +667,7 @@ private struct DocumentDetailView: View {
                 Menu {
                     Button("Edit") { showEdit = true }
                     Button("Share") { showShare = true }
+                    Button("Invite by email") { showInvites = true }
                     if let url = ILWebURL.document(current.id) {
                         SwiftUI.ShareLink(item: url) {
                             Label("Share link", systemImage: "square.and.arrow.up")
@@ -694,6 +696,10 @@ private struct DocumentDetailView: View {
         }
         .sheet(isPresented: $showShare) {
             ShareLinksSheet(kind: .documents, resourceId: current.id, title: current.title)
+                .environmentObject(authState)
+        }
+        .sheet(isPresented: $showInvites) {
+            ShareInvitesSheet(kind: .documents, resourceId: current.id, title: current.title)
                 .environmentObject(authState)
         }
         .sheet(isPresented: $showCollaborators) {

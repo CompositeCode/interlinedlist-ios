@@ -1103,9 +1103,14 @@ final class APIClient {
         let _: Response = try await postCamel("/api/lists/\(encoded)/watchers", body: Empty())
     }
 
-    func searchWatcherCandidates(listId: String, limit: Int = 20, offset: Int = 0) async throws -> [WatcherCandidate] {
+    func searchWatcherCandidates(listId: String, limit: Int = 20, offset: Int = 0, search: String? = nil) async throws -> [WatcherCandidate] {
         let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
-        let response: WatcherCandidatesResponse = try await get("/api/lists/\(encoded)/watchers/users?limit=\(limit)&offset=\(offset)")
+        var path = "/api/lists/\(encoded)/watchers/users?limit=\(limit)&offset=\(offset)"
+        if let search, !search.isEmpty {
+            let q = search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search
+            path += "&search=\(q)"
+        }
+        let response: WatcherCandidatesResponse = try await get(path)
         return response.users
     }
 
@@ -1158,6 +1163,36 @@ final class APIClient {
         let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
         guard let url = URL(string: baseURL + "/api/\(kind.pathSegment)/\(encodedId)/share-links/\(encodedToken)") else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let (data, response) = try await session.data(for: request)
+        try checkResponse(data: data, response: response)
+    }
+
+    // MARK: - Sharing: email share-invites (owner-only send/list/revoke)
+
+    /// Owner-side invites for a list or document. The recipient claims the invite
+    /// on the web (session-only), so iOS only ever sends, lists, and revokes.
+    func shareInvites(kind: ShareResourceKind, id: String) async throws -> [ShareInvite] {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let response: ShareInvitesResponse = try await get("/api/\(kind.pathSegment)/\(encoded)/invites")
+        return response.invites
+    }
+
+    /// Sends an email invite (subscriber-gated, rate-limited server-side). Body is
+    /// camelCase (`email`, `role`, `expiresAt`); `expiresAt` is omitted when nil.
+    func createShareInvite(kind: ShareResourceKind, id: String, email: String, role: WatcherRole = .watcher, expiresAt: String? = nil) async throws -> CreateShareInviteResponse {
+        struct Body: Encodable { let email: String; let role: String; let expiresAt: String? }
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        return try await postCamel("/api/\(kind.pathSegment)/\(encoded)/invites", body: Body(email: email, role: role.rawValue, expiresAt: expiresAt))
+    }
+
+    func revokeShareInvite(kind: ShareResourceKind, id: String, token: String) async throws {
+        let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
+        let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
+        guard let url = URL(string: baseURL + "/api/\(kind.pathSegment)/\(encodedId)/invites/\(encodedToken)") else { throw APIError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
