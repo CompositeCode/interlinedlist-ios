@@ -34,8 +34,44 @@ final class AppDeepLinkParseTests: XCTestCase {
     }
 
     func test_parse_httpsCanonicalList_isNotRouted_returnsNil() {
-        // Inbound list/document deep links are out of scope this pass.
+        // List permalinks are deliberately not routed: a bare `/lists/<id>` has no
+        // owner username, which the list-detail endpoint requires (G10 follow-on).
         XCTAssertNil(parse("https://interlinedlist.com/lists/xyz"))
+    }
+
+    // MARK: Documents (G10)
+
+    func test_parse_httpsCanonicalDocument_returnsDocument() {
+        XCTAssertEqual(parse("https://interlinedlist.com/documents/doc-1"),
+                       .document(id: "doc-1"))
+    }
+
+    func test_parse_customSchemeDocumentHost_returnsDocument() {
+        XCTAssertEqual(parse("interlinedlist://documents/doc-1"),
+                       .document(id: "doc-1"))
+    }
+
+    func test_parse_httpsSharedDocument_returnsSharedDocument() {
+        XCTAssertEqual(parse("https://interlinedlist.com/documents/shared/tok-123"),
+                       .sharedDocument(token: "tok-123"))
+    }
+
+    func test_parse_customSchemeSharedDocument_returnsSharedDocument() {
+        XCTAssertEqual(parse("interlinedlist://documents/shared/tok-123"),
+                       .sharedDocument(token: "tok-123"))
+    }
+
+    func test_parse_documentsMissingId_returnsNil() {
+        XCTAssertNil(parse("https://interlinedlist.com/documents"))
+    }
+
+    func test_parse_sharedDocumentMissingToken_returnsNil() {
+        XCTAssertNil(parse("https://interlinedlist.com/documents/shared"))
+    }
+
+    func test_parse_httpsCanonicalSharedList_isNotRouted_returnsNil() {
+        // List share-link resolution is deferred (see the-gaps.md G10 / lists refactor).
+        XCTAssertNil(parse("https://interlinedlist.com/lists/shared/tok-9"))
     }
 
     // MARK: Rejections

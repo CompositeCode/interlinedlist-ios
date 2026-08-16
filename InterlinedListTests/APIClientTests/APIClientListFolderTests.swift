@@ -1,11 +1,13 @@
 import XCTest
 @testable import InterlinedList
 
+// NOTE: List folders were removed from the app; this file retains the plain
+// list-mutation coverage (updateList / searchLists) that lived alongside the
+// old folder tests.
 final class APIClientListFolderTests: XCTestCase {
     var sut: APIClient!
     var session: MockURLSession!
 
-    private let folderJSON = #"{"id":"f1","name":"My Folder","created_at":"2024-01-01T00:00:00Z"}"#
     private let listJSON = #"{"id":"l1","title":"My List","created_at":"2024-01-01T00:00:00Z"}"#
 
     override func setUp() {
@@ -13,163 +15,6 @@ final class APIClientListFolderTests: XCTestCase {
         session = MockURLSession()
         sut = APIClient(session: session)
         sut.setBearerToken("tok")
-    }
-
-    // MARK: createListFolder()
-
-    func test_createListFolder_sendsPostToCorrectPath() async throws {
-        session.stub(json: #"{"folder":\#(folderJSON)}"#)
-        _ = try await sut.createListFolder(name: "My Folder", parentId: nil)
-        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
-        XCTAssertEqual(session.lastRequest?.url?.path, "/api/folders")
-    }
-
-    func test_createListFolder_sendsBearerToken() async throws {
-        session.stub(json: #"{"folder":\#(folderJSON)}"#)
-        _ = try await sut.createListFolder(name: "My Folder", parentId: nil)
-        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
-    }
-
-    func test_createListFolder_bodyContainsName() async throws {
-        session.stub(json: #"{"folder":\#(folderJSON)}"#)
-        _ = try await sut.createListFolder(name: "My Folder", parentId: nil)
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["name"] as? String, "My Folder")
-    }
-
-    func test_createListFolder_withParentId_sendsParentId() async throws {
-        session.stub(json: #"{"folder":\#(folderJSON)}"#)
-        _ = try await sut.createListFolder(name: "Child", parentId: "parent-123")
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["parent_id"] as? String, "parent-123")
-    }
-
-    func test_createListFolder_decodesReturnedFolder() async throws {
-        session.stub(json: #"{"folder":\#(folderJSON)}"#)
-        let folder = try await sut.createListFolder(name: "My Folder", parentId: nil)
-        XCTAssertEqual(folder.id, "f1")
-        XCTAssertEqual(folder.name, "My Folder")
-    }
-
-    func test_createListFolder_401_throwsStatusError() async throws {
-        session.stub(data: Data(), statusCode: 401)
-        do {
-            _ = try await sut.createListFolder(name: "X", parentId: nil)
-            XCTFail("Expected throw")
-        } catch APIError.status(let code) {
-            XCTAssertEqual(code, 401)
-        }
-    }
-
-    func test_createListFolder_serverError_throwsServerError() async throws {
-        session.stub(json: #"{"error":"name required"}"#, statusCode: 422)
-        do {
-            _ = try await sut.createListFolder(name: "", parentId: nil)
-            XCTFail("Expected throw")
-        } catch APIError.server(let msg) {
-            XCTAssertEqual(msg, "name required")
-        }
-    }
-
-    func test_createListFolder_subscriberOnly403_surfacesServerMessageVerbatim() async throws {
-        let message = "Subscriber only feature"
-        session.stub(json: #"{"error":"\#(message)"}"#, statusCode: 403)
-        do {
-            _ = try await sut.createListFolder(name: "X", parentId: nil)
-            XCTFail("Expected throw")
-        } catch APIError.server(let msg) {
-            XCTAssertEqual(msg, message)
-        } catch {
-            XCTFail("Expected APIError.server, got \(error)")
-        }
-    }
-
-    // MARK: updateListFolder()
-
-    func test_updateListFolder_sendsPutToCorrectPath() async throws {
-        session.stub(json: #"{"folder":\#(folderJSON)}"#)
-        _ = try await sut.updateListFolder(id: "f1", name: "Renamed", parentId: nil)
-        XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
-        XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/folders/f1") == true)
-    }
-
-    func test_updateListFolder_bodyContainsName() async throws {
-        session.stub(json: #"{"folder":\#(folderJSON)}"#)
-        _ = try await sut.updateListFolder(id: "f1", name: "Renamed", parentId: nil)
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["name"] as? String, "Renamed")
-    }
-
-    func test_updateListFolder_withParentId_sendsParentId() async throws {
-        session.stub(json: #"{"folder":\#(folderJSON)}"#)
-        _ = try await sut.updateListFolder(id: "f1", name: nil, parentId: "p1")
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["parent_id"] as? String, "p1")
-    }
-
-    func test_updateListFolder_rename_sendsNameAndDecodes() async throws {
-        // The rename affordance calls updateListFolder(name:, parentId: nil).
-        session.stub(json: #"{"folder":{"id":"f1","name":"Renamed Folder","created_at":"2024-01-01T00:00:00Z"}}"#)
-        let folder = try await sut.updateListFolder(id: "f1", name: "Renamed Folder", parentId: nil)
-        XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
-        XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/folders/f1") == true)
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["name"] as? String, "Renamed Folder")
-        XCTAssertEqual(folder.name, "Renamed Folder")
-    }
-
-    func test_updateListFolder_409_throwsStatusError() async throws {
-        session.stub(data: Data(), statusCode: 409)
-        do {
-            _ = try await sut.updateListFolder(id: "f1", name: "Clash", parentId: nil)
-            XCTFail("Expected throw")
-        } catch APIError.status(let code) {
-            XCTAssertEqual(code, 409)
-        }
-    }
-
-    func test_updateListFolder_decodesReturnedFolder() async throws {
-        session.stub(json: #"{"folder":\#(folderJSON)}"#)
-        let folder = try await sut.updateListFolder(id: "f1", name: "My Folder", parentId: nil)
-        XCTAssertEqual(folder.id, "f1")
-    }
-
-    // MARK: deleteListFolder()
-
-    func test_deleteListFolder_sendsDeleteToCorrectPath() async throws {
-        session.stub(data: Data(), statusCode: 200)
-        try await sut.deleteListFolder(id: "f1")
-        XCTAssertEqual(session.lastRequest?.httpMethod, "DELETE")
-        XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/folders/f1") == true)
-    }
-
-    func test_deleteListFolder_sendsBearerToken() async throws {
-        session.stub(data: Data(), statusCode: 200)
-        try await sut.deleteListFolder(id: "f1")
-        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
-    }
-
-    func test_deleteListFolder_percentEncodesId() async throws {
-        session.stub(data: Data(), statusCode: 200)
-        try await sut.deleteListFolder(id: "f 1")
-        let path = session.lastRequest?.url?.path ?? ""
-        XCTAssertTrue(path.hasSuffix("/api/folders/f%201") || path.hasSuffix("/api/folders/f 1"),
-                      "Expected percent-encoded path, got: \(path)")
-    }
-
-    func test_deleteListFolder_401_throwsStatusError() async throws {
-        session.stub(data: Data(), statusCode: 401)
-        do {
-            try await sut.deleteListFolder(id: "f1")
-            XCTFail("Expected throw")
-        } catch APIError.status(let code) {
-            XCTAssertEqual(code, 401)
-        }
     }
 
     // MARK: updateList()

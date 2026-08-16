@@ -30,12 +30,11 @@ since the 2026-07-18/22 assessment (see [What changed](#what-changed-since-2026-
 
 > **⏱ Re-verification — 2026-08-15 (live Bearer probe + backend source).** Two
 > findings materially change the list below:
-> 1. **A5 is DELIVERED.** `GET /api/lists` now returns **`folderId`** on every row
->    (live-verified: key present, `null` for root lists — `getUserLists` uses Prisma
->    `include`, so all list scalars now serialize through). iOS already decodes
->    `folderId` and groups the tree by it → **"lists into folders" (Phase 14) now
->    works end-to-end** on the API side; an iOS build/run confirmation is the only
->    residual. A5 was the last blocker.
+> 1. **A5 is DELIVERED** — `GET /api/lists` returns **`folderId`** (live-verified).
+>    **Superseded same day:** iOS then **removed the list-folder concept entirely**
+>    (product decision — lists organize via parent/child `parentId` nesting only).
+>    `ListFolder`, `folderId`, and the `/api/folders` client calls were deleted, so the
+>    delivered `folderId` field is now simply unused by iOS. See Phase 14 (reverted).
 > 2. **X2 is stale — tag discovery now exists.** `/api/tags/trending` and
 >    `/api/tags/autocomplete` shipped on the backend (both `getCurrentUserOrSyncToken`,
 >    live-verified **200** with real data). iOS has **no consumer** → reclassified
@@ -71,8 +70,8 @@ Every open gap, most-actionable first. IDs are used throughout the plan below.
 | **G6** ◑ | **People search / discovery** — find & open other users | 🟢 `/api/users/search`, `/api/users/lookup` | **S** |
 | **G7** ◑ | **Muted-users management UI** (API wired, no screen) | 🟢 `/api/user/mutes` (already called) | **XS** |
 | **G8** ✅◑ | **CSV Exports** — was dead (D4), backend now accepts Bearer → **verify it works** | 🟢 `/api/exports/*` (**now Bearer**) | **XS** |
-| **G13** ❌ | **Tag discovery / trending** — trending-tags list + `#` autocomplete (was X2 "non-feature"; backend shipped it) | 🟢 `/api/tags/{trending,autocomplete}` (Bearer, **live-verified 2026-08-15**) | **S** |
-| **G14** ◑ | **Composer live link-preview** — OG card while typing a post (read side already renders previews on *posted* messages) | 🟢 `/api/link-metadata?url=` (Bearer, rate-limited 30/60s) | **XS** |
+| **G13** ✅ | **Tag discovery / trending** — trending-tags list + `#` autocomplete (was X2 "non-feature"; backend shipped it) | 🟢 `/api/tags/{trending,autocomplete}` (Bearer) · **✅ SHIPPED 2026-08-15** (Phase 16) | **S** |
+| **G14** ✅ | **Composer live link-preview** — OG card while typing a post (read side already renders previews on *posted* messages) | 🟢 `/api/link-metadata?url=` (Bearer, rate-limited 30/60s) · **✅ SHIPPED 2026-08-15** (Phase 16) | **XS** |
 
 ### Tier 2 — Larger systems / lower urgency
 
@@ -122,9 +121,10 @@ Live implementation status — updated as work lands on `dev` (uncommitted unles
 | **11 — Offline doc sync, Slice 3 (G9)** | **Conflict-copy** — `DocumentSyncConflict` (dirty id whose server `updatedAt` beats baseline → keep local live + preserve server version as "(conflicted copy <date>)"), `DocumentSyncMerge.apply(protectingIds:)`, **cycle reordered to pull-first-then-push** (see server's version before a local push clobbers it), baselines in `DocumentSyncState`, dismissible banner in `DocumentsView` | ✅ **Done** 2026-08-02 — build green; 747-test suite passes (+22). **G9 COMPLETE (slices 1–3).** Offline writes are no longer LWW → the default-on `ILOfflineDocSync` flag is safe; PR #13 mergeable |
 | **12 — editor UX** | Markdown format toolbar (H1–H6 dropdown, icon Write/Preview) in `MarkdownEditor` | ✅ **Done** 2026-08-13 (`40b5850`) — additive; not a tracked gap |
 | **13 — email share-invites (extends G2)** | `ShareInvite` model + `ShareInvitesSheet` (email-invite lists & documents by role) + watcher search | ✅ **Done** 2026-08-13 (`2ae9e20`) |
-| **14 — lists into folders (unblocks on A5)** | `folderId` on create/update list (camelCase, `""`==root), folder picker + move-to-folder + `RenameFolderView`; split `UserList.parentId` (nesting) vs `folderId` (folder membership); `buildTree` groups by real `folderId` | ✅ **Done** 2026-08-13 (`3ac4040`); **now unblocked** — **A5 delivered 2026-08-15**, list GET returns `folderId` (live-verified), so folder display works end-to-end. Residual: an iOS build/run confirmation |
+| **14 — lists into folders** | ~~`folderId` on create/update list, folder picker + move-to-folder + `RenameFolderView`; split `parentId` vs `folderId`~~ | ↩️ **Reverted 2026-08-15** — the list-folder concept was removed by product decision. Lists organize only via parent/child nesting (`parentId`); `ListFolder`, `folderId`, and the `/api/folders` client calls are gone. `ListTreeNode.buildTree(lists:)` now nests purely on `parentId` |
 | **15 — API re-verification (this pass)** | Live Bearer re-probe + backend-source re-read (2026-08-15): confirmed **A5 shipped** (`folderId` in list GET), surfaced **G13** (tags trending/autocomplete now exist — was X2) and **G14** (`/api/link-metadata` composer preview). No code changes — doc-only update | ✅ **Done** 2026-08-15 |
-| — | **iOS-only tail of A1/A2** — merge staged `feat/github-oauth-universal-links` (1 commit ahead of `dev`: flips GitHub `supportsNativeAuth→true` + Associated Domains entitlement); enable the Apple-portal Associated Domains capability & regen profile · **G10 follow-ons** *(list/doc inbound, shared-token resolve)* · **G13 tags UI** · **G14 composer link-preview** · **G11 presence** *(optional)* | ⏳ remaining |
+| **16 — G13/G14 + G10 doc deep links (this session)** | **G13**: `TrendingTag`/`TagSuggestion` + `trendingTags()`/`tagAutocomplete()`; server-wide **Trending** strip & `#`-autocomplete wired into `FeedView`'s existing `tagFilter`. **G14**: `linkMetadata(url:)` + live OG preview card in `ComposeView` (`NSDataDetector` URL detection, 400 ms debounce, 429/`failed`→no card). **G10 (documents)**: `.document(id:)` + `.sharedDocument(token:)` deep links → `DocumentLinkView` / read-only `SharedDocumentView` + `resolveSharedDocument()`; parser routes `/documents/:id` and `/documents/shared/:token` (custom-scheme + https) | ✅ **Done** 2026-08-15 — app builds green; **787-test unit suite passes** (+31 new: 12 tags, 9 link-metadata, 6 resolver, +4 parse) |
+| — | **iOS-only tail of A1/A2** — merge staged `feat/github-oauth-universal-links` (1 commit ahead of `dev`: flips GitHub `supportsNativeAuth→true` + Associated Domains entitlement); enable the Apple-portal Associated Domains capability & regen profile · **G10 list follow-ons** *(list permalink inbound is **backend-limited** — a bare `/lists/:id` carries no owner username the list-detail endpoint requires; list share-token resolve deferred behind the active lists refactor)* · **G11 presence** *(optional)* | ⏳ remaining |
 
 **Whole-tree gate (2026-07-31, after the fix pass):** full unit suite **694 tests,
 0 failures** (E2E excluded). All work builds and passes together; Phases 1–9
@@ -282,7 +282,7 @@ directly from source:
 | **Edit a posted message** | 🔴 | **D2** — client sends unsupported `PUT` |
 | **Edit profile / settings** | 🔴 | **D1** — client sends unsupported `POST` |
 | **Mark one notification read** | 🔴 | **D3** — client sends unsupported `PUT` |
-| Lists: CRUD, folders, schema DSL, rows, connections, watchers | ✅ | list create is 💲; **lists-into-folders now end-to-end** (A5 delivered — GET returns `folderId`) |
+| Lists: CRUD, schema DSL, rows, connections, watchers, parent/child nesting | ✅ | list create is 💲; **list folders removed 2026-08-15** — lists nest via `parentId` only |
 | Documents: CRUD, folders, search, inline images, public reader | ✅ | doc create is 💲 (confirmed) |
 | **Document templates** | ❌ | **G3** — Bearer-ready |
 | **Document collaborators / share-links** | ❌ | **G2** — iOS has list *watchers* only |
@@ -294,12 +294,12 @@ directly from source:
 | **GitHub-backed lists / issues** | ❌ | **G4** — now Bearer-ready |
 | **LinkedIn org/target picker** | ◑ | **G5** — `linkedInTargets` posts; can't fetch targets yet |
 | **Offline document sync** | ❌ | **G9** |
-| **Content deep / universal links** | ◑ | **G10** — only auth callbacks routed today |
+| **Content deep / universal links** | ◑ | **G10** — profile/message/**document**/**doc-share-token** routed (Phase 16); list permalinks backend-limited (no owner in URL); Universal Links pending A2 iOS merge |
 | **Live doc presence (cursors)** | ❌ | **G11** |
 | **Active-sessions management** | ❌ | **G12** |
 | Multi-account switching | ⛔ | **X1** — session-only backend |
-| **Tag discovery / trending** | ❌ | **G13** — `/api/tags/{trending,autocomplete}` now exist (Bearer); no iOS consumer |
-| **Composer live link-preview** | ◑ | **G14** — posted-message previews render; no live compose-time card |
+| **Tag discovery / trending** | ✅ | **G13** — trending strip + `#` autocomplete in FeedView (Phase 16) |
+| **Composer live link-preview** | ✅ | **G14** — live OG card in ComposeView (Phase 16) |
 | Realtime channel (SSE/WS) | — | **X3** — none; polling only |
 | Billing, layouts, engagement, widgets, admin | — | web-only by design |
 
@@ -505,7 +505,7 @@ missing. Add `MutedUsersView` mirroring `BlockedUsersView` and link it from
 it was hidden per the old D4 plan), remove any `// TODO: re-enable when …` note, and
 smoke-test in-app. Note the client knows only 3 of 4 — add `list-data-rows`.
 
-#### G13 — Tag discovery / trending `Small` 🟢 (new 2026-08-15)
+#### G13 — Tag discovery / trending `Small` 🟢 ✅ SHIPPED 2026-08-15 (Phase 16)
 
 Backend shipped two Bearer endpoints (both `getCurrentUserOrSyncToken`), **live-verified 2026-08-15**:
 
@@ -524,7 +524,7 @@ but has no discovery surface.
   taps drive the existing `tag:` feed filter; `#`-autocomplete suggestions in the
   compose field and/or the feed search box. All read-only, **free** — no gating.
 
-#### G14 — Composer live link-preview `XS` 🟢 (new 2026-08-15)
+#### G14 — Composer live link-preview `XS` 🟢 ✅ SHIPPED 2026-08-15 (Phase 16)
 
 `GET /api/link-metadata?url=<http(s) url>` (Bearer; rate-limited 30/60 s → 429 with
 `Retry-After`) returns a terminal `{ link: LinkMetadataItem }` (OG title/description/
@@ -632,14 +632,14 @@ field). What's left:
   (`{ message, data }`) still isn't documented; the doc-folder path-scoping caveat
   and the public-browse singular/plural namespace split are still worth a callout
   for future integrators.
-- **A5 — List GET returns `folderId`. ✅ DELIVERED (live-verified 2026-08-15).** The
-  list **GET** now emits `folderId` on every row (`getUserLists` uses Prisma
-  `include`, so all `List` scalars — including the `folderId` column — serialize
-  through; live probe of `GET /api/lists` shows the key present, `null` for root
-  lists). iOS was already prepped (`UserList` decodes a separate `folderId`; the tree
-  groups by it), so **"folders for lists" now works end-to-end** — the residual is an
-  iOS build/run confirmation, not a backend change. *(Was: "GET selects only
-  `id, title, parentId`" — that no longer matches the deployed query.)*
+- **A5 — List GET returns `folderId`. ✅ DELIVERED, then WITHDRAWN on the iOS side
+  (2026-08-15).** The list **GET** does emit `folderId` (`getUserLists` uses Prisma
+  `include`). However, iOS has **removed the list-folder concept entirely** by product
+  decision: lists organize only via parent/child nesting (`parentId`), not folders. The
+  client no longer decodes `folderId`, no longer calls the `/api/folders` CRUD
+  endpoints, and no longer sends `folderId` on list create/update. **No backend change
+  is requested** — the `folderId` column and `/api/folders/*` routes are simply unused
+  by the iOS client now (backend cleanup optional; the web app never had folder UI).
 - **A6 — Doc the new endpoints (low priority).** `/api/tags/{trending,autocomplete}`
   (G13) and `/api/link-metadata` (G14) shipped but aren't yet in `/help/api/*`; add
   pages so future integrators (and this doc) can rely on the published contract.

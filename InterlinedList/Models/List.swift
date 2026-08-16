@@ -170,13 +170,6 @@ struct UserList: Identifiable, Codable, Hashable {
     }
 }
 
-struct ListFolder: Identifiable, Codable, Equatable {
-    let id: String
-    let name: String
-    let parentId: String?
-    let createdAt: String?
-}
-
 struct ListItem: Identifiable, Codable {
     let id: String
     let rowData: [String: JSONValue]
@@ -189,30 +182,17 @@ struct ListItem: Identifiable, Codable {
 struct ListTreeNode: Identifiable {
     let id: String
     let name: String
-    var children: [ListTreeNode]?  // nil = list leaf, non-nil = folder
+    var children: [ListTreeNode]?  // nil = leaf list, non-nil = parent with child lists
     let list: UserList?
 
-    static func buildTree(folders: [ListFolder], lists: [UserList]) -> [ListTreeNode] {
-        let knownFolderIds = Set(folders.map { $0.id })
+    static func buildTree(lists: [UserList]) -> [ListTreeNode] {
         let knownListIds = Set(lists.map { $0.id })
 
-        func folderNode(_ folder: ListFolder) -> ListTreeNode {
-            let childFolders = folders
-                .filter { !($0.parentId ?? "").isEmpty && $0.parentId == folder.id }
-                .map { folderNode($0) }
-            let childLists = lists
-                .filter { !($0.folderId ?? "").isEmpty && $0.folderId == folder.id }
-                .map { listNode($0) }
-            return ListTreeNode(id: folder.id, name: folder.name, children: childFolders + childLists, list: nil)
-        }
-
         // Builds a node for a list, recursing into child lists (parentId → this list's id).
-        // A list that lives in a known folder is rendered under that folder, not nested
-        // here, so folder membership wins over list nesting. API data is assumed acyclic;
-        // guard against any circular edge by ignoring a child whose id equals the ancestor's.
+        // API data is assumed acyclic; guard against any circular edge by ignoring a child
+        // whose id equals the ancestor's.
         func listNode(_ list: UserList) -> ListTreeNode {
             let children = lists.filter { child in
-                if let fid = child.folderId, !fid.isEmpty, knownFolderIds.contains(fid) { return false }
                 guard let pid = child.parentId, !pid.isEmpty else { return false }
                 return pid == list.id && child.id != list.id
             }.map { listNode($0) }
@@ -221,15 +201,13 @@ struct ListTreeNode: Identifiable {
                                 list: list)
         }
 
-        let rootFolders = folders.filter { ($0.parentId ?? "").isEmpty }.map { folderNode($0) }
-        // A list shows at root unless it lives in a known folder or nests under a known
-        // list; orphaned folder/parent references fall through to root.
+        // A list shows at root unless it nests under a known parent list; an empty or
+        // orphaned parentId falls through to root (CLAUDE.md: parentId may arrive "").
         let rootLists = lists.filter { list in
-            if let fid = list.folderId, !fid.isEmpty, knownFolderIds.contains(fid) { return false }
             if let pid = list.parentId, !pid.isEmpty, knownListIds.contains(pid) { return false }
             return true
         }.map { listNode($0) }
-        return rootFolders + rootLists
+        return rootLists
     }
 }
 
@@ -237,10 +215,6 @@ struct ListTreeNode: Identifiable {
 
 struct ListsResponse: Decodable {
     let lists: [UserList]
-}
-
-struct FoldersResponse: Decodable {
-    let folders: [ListFolder]
 }
 
 // MARK: - List connections

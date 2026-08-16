@@ -33,16 +33,42 @@ struct FeedView: View {
     @State private var reportTarget: ReportTarget? = nil
     @State private var blockedUserIds: Set<String> = []
     @State private var detailMessage: Message?
+    @State private var trendingTags: [TrendingTag] = []
+    @State private var tagSuggestions: [TagSuggestion] = []
 
     private var distinctTags: [String] {
         var seen = Set<String>()
         return messages.compactMap { $0.tags }.flatMap { $0 }.filter { seen.insert($0).inserted }
     }
 
+    /// Tags shown in the discovery strip: server-wide **trending** when available
+    /// (G13), else the tags present on the current feed page. The active filter is
+    /// always included so it can be toggled off even if it isn't currently trending.
+    private var feedTags: [String] {
+        let base = trendingTags.isEmpty ? distinctTags : trendingTags.map(\.tag)
+        guard let active = tagFilter, !base.contains(active) else { return base }
+        return [active] + base
+    }
+
+    private var trimmedSearch: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// A `#`-prefixed search term switches the search field into tag-autocomplete
+    /// mode (G13) instead of full-text message search.
+    private var isTagSearch: Bool { trimmedSearch.hasPrefix("#") }
+    private var tagSearchPrefix: String {
+        String(trimmedSearch.dropFirst()).trimmingCharacters(in: .whitespaces)
+    }
+
     @ViewBuilder
     private var feedContent: some View {
         if !searchText.isEmpty {
-            searchResultsList
+            if isTagSearch {
+                tagSuggestionsList
+            } else {
+                searchResultsList
+            }
         } else if isLoading && messages.isEmpty {
             FeedSkeletonView()
         } else if let error = errorMessage, messages.isEmpty {
@@ -87,17 +113,49 @@ struct FeedView: View {
         }
     }
 
+    @ViewBuilder
+    private var tagSuggestionsList: some View {
+        if tagSearchPrefix.isEmpty {
+            ContentUnavailableView {
+                Label("Search tags", systemImage: "number")
+            } description: {
+                Text("Type a tag after # to find posts by topic.")
+            }
+        } else if tagSuggestions.isEmpty {
+            ContentUnavailableView.search(text: trimmedSearch)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List(tagSuggestions) { suggestion in
+                Button {
+                    applyTagFilter(suggestion.tag)
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("#\(suggestion.tag)").font(.ilBody())
+                        Spacer()
+                        Text("\(suggestion.count)")
+                            .font(.ilMono(12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Tag \(suggestion.tag), \(suggestion.count) posts")
+            }
+            .listStyle(.plain)
+        }
+    }
+
     private var messageList: some View {
         List {
             Section {
                 Toggle("Show previews", isOn: $showPreviews)
                 Toggle("My Posts", isOn: $showOnlyMine)
             }
-            if !distinctTags.isEmpty {
+            if !feedTags.isEmpty {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(distinctTags, id: \.self) { tag in
+                            ForEach(feedTags, id: \.self) { tag in
                                 let isActive = tagFilter == tag
                                 Button {
                                     tagFilter = isActive ? nil : tag
@@ -114,6 +172,11 @@ struct FeedView: View {
                             }
                         }
                         .padding(.vertical, 2)
+                    }
+                } header: {
+                    if !trendingTags.isEmpty {
+                        Label("Trending", systemImage: "chart.line.uptrend.xyaxis")
+                            .font(.ilMono(11))
                     }
                 }
             }
@@ -218,13 +281,23 @@ struct FeedView: View {
                 }
                 .navigationTitle("InterlinedList")
                 .navigationBarTitleDisplayMode(.inline)
-                .searchable(text: $searchText, prompt: "Search posts")
+                .searchable(text: $searchText, prompt: "Search posts (or #tag)")
                 .onSubmit(of: .search) { Task { await runSearch() } }
                 .onChange(of: searchText) { _, newValue in
                     if newValue.isEmpty {
                         searchResults = []
                         searchPerformed = false
+                        tagSuggestions = []
                     }
+                }
+                .task(id: searchText) {
+                    guard isTagSearch, !tagSearchPrefix.isEmpty else {
+                        tagSuggestions = []
+                        return
+                    }
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    guard !Task.isCancelled else { return }
+                    await loadTagSuggestions()
                 }
                 .toolbar { feedToolbar }
         }
@@ -315,6 +388,38 @@ struct FeedView: View {
         } else {
             isLoading = store.feedLoading
         }
+        await loadTrendingTags()
+    }
+
+    /// Server-wide trending tags for the discovery strip (G13). Non-critical: on any
+    /// failure the strip silently falls back to `distinctTags` from the current page.
+    private func loadTrendingTags() async {
+        do {
+            trendingTags = try await APIClient.shared.trendingTags()
+        } catch {
+            // Ignore — the feed still works without discovery tags.
+        }
+    }
+
+    private func loadTagSuggestions() async {
+        let prefix = tagSearchPrefix
+        guard !prefix.isEmpty else { tagSuggestions = []; return }
+        do {
+            let suggestions = try await APIClient.shared.tagAutocomplete(query: prefix)
+            guard !Task.isCancelled else { return }
+            tagSuggestions = suggestions
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            tagSuggestions = []
+        }
+    }
+
+    private func applyTagFilter(_ tag: String) {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        searchText = ""
+        tagSuggestions = []
+        tagFilter = tag
     }
 
     private func toggleDig(for message: Message) async {
@@ -352,6 +457,8 @@ struct FeedView: View {
     }
 
     private func runSearch() async {
+        // `#tag` queries are handled live by tag autocomplete, not full-text search.
+        guard !isTagSearch else { return }
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         isSearching = true

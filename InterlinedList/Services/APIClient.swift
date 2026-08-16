@@ -426,10 +426,9 @@ final class APIClient {
 
     // MARK: - Lists
 
-    func listsAndFolders() async throws -> (folders: [ListFolder], lists: [UserList]) {
-        let foldersResponse: FoldersResponse = try await get("/api/folders")
+    func lists() async throws -> [UserList] {
         let listsResponse: ListsResponse = try await get("/api/lists")
-        return (foldersResponse.folders, listsResponse.lists)
+        return listsResponse.lists
     }
 
     func listItems(listId: String) async throws -> [ListItem] {
@@ -462,20 +461,16 @@ final class APIClient {
     /// For a GitHub-backed list pass `githubSource`; the backend ignores `schema`
     /// in that case (issues drive the columns), so the caller should pass `schema: nil`.
     /// The endpoint returns the created list under `data`, not `list`.
-    /// `folderId` files the new list into a folder (camelCase, per the backend).
-    /// Pass `nil` to omit it (root); an empty string is also read as root by the
-    /// backend (`folderId || null`).
-    func createList(title: String, description: String?, isPublic: Bool, schema: ListSchemaDSL? = nil, githubSource: GitHubSource? = nil, folderId: String? = nil) async throws -> UserList {
+    func createList(title: String, description: String?, isPublic: Bool, schema: ListSchemaDSL? = nil, githubSource: GitHubSource? = nil) async throws -> UserList {
         struct Body: Encodable {
             let title: String
             let description: String?
             let isPublic: Bool
             let schema: ListSchemaDSL?
             let githubSource: GitHubSource?
-            let folderId: String?
 
             enum CodingKeys: String, CodingKey {
-                case title, description, isPublic, schema, githubSource, folderId
+                case title, description, isPublic, schema, githubSource
             }
 
             func encode(to encoder: Encoder) throws {
@@ -485,13 +480,11 @@ final class APIClient {
                 try c.encode(isPublic, forKey: .isPublic)
                 try c.encodeIfPresent(schema, forKey: .schema)
                 try c.encodeIfPresent(githubSource, forKey: .githubSource)
-                if let folderId { try c.encode(folderId, forKey: .folderId) }
             }
         }
         struct Response: Decodable { let data: UserList? }
         let body = Body(title: title, description: description, isPublic: isPublic,
-                        schema: githubSource == nil ? schema : nil, githubSource: githubSource,
-                        folderId: folderId)
+                        schema: githubSource == nil ? schema : nil, githubSource: githubSource)
         let response: Response = try await postCamel("/api/lists", body: body)
         guard let list = response.data else { throw APIError.noData }
         return list
@@ -712,19 +705,16 @@ final class APIClient {
         throw APIError.noData
     }
 
-    /// The backend reads camelCase (`isPublic`, `folderId`) directly from the body,
-    /// so this uses the camelCase encoder. `folderId == nil` omits the field (the
-    /// list stays where it is); pass an empty string to move it to root (the backend
-    /// treats `""` and `null` identically), or a folder id to file it there.
-    func updateList(id: String, title: String?, description: String?, isPublic: Bool?, folderId: String? = nil) async throws -> UserList {
+    /// The backend reads camelCase (`isPublic`) directly from the body, so this uses
+    /// the camelCase encoder. Nil fields are omitted (left unchanged).
+    func updateList(id: String, title: String?, description: String?, isPublic: Bool?) async throws -> UserList {
         struct Body: Encodable {
             let title: String?
             let description: String?
             let isPublic: Bool?
-            let folderId: String?
 
             enum CodingKeys: String, CodingKey {
-                case title, description, isPublic, folderId
+                case title, description, isPublic
             }
 
             func encode(to encoder: Encoder) throws {
@@ -732,12 +722,11 @@ final class APIClient {
                 try c.encodeIfPresent(title, forKey: .title)
                 try c.encodeIfPresent(description, forKey: .description)
                 try c.encodeIfPresent(isPublic, forKey: .isPublic)
-                if let folderId { try c.encode(folderId, forKey: .folderId) }
             }
         }
         struct Response: Decodable { let list: UserList? }
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: Response = try await putCamel("/api/lists/\(encoded)", body: Body(title: title, description: description, isPublic: isPublic, folderId: folderId))
+        let response: Response = try await putCamel("/api/lists/\(encoded)", body: Body(title: title, description: description, isPublic: isPublic))
         guard let list = response.list else { throw APIError.noData }
         return list
     }
@@ -750,34 +739,6 @@ final class APIClient {
         let response: Response = try await putCamel("/api/lists/\(encoded)/schema",
                                                     body: Body(schema: schemaDSL))
         return response.properties ?? []
-    }
-
-    func createListFolder(name: String, parentId: String?) async throws -> ListFolder {
-        struct Body: Encodable { let name: String; let parentId: String? }
-        struct Response: Decodable { let folder: ListFolder? }
-        let response: Response = try await post("/api/folders", body: Body(name: name, parentId: parentId))
-        guard let folder = response.folder else { throw APIError.noData }
-        return folder
-    }
-
-    func updateListFolder(id: String, name: String?, parentId: String?) async throws -> ListFolder {
-        struct Body: Encodable { let name: String?; let parentId: String? }
-        struct Response: Decodable { let folder: ListFolder? }
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: Response = try await put("/api/folders/\(encoded)", body: Body(name: name, parentId: parentId))
-        guard let folder = response.folder else { throw APIError.noData }
-        return folder
-    }
-
-    func deleteListFolder(id: String) async throws {
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: baseURL + "/api/folders/\(encoded)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
     }
 
     func searchLists(q: String, limit: Int = 20, offset: Int = 0) async throws -> ([UserList], Pagination?) {
@@ -917,6 +878,65 @@ final class APIClient {
         let encodedQuery = components?.percentEncodedQuery.map { "?" + $0 } ?? ""
         let response: Response = try await get("/api/users/search" + encodedQuery)
         return response.users
+    }
+
+    // MARK: - Tag discovery (G13)
+
+    /// Most-used tags across public messages within a trailing window.
+    /// `window` is one of `day`/`week`/`month` (backend defaults unknown values to
+    /// `week`); `limit` is clamped server-side to ≤100.
+    func trendingTags(window: String = "week", limit: Int = 20) async throws -> [TrendingTag] {
+        struct Response: Decodable { let tags: [TrendingTag] }
+        var components = URLComponents(string: baseURL + "/api/tags/trending")
+        components?.queryItems = [
+            URLQueryItem(name: "window", value: window),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+        let encodedQuery = components?.percentEncodedQuery.map { "?" + $0 } ?? ""
+        let response: Response = try await get("/api/tags/trending" + encodedQuery)
+        return response.tags
+    }
+
+    /// Tags on public messages matching a case-insensitive literal prefix. A leading
+    /// `#` is stripped server-side; a blank prefix is rejected with 400, so callers
+    /// should guard against empty input. `limit` is clamped server-side to ≤50.
+    func tagAutocomplete(query: String, limit: Int = 10) async throws -> [TagSuggestion] {
+        struct Response: Decodable { let tags: [TagSuggestion] }
+        var components = URLComponents(string: baseURL + "/api/tags/autocomplete")
+        components?.queryItems = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "limit", value: String(limit)),
+        ]
+        let encodedQuery = components?.percentEncodedQuery.map { "?" + $0 } ?? ""
+        let response: Response = try await get("/api/tags/autocomplete" + encodedQuery)
+        return response.tags
+    }
+
+    // MARK: - Link preview (G14)
+
+    /// Fetches Open Graph / link metadata for a single URL so the composer can show a
+    /// live preview before a post is created. The endpoint always returns a terminal
+    /// item (`fetchStatus` `success`|`failed`, never pending) and is rate-limited
+    /// (429). Callers should treat a 429 or a `failed` status as "no preview" rather
+    /// than a hard error.
+    func linkMetadata(url: String) async throws -> LinkMetadataItem {
+        struct Response: Decodable { let link: LinkMetadataItem }
+        var components = URLComponents(string: baseURL + "/api/link-metadata")
+        components?.queryItems = [URLQueryItem(name: "url", value: url)]
+        let encodedQuery = components?.percentEncodedQuery.map { "?" + $0 } ?? ""
+        let response: Response = try await get("/api/link-metadata" + encodedQuery)
+        return response.link
+    }
+
+    // MARK: - Share-link resolvers (G10)
+
+    /// Resolves a document share-link token to a read-only view. Auth is optional on
+    /// this endpoint (anonymous read works); a Bearer token, if present, is ignored
+    /// for the read. Throws `.server`/`.status(404)` for an unknown/expired/revoked
+    /// token and `.status(429)` when rate-limited.
+    func resolveSharedDocument(token: String) async throws -> SharedDocumentResolution {
+        let t = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
+        return try await get("/api/documents/shared/\(t)")
     }
 
     // MARK: - Notifications

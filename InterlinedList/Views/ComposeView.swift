@@ -22,6 +22,7 @@ struct ComposeView: View {
     var repostOf: Message? = nil
     @State private var content = ""
     @State private var tags = ""
+    @State private var linkPreview: LinkMetadataItem?
     @State private var publiclyVisible = true
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -112,6 +113,17 @@ struct ComposeView: View {
                     }
                 }
 
+                if let preview = linkPreview,
+                   preview.fetchStatus == "success",
+                   let meta = preview.metadata {
+                    Section {
+                        LinkPreviewBlock(link: preview, meta: meta)
+                            .accessibilityLabel("Link preview: \(meta.title ?? preview.url)")
+                    } header: {
+                        Text("Link preview")
+                    }
+                }
+
                 if !isReply && !isRepost && !postableOrgs.isEmpty {
                     Section("Post Message As") {
                         Picker("Author", selection: $selectedOrgId) {
@@ -171,6 +183,7 @@ struct ComposeView: View {
             .alert(successTitle, isPresented: $showSuccess) {
                 Button("OK") {
                     content = ""
+                    linkPreview = nil
                     imageUploader.reset()
                     photoSelection = []
                     uploadedVideoURL = nil
@@ -201,6 +214,45 @@ struct ComposeView: View {
                 guard isOn else { return }
                 Task { await loadLinkedInTargetsIfNeeded() }
             }
+            .task(id: firstDetectedURL) {
+                guard let url = firstDetectedURL else {
+                    linkPreview = nil
+                    return
+                }
+                // Debounce keystrokes; the endpoint is rate-limited (30/60s).
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                guard !Task.isCancelled else { return }
+                await loadLinkPreview(url)
+            }
+        }
+    }
+
+    // MARK: - Link preview (G14)
+
+    /// The first `http(s)` URL in the draft, used to drive a live preview card.
+    /// Recomputed on each content change; cheap enough for per-keystroke use.
+    private var firstDetectedURL: String? {
+        guard !content.isEmpty,
+              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        else { return nil }
+        let range = NSRange(content.startIndex..<content.endIndex, in: content)
+        guard let match = detector.firstMatch(in: content, options: [], range: range),
+              let url = match.url,
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https"
+        else { return nil }
+        return url.absoluteString
+    }
+
+    private func loadLinkPreview(_ url: String) async {
+        do {
+            let item = try await APIClient.shared.linkMetadata(url: url)
+            guard !Task.isCancelled else { return }
+            linkPreview = item
+        } catch {
+            // Rate-limited (429), fetch failure, or offline → show no card rather
+            // than surfacing an error; the preview is a non-essential nicety.
+            linkPreview = nil
         }
     }
 

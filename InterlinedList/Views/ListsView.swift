@@ -9,23 +9,14 @@ struct ListsView: View {
     @EnvironmentObject var authState: AuthState
     @EnvironmentObject var store: AppDataStore
     @State private var showCreateList = false
-    @State private var showCreateFolder = false
     @State private var createError: String?
     @State private var searchText = ""
     @State private var searchResults: [UserList] = []
     @State private var isSearching = false
     @State private var treeNodes: [ListTreeNode] = []
 
-    private var canCreateFolders: Bool {
-        authState.user?.isSubscriber == true
-    }
-
     private func rebuildTree() -> [ListTreeNode] {
-        // Folders are a subscriber-only feature. For free users we pass an empty
-        // folder array so any lists that were nested under folders (e.g. from when
-        // the user was a subscriber) surface at root via buildTree's orphan rule.
-        let visibleFolders = canCreateFolders ? store.listFolders : []
-        return ListTreeNode.buildTree(folders: visibleFolders, lists: store.userLists)
+        ListTreeNode.buildTree(lists: store.userLists)
     }
 
     var body: some View {
@@ -56,17 +47,11 @@ struct ListsView: View {
                 .environmentObject(authState)
                 .environmentObject(store)
             }
-            .sheet(isPresented: $showCreateFolder) {
-                CreateListFolderView(parentId: nil) {
-                    Task { await store.refreshLists() }
-                }
-            }
             .refreshable {
                 await store.refreshLists()
             }
             .onAppear { treeNodes = rebuildTree() }
             .onChange(of: store.userLists) { _, _ in treeNodes = rebuildTree() }
-            .onChange(of: store.listFolders) { _, _ in treeNodes = rebuildTree() }
         }
     }
 
@@ -98,9 +83,7 @@ struct ListsView: View {
                     ListTreeNodeRow(
                         node: node,
                         onDeleteList: { list in Task { await deleteList(list) } },
-                        onDeleteFolder: { folder in Task { await deleteFolder(folder) } },
-                        onUpdateList: { _ in Task { await store.refreshLists() } },
-                        onRenameFolder: { _ in Task { await store.refreshLists() } }
+                        onUpdateList: { _ in Task { await store.refreshLists() } }
                     )
                 }
             }
@@ -113,11 +96,6 @@ struct ListsView: View {
         Menu {
             Button { showCreateList = true } label: {
                 Label("New List", systemImage: "plus.rectangle")
-            }
-            if canCreateFolders {
-                Button { showCreateFolder = true } label: {
-                    Label("New Folder", systemImage: "folder.badge.plus")
-                }
             }
         } label: {
             Image(systemName: "plus")
@@ -173,144 +151,6 @@ struct ListsView: View {
             await store.refreshLists()
         }
     }
-
-    private func deleteFolder(_ folder: ListFolder) async {
-        do {
-            try await APIClient.shared.deleteListFolder(id: folder.id)
-            store.removeListFolder(id: folder.id)
-        } catch APIError.status(401) {
-            authState.handleUnauthorized()
-        } catch {
-            await store.refreshLists()
-        }
-    }
-}
-
-// MARK: - Create list folder sheet
-
-private struct CreateListFolderView: View {
-    let parentId: String?
-    let onSave: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Folder Name") {
-                    TextField("Name", text: $name)
-                }
-                if let error = errorMessage {
-                    Section {
-                        Text(error).foregroundStyle(.red).font(.ilMono())
-                    }
-                }
-            }
-            .navigationTitle("New Folder")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Create") { Task { await save() } }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
-                }
-            }
-        }
-    }
-
-    private func save() async {
-        isLoading = true
-        defer { isLoading = false }
-        errorMessage = nil
-        do {
-            _ = try await APIClient.shared.createListFolder(
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                parentId: parentId
-            )
-            onSave()
-            dismiss()
-        } catch APIError.server(let msg) {
-            errorMessage = msg
-        } catch {
-            // 403 falls through here — the New Folder button is hidden for
-            // non-subscribers, so this catch should only trigger on transient
-            // errors. Per the iOS-free-app direction, no subscription copy is
-            // ever surfaced.
-            errorMessage = "Failed to create folder."
-        }
-    }
-}
-
-// MARK: - Rename folder sheet
-
-private struct RenameFolderView: View {
-    let folder: ListFolder
-    let onSave: () -> Void
-
-    @EnvironmentObject private var authState: AuthState
-    @Environment(\.dismiss) private var dismiss
-    @State private var name: String
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-
-    init(folder: ListFolder, onSave: @escaping () -> Void) {
-        self.folder = folder
-        self.onSave = onSave
-        _name = State(initialValue: folder.name)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Folder Name") {
-                    TextField("Name", text: $name)
-                }
-                if let error = errorMessage {
-                    Section {
-                        Text(error).foregroundStyle(.red).font(.ilMono())
-                    }
-                }
-            }
-            .navigationTitle("Rename Folder")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") { Task { await save() } }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
-                }
-            }
-        }
-    }
-
-    private func save() async {
-        isLoading = true
-        defer { isLoading = false }
-        errorMessage = nil
-        do {
-            _ = try await APIClient.shared.updateListFolder(
-                id: folder.id,
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                parentId: nil
-            )
-            onSave()
-            dismiss()
-        } catch APIError.status(401) {
-            authState.handleUnauthorized()
-            errorMessage = "Session expired. Please try again."
-        } catch APIError.server(let msg) {
-            errorMessage = msg
-        } catch {
-            errorMessage = "Failed to rename folder."
-        }
-    }
 }
 
 // MARK: - Rename list sheet
@@ -320,11 +160,9 @@ private struct RenameListView: View {
     let onSave: (UserList) -> Void
 
     @EnvironmentObject private var authState: AuthState
-    @EnvironmentObject private var store: AppDataStore
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var isPublic: Bool
-    @State private var selectedFolderId: String?
     @State private var isLoading = false
     @State private var errorMessage: String?
 
@@ -333,13 +171,6 @@ private struct RenameListView: View {
         self.onSave = onSave
         _title = State(initialValue: list.name)
         _isPublic = State(initialValue: list.isPublic ?? false)
-        // Empty-string folderId means "root" (CLAUDE.md gotcha) — normalize to nil.
-        let current = list.folderId ?? ""
-        _selectedFolderId = State(initialValue: current.isEmpty ? nil : current)
-    }
-
-    private var canFileInFolder: Bool {
-        authState.user?.isSubscriber == true && !store.listFolders.isEmpty
     }
 
     var body: some View {
@@ -350,17 +181,6 @@ private struct RenameListView: View {
                 }
                 Section {
                     Toggle("Public", isOn: $isPublic)
-                }
-                if canFileInFolder {
-                    Section("Folder") {
-                        Picker("Folder", selection: $selectedFolderId) {
-                            Text("None / Root").tag(String?.none)
-                            ForEach(store.listFolders) { folder in
-                                Text(folder.name).tag(String?.some(folder.id))
-                            }
-                        }
-                        .accessibilityLabel("Move to folder")
-                    }
                 }
                 if let error = errorMessage {
                     Section {
@@ -382,13 +202,6 @@ private struct RenameListView: View {
         }
     }
 
-    /// nil selection (root) is sent as an empty string, which the backend reads as
-    /// root (`folderId || null`). When the folder gate is off, don't touch folderId.
-    private var folderIdForUpdate: String? {
-        guard canFileInFolder else { return nil }
-        return selectedFolderId ?? ""
-    }
-
     private func save() async {
         isLoading = true
         defer { isLoading = false }
@@ -399,8 +212,7 @@ private struct RenameListView: View {
                 id: list.id,
                 title: trimmed,
                 description: list.description,
-                isPublic: isPublic,
-                folderId: folderIdForUpdate
+                isPublic: isPublic
             )
             onSave(updated)
             dismiss()
@@ -420,12 +232,9 @@ private struct RenameListView: View {
 struct ListTreeNodeRow: View {
     let node: ListTreeNode
     let onDeleteList: (UserList) -> Void
-    let onDeleteFolder: (ListFolder) -> Void
     let onUpdateList: (UserList) -> Void
-    let onRenameFolder: (ListFolder) -> Void
     @State private var isExpanded = true
     @State private var showRename = false
-    @State private var showFolderRename = false
     @State private var schemaEditorList: UserList?
     @State private var schemaEditorSchema: [ListPropertyDef] = []
     @State private var isLoadingSchema = false
@@ -434,7 +243,7 @@ struct ListTreeNodeRow: View {
         if let children = node.children, let list = node.list {
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
-                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList, onRenameFolder: onRenameFolder)
+                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onUpdateList: onUpdateList)
                 }
             } label: {
                 NavigationLink(value: list) {
@@ -458,41 +267,6 @@ struct ListTreeNodeRow: View {
             }
             .sheet(item: $schemaEditorList) { editing in
                 ListSchemaEditorView(list: editing, schema: schemaEditorSchema) { _ in onUpdateList(editing) }
-            }
-        } else if let children = node.children {
-            DisclosureGroup(isExpanded: $isExpanded) {
-                ForEach(children) { child in
-                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList, onRenameFolder: onRenameFolder)
-                }
-            } label: {
-                Label(node.name, systemImage: "folder.fill")
-                    .foregroundStyle(.primary)
-                    .contextMenu {
-                        Button("Rename Folder") { showFolderRename = true }
-                        Button("Delete", role: .destructive) {
-                            if let folder = folderFromNode(node) { onDeleteFolder(folder) }
-                        }
-                    }
-            }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button(role: .destructive) {
-                    if let folder = folderFromNode(node) {
-                        onDeleteFolder(folder)
-                    }
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-                Button {
-                    showFolderRename = true
-                } label: {
-                    Label("Rename", systemImage: "pencil")
-                }
-                .tint(ILColor.primary)
-            }
-            .sheet(isPresented: $showFolderRename) {
-                if let folder = folderFromNode(node) {
-                    RenameFolderView(folder: folder) { onRenameFolder(folder) }
-                }
             }
         } else if let list = node.list {
             NavigationLink(value: list) {
@@ -532,11 +306,6 @@ struct ListTreeNodeRow: View {
         let schema = (try? await APIClient.shared.listSchema(listId: list.id)) ?? []
         schemaEditorSchema = schema
         schemaEditorList = list
-    }
-
-    private func folderFromNode(_ node: ListTreeNode) -> ListFolder? {
-        guard node.list == nil, node.children != nil else { return nil }
-        return ListFolder(id: node.id, name: node.name, parentId: nil, createdAt: nil)
     }
 }
 
@@ -962,7 +731,7 @@ struct ListDetailView: View {
             async let schemaTask = APIClient.shared.listSchema(listId: list.id)
             async let itemsTask = APIClient.shared.listItems(listId: list.id)
             async let connectionsTask = APIClient.shared.listConnections()
-            async let allListsTask = APIClient.shared.listsAndFolders()
+            async let allListsTask = APIClient.shared.lists()
             let (fetchedSchema, fetchedItems) = try await (schemaTask, itemsTask)
             schema = fetchedSchema
             items = fetchedItems
@@ -970,7 +739,7 @@ struct ListDetailView: View {
             let listId = list.id
             connections = (try? await connectionsTask)?
                 .filter { $0.fromListId == listId || $0.toListId == listId } ?? []
-            allLists = (try? await allListsTask)?.lists ?? []
+            allLists = (try? await allListsTask) ?? []
         } catch APIError.status(401) {
             authState.handleUnauthorized()
             errorMessage = "Session expired or not authorized."

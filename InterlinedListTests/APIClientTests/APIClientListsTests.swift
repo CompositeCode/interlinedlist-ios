@@ -14,49 +14,26 @@ final class APIClientListsTests: XCTestCase {
         sut.setBearerToken("tok")
     }
 
-    // MARK: listsAndFolders()
+    // MARK: lists()
 
-    func test_listsAndFolders_returnsBoth() async throws {
-        session.enqueue(json: #"{"folders":[{"id":"f1","name":"Work","parentId":null}]}"#)
-        session.enqueue(json: #"{"lists":[\#(listJSON)]}"#)
-        let (folders, lists) = try await sut.listsAndFolders()
-        XCTAssertEqual(folders.count, 1)
-        XCTAssertEqual(folders.first?.id, "f1")
+    func test_lists_sendsGetToCorrectPath() async throws {
+        session.stub(json: #"{"lists":[\#(listJSON)]}"#)
+        _ = try await sut.lists()
+        XCTAssertEqual(session.lastRequest?.httpMethod, "GET")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/lists")
+    }
+
+    func test_lists_decodesLists() async throws {
+        session.stub(json: #"{"lists":[\#(listJSON)]}"#)
+        let lists = try await sut.lists()
         XCTAssertEqual(lists.count, 1)
         XCTAssertEqual(lists.first?.name, "My List")
     }
 
-    func test_listsAndFolders_folderError_propagates() async throws {
-        // Old behavior swallowed folder errors; new behavior propagates them so the
-        // UI can surface real failures from /api/folders (now a documented endpoint).
-        session.enqueue(data: Data(), statusCode: 500)
-        session.enqueue(json: #"{"lists":[]}"#)
+    func test_lists_401_throws() async throws {
+        session.stub(data: Data(), statusCode: 401)
         do {
-            _ = try await sut.listsAndFolders()
-            XCTFail("Expected folder error to propagate")
-        } catch APIError.status(let code) {
-            XCTAssertEqual(code, 500)
-        } catch APIError.server {
-            // Acceptable: server returned a parseable error body.
-        }
-    }
-
-    func test_listsAndFolders_401OnFolders_throws() async throws {
-        session.enqueue(data: Data(), statusCode: 401)
-        session.enqueue(json: #"{"lists":[]}"#)
-        do {
-            _ = try await sut.listsAndFolders()
-            XCTFail("Expected throw from folders call")
-        } catch APIError.status(let code) {
-            XCTAssertEqual(code, 401)
-        }
-    }
-
-    func test_listsAndFolders_401OnLists_throws() async throws {
-        session.enqueue(json: #"{"folders":[]}"#)
-        session.enqueue(data: Data(), statusCode: 401)
-        do {
-            _ = try await sut.listsAndFolders()
+            _ = try await sut.lists()
             XCTFail("Expected throw from lists call")
         } catch APIError.status(let code) {
             XCTAssertEqual(code, 401)
@@ -142,10 +119,10 @@ final class APIClientListsTests: XCTestCase {
 
     // MARK: updateList() — isPublic round-trip
     //
-    // The backend PUT /api/lists/:id reads camelCase (`isPublic`, `folderId`) from
-    // the body, so updateList uses the camelCase encoder. Sending snake_case
-    // (`is_public`) left the field `undefined` server-side and the update was
-    // silently dropped — hence these assert the camelCase key.
+    // The backend PUT /api/lists/:id reads camelCase (`isPublic`) from the body, so
+    // updateList uses the camelCase encoder. Sending snake_case (`is_public`) left
+    // the field `undefined` server-side and the update was silently dropped — hence
+    // these assert the camelCase key.
 
     func test_updateList_isPublicTrue_sentAsCamelCaseBoolAndDecodes() async throws {
         let body = #"{"list":{"id":"l1","title":"My List","isPublic":true,"createdAt":"2024-01-01T00:00:00Z"}}"#
@@ -178,54 +155,5 @@ final class APIClientListsTests: XCTestCase {
 
         XCTAssertEqual(updated.id, "l1")
         XCTAssertEqual(updated.isPublic, false)
-    }
-
-    // MARK: createList() — folderId (file into a folder)
-
-    func test_createList_withFolderId_sendsCamelCaseFolderId() async throws {
-        session.stub(json: #"{"data":\#(listJSON)}"#)
-        _ = try await sut.createList(title: "New", description: nil, isPublic: true, folderId: "f42")
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["folderId"] as? String, "f42")
-        XCTAssertNil(json["folder_id"], "Must be camelCase")
-    }
-
-    func test_createList_nilFolderId_omitsFolderIdKey() async throws {
-        session.stub(json: #"{"data":\#(listJSON)}"#)
-        _ = try await sut.createList(title: "New", description: nil, isPublic: true)
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertNil(json["folderId"], "Root create must omit folderId entirely")
-    }
-
-    // MARK: updateList() — folderId (move into a folder / to root)
-
-    func test_updateList_withFolderId_sendsCamelCaseFolderId() async throws {
-        session.stub(json: #"{"list":\#(listJSON)}"#)
-        _ = try await sut.updateList(id: "l1", title: "My List", description: nil, isPublic: true, folderId: "f9")
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["folderId"] as? String, "f9")
-        XCTAssertNil(json["folder_id"], "Must be camelCase")
-    }
-
-    func test_updateList_moveToRoot_sendsEmptyStringFolderId() async throws {
-        // The backend reads "" and null identically as root (`folderId || null`).
-        session.stub(json: #"{"list":\#(listJSON)}"#)
-        _ = try await sut.updateList(id: "l1", title: "My List", description: nil, isPublic: true, folderId: "")
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["folderId"] as? String, "", "Root move sends empty string, which the backend treats as null")
-    }
-
-    func test_updateList_nilFolderId_omitsFolderIdKey() async throws {
-        // A plain rename (no folder change) must NOT touch folderId, or the list
-        // would be moved to root unintentionally.
-        session.stub(json: #"{"list":\#(listJSON)}"#)
-        _ = try await sut.updateList(id: "l1", title: "My List", description: nil, isPublic: true)
-        let body = try XCTUnwrap(session.lastRequest?.httpBody)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertNil(json["folderId"], "Rename without a folder change must omit folderId")
     }
 }

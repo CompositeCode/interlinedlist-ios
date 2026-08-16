@@ -11,7 +11,6 @@ final class AppDataStore: ObservableObject {
     @Published private(set) var feedLoading = true
     @Published private(set) var feedError: String?
 
-    @Published private(set) var listFolders: [ListFolder] = []
     @Published private(set) var userLists: [UserList] = []
     @Published private(set) var listsLoading = true
     @Published private(set) var listsError: String?
@@ -131,9 +130,7 @@ final class AppDataStore: ObservableObject {
         listsError = nil
         defer { listsLoading = false }
         do {
-            let result = try await APIClient.shared.listsAndFolders()
-            listFolders = result.folders
-            userLists = result.lists
+            userLists = try await APIClient.shared.lists()
             saveListsCache()
         } catch APIError.status(401) {
         } catch APIError.server(let msg) {
@@ -461,7 +458,6 @@ final class AppDataStore: ObservableObject {
     }
 
     func removeList(id: String) { userLists.removeAll { $0.id == id }; saveListsCache() }
-    func removeListFolder(id: String) { listFolders.removeAll { $0.id == id }; saveListsCache() }
 
     /// Idempotent upsert by id — safe to call after `createDocumentOffline`
     /// (which already inserted the row) so the flag-ON callbacks don't duplicate.
@@ -494,7 +490,6 @@ final class AppDataStore: ObservableObject {
 
     func reset() {
         feedMessages = []
-        listFolders = []
         userLists = []
         documentFolders = []
         documents = []
@@ -523,7 +518,6 @@ final class AppDataStore: ObservableObject {
     private func loadFromCache(userId: String) async {
         if let msgs: [Message] = await cache.load(key: "\(userId)_feed") { feedMessages = msgs }
         if let cached: ListsCache = await cache.load(key: "\(userId)_lists") {
-            listFolders = cached.folders
             userLists = cached.lists
         }
         if offlineDocSyncEnabled {
@@ -550,7 +544,7 @@ final class AppDataStore: ObservableObject {
 
     private func saveListsCache() {
         guard let uid = userId else { return }
-        let snapshot = ListsCache(folders: listFolders, lists: userLists)
+        let snapshot = ListsCache(lists: userLists)
         Task { await cache.save(snapshot, key: "\(uid)_lists") }
     }
 
@@ -577,7 +571,6 @@ protocol DocumentSyncAPI {
 extension APIClient: DocumentSyncAPI {}
 
 private struct ListsCache: Codable {
-    let folders: [ListFolder]
     let lists: [UserList]
 }
 

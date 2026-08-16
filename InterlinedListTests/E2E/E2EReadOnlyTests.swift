@@ -99,9 +99,8 @@ final class E2EReadOnlyTests: XCTestCase {
 
     // MARK: - Lists
 
-    func test_e2e_listsAndFolders_returnsBoth() async throws {
-        let (folders, lists) = try await client.listsAndFolders()
-        XCTAssertGreaterThanOrEqual(folders.count, 0)
+    func test_e2e_lists_returnsArray() async throws {
+        let lists = try await client.lists()
         XCTAssertGreaterThanOrEqual(lists.count, 0)
     }
 

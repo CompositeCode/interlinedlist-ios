@@ -9,12 +9,10 @@ struct CreateListView: View {
     let onCreate: (UserList) -> Void
 
     @EnvironmentObject private var authState: AuthState
-    @EnvironmentObject private var store: AppDataStore
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var description = ""
     @State private var isPublic = true
-    @State private var selectedFolderId: String?
     @State private var columns: [DraftProperty] = ListSchemaDraft.starterColumns()
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -29,16 +27,6 @@ struct CreateListView: View {
     private var isSubscriber: Bool { authState.user?.isSubscriber == true }
     private var hasGitHubIdentity: Bool { authState.hasGitHubIdentity }
     private var canOfferGitHub: Bool { isSubscriber && hasGitHubIdentity }
-
-    /// Folders are a subscriber-only feature (mirrors ListsView.canCreateFolders).
-    private var canFileInFolder: Bool { isSubscriber && !store.listFolders.isEmpty }
-
-    /// nil (omit the field, list lands at root) unless the folder gate is active and
-    /// a real folder is selected.
-    private var folderIdForCreate: String? {
-        guard canFileInFolder, let id = selectedFolderId, !id.isEmpty else { return nil }
-        return id
-    }
 
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -60,8 +48,6 @@ struct CreateListView: View {
                     TextField("Description (optional)", text: $description)
                     Toggle("Public", isOn: $isPublic)
                 }
-
-                folderSection
 
                 githubSection
 
@@ -102,25 +88,6 @@ struct CreateListView: View {
             }
             .task {
                 if isSubscriber { await authState.loadLinkedProvidersIfNeeded() }
-            }
-        }
-    }
-
-    // MARK: - Folder section
-
-    @ViewBuilder
-    private var folderSection: some View {
-        if canFileInFolder {
-            Section {
-                Picker("Folder", selection: $selectedFolderId) {
-                    Text("None / Root").tag(String?.none)
-                    ForEach(store.listFolders) { folder in
-                        Text(folder.name).tag(String?.some(folder.id))
-                    }
-                }
-                .accessibilityLabel("Folder")
-            } header: {
-                Text("Folder")
             }
         }
     }
@@ -247,8 +214,7 @@ struct CreateListView: View {
                     title: trimmedName,
                     description: trimmedDesc.isEmpty ? nil : trimmedDesc,
                     isPublic: isPublic,
-                    githubSource: source,
-                    folderId: folderIdForCreate
+                    githubSource: source
                 )
             } else {
                 guard ListSchemaDraft.hasCreatableColumns(columns) else { return }
@@ -257,8 +223,7 @@ struct CreateListView: View {
                     title: trimmedName,
                     description: trimmedDesc.isEmpty ? nil : trimmedDesc,
                     isPublic: isPublic,
-                    schema: schema.fields.isEmpty ? nil : schema,
-                    folderId: folderIdForCreate
+                    schema: schema.fields.isEmpty ? nil : schema
                 )
             }
             onCreate(list)
