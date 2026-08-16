@@ -107,6 +107,8 @@ final class APIClientSharingTests: XCTestCase {
         do {
             _ = try await sut.createShareLink(kind: .lists, id: "l1", role: .watcher)
             XCTFail("Expected throw")
+        } catch APIError.forbidden(let msg) {
+            XCTAssertTrue(msg.contains("Subscribe"))
         } catch APIError.status(let code) {
             XCTAssertEqual(code, 403)
         } catch APIError.server(let msg) {
@@ -189,6 +191,8 @@ final class APIClientSharingTests: XCTestCase {
         do {
             _ = try await sut.addDocumentCollaborator(id: "d1", userId: "u1", role: .watcher)
             XCTFail("Expected throw")
+        } catch APIError.forbidden(let msg) {
+            XCTAssertTrue(msg.contains("Subscribe"))
         } catch APIError.status(let code) {
             XCTAssertEqual(code, 403)
         } catch APIError.server(let msg) {

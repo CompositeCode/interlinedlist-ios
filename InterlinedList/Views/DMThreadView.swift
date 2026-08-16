@@ -249,6 +249,10 @@ struct DMThreadView: View {
             attachmentURL = nil
         } catch APIError.status(401) {
             authState.handleUnauthorized()
+        } catch APIError.forbidden(let code) {
+            // Authorization failures (`blocked`, `not_mutual`) come back as 403
+            // with the code in the body; map them like validation codes.
+            sendError = mappedSendError(code)
         } catch APIError.server(let code) {
             sendError = mappedSendError(code)
         } catch {

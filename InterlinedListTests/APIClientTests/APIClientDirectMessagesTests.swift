@@ -103,12 +103,12 @@ final class APIClientDirectMessagesTests: XCTestCase {
         XCTAssertEqual(message.body, "hello")
     }
 
-    func test_sendDirectMessage_notMutual_mapsToServerError() async throws {
+    func test_sendDirectMessage_notMutual_mapsToForbiddenError() async throws {
         session.stub(json: #"{"error":"not_mutual"}"#, statusCode: 403)
         do {
             _ = try await sut.sendDirectMessage(recipientId: "r1", body: "hi")
             XCTFail("Expected throw")
-        } catch APIError.server(let message) {
+        } catch APIError.forbidden(let message) {
             XCTAssertEqual(message, "not_mutual")
         }
     }

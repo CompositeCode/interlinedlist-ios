@@ -716,10 +716,13 @@ struct ComposeView: View {
             }
         } catch APIError.status(401) {
             authState.handleUnauthorized()
+        } catch APIError.forbidden(_) {
+            // Authorization failure (email not verified, or a subscriber-gated
+            // option that slipped through on stale state). Neutral copy only —
+            // never surface the raw backend message, which may steer to purchase.
+            errorMessage = "You can't post this right now. Make sure your email is verified."
         } catch APIError.server(let message) {
             errorMessage = message
-        } catch APIError.status(403) {
-            errorMessage = "You may need to verify your email before posting."
         } catch {
             composeLog.error("postMessage failed: \(error)")
             errorMessage = "Connection failed. Please try again."

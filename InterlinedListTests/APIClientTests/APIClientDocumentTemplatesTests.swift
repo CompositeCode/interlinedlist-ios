@@ -104,11 +104,13 @@ final class APIClientDocumentTemplatesTests: XCTestCase {
         do {
             _ = try await sut.createDocumentFromTemplate(templateDocumentId: "t1", targetFolderId: nil)
             XCTFail("Expected throw")
+        } catch APIError.forbidden(let msg) {
+            // A 403 with an {"error":...} body maps to `.forbidden` so views can
+            // present neutral copy instead of the raw "Subscribe…" text.
+            XCTAssertEqual(msg, "Subscribe to create documents.")
         } catch APIError.status(let code) {
             XCTAssertEqual(code, 403)
         } catch APIError.server(let msg) {
-            // The client surfaces the {"error":...} body when present; accept either shape
-            // so the test asserts the subscriber gate is rejected, not the exact error type.
             XCTAssertEqual(msg, "Subscribe to create documents.")
         }
     }
