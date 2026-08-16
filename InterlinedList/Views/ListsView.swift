@@ -355,6 +355,11 @@ struct ListDetailView: View {
     @State private var isRefreshingGitHub = false
     @State private var gitHubRefreshError: String?
 
+    /// Watchers / share-links / invites are owner-only server-side. The lists tab
+    /// is owner-scoped so this is true today, but gating on it keeps the
+    /// management controls hidden should a shared-in list ever reach this view.
+    private var isOwner: Bool { list.isOwned(by: authState.user?.id) }
+
     var body: some View {
         Group {
             if isLoading && items.isEmpty {
@@ -489,29 +494,31 @@ struct ListDetailView: View {
                     .accessibilityLabel("Add item to list")
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showWatchers = true
-                } label: {
-                    Image(systemName: "person.2")
+            if isOwner {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showWatchers = true
+                    } label: {
+                        Image(systemName: "person.2")
+                    }
+                    .accessibilityLabel("Manage watchers")
                 }
-                .accessibilityLabel("Manage watchers")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showShare = true
-                } label: {
-                    Image(systemName: "link")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showShare = true
+                    } label: {
+                        Image(systemName: "link")
+                    }
+                    .accessibilityLabel("Share list")
                 }
-                .accessibilityLabel("Share list")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showInvites = true
-                } label: {
-                    Image(systemName: "envelope")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showInvites = true
+                    } label: {
+                        Image(systemName: "envelope")
+                    }
+                    .accessibilityLabel("Invite by email")
                 }
-                .accessibilityLabel("Invite by email")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 if let url = ILWebURL.list(list.id) {
