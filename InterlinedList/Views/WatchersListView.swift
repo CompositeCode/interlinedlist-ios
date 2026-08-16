@@ -19,6 +19,12 @@ struct WatchersListView: View {
     @State private var actionError: String?
     @State private var showAdd = false
 
+    /// Adding a watcher and changing a watcher's role are subscriber-only
+    /// server-side (`POST`/`PUT /api/lists/[id]/watchers`). Hide those controls
+    /// for free owners rather than surfacing a 403 — mirrors DocumentCollaboratorsView.
+    /// Viewing and removing existing watchers stay available to any owner.
+    private var canManage: Bool { authState.user?.isSubscriber == true }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -42,9 +48,11 @@ struct WatchersListView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "person.badge.plus") }
-                        .accessibilityLabel("Add watcher")
+                if canManage {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showAdd = true } label: { Image(systemName: "person.badge.plus") }
+                            .accessibilityLabel("Add watcher")
+                    }
                 }
             }
             .task { await load() }
@@ -71,6 +79,7 @@ struct WatchersListView: View {
                 ForEach(watchers) { watcher in
                     WatcherRow(
                         watcher: watcher,
+                        canManage: canManage,
                         onChangeRole: { role in Task { await changeRole(watcher, to: role) } }
                     )
                     .swipeActions(edge: .trailing) {
@@ -126,6 +135,7 @@ struct WatchersListView: View {
 
 private struct WatcherRow: View {
     let watcher: ListWatcher
+    let canManage: Bool
     let onChangeRole: (WatcherRole) -> Void
 
     var body: some View {
@@ -139,28 +149,36 @@ private struct WatcherRow: View {
                 }
             }
             Spacer()
-            Menu {
-                ForEach(WatcherRole.allCases, id: \.self) { role in
-                    Button {
-                        onChangeRole(role)
-                    } label: {
-                        if watcher.watcherRole == role {
-                            Label(role.label, systemImage: "checkmark")
-                        } else {
-                            Text(role.label)
+            if canManage {
+                Menu {
+                    ForEach(WatcherRole.allCases, id: \.self) { role in
+                        Button {
+                            onChangeRole(role)
+                        } label: {
+                            if watcher.watcherRole == role {
+                                Label(role.label, systemImage: "checkmark")
+                            } else {
+                                Text(role.label)
+                            }
                         }
                     }
+                } label: {
+                    roleBadge
                 }
-            } label: {
-                Text((watcher.watcherRole ?? .watcher).label)
-                    .font(.ilMono())
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(ILColor.surface2)
-                    .clipShape(Capsule())
+            } else {
+                roleBadge
             }
         }
         .padding(.vertical, 2)
+    }
+
+    private var roleBadge: some View {
+        Text((watcher.watcherRole ?? .watcher).label)
+            .font(.ilMono())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(ILColor.surface2)
+            .clipShape(Capsule())
     }
 
     @ViewBuilder
