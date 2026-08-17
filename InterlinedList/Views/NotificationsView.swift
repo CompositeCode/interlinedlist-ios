@@ -102,6 +102,8 @@ struct NotificationsView: View {
             authState.handleUnauthorized()
         } catch APIError.status(403) {
             // Not a subscriber or endpoint not available — silently show empty
+        } catch APIError.forbidden(_) {
+            // Same as above, but the 403 arrived with an error body.
         } catch {
             if followRequests.isEmpty {
                 errorMessage = "Could not load notifications."

@@ -73,6 +73,13 @@ struct ComposeView: View {
         authState.user.map { $0.emailVerified != false } ?? true
     }
 
+    /// Image/video upload is subscriber-gated *and* requires a verified email
+    /// server-side. Hide the pickers when unverified so the user doesn't start an
+    /// upload that 403s (the post button already blocks posting when unverified).
+    private var canAttachMedia: Bool {
+        canUseSubscriberFeatures && isEmailVerified
+    }
+
     /// Apply user's default settings for public visibility and advanced bar. Call when view appears (new post) or after successful post.
     private func applyUserDefaults() {
         guard !isReply else { return }
@@ -348,23 +355,25 @@ struct ComposeView: View {
             }
             if showAdvancedBar && canUseSubscriberFeatures {
                 HStack(spacing: 12) {
-                    attachPhotosButton
-                    PhotosPicker(selection: $selectedVideo, matching: .videos) {
-                        if isUploadingVideo {
-                            ProgressView()
-                                .frame(width: 20, height: 20)
-                        } else {
-                            Image(systemName: uploadedVideoURL != nil ? "video.fill" : "video")
-                                .font(.ilBody())
-                                .foregroundStyle(uploadedVideoURL != nil ? ILColor.primary : Color.secondary)
+                    if canAttachMedia {
+                        attachPhotosButton
+                        PhotosPicker(selection: $selectedVideo, matching: .videos) {
+                            if isUploadingVideo {
+                                ProgressView()
+                                    .frame(width: 20, height: 20)
+                            } else {
+                                Image(systemName: uploadedVideoURL != nil ? "video.fill" : "video")
+                                    .font(.ilBody())
+                                    .foregroundStyle(uploadedVideoURL != nil ? ILColor.primary : Color.secondary)
+                            }
                         }
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(isUploadingVideo)
-                    .accessibilityLabel("Attach video")
-                    .onChange(of: selectedVideo) { _, newItem in
-                        guard let newItem else { return }
-                        Task { await uploadVideo(newItem) }
+                        .buttonStyle(.borderless)
+                        .disabled(isUploadingVideo)
+                        .accessibilityLabel("Attach video")
+                        .onChange(of: selectedVideo) { _, newItem in
+                            guard let newItem else { return }
+                            Task { await uploadVideo(newItem) }
+                        }
                     }
                     Button {
                         withAnimation {
@@ -716,10 +725,13 @@ struct ComposeView: View {
             }
         } catch APIError.status(401) {
             authState.handleUnauthorized()
+        } catch APIError.forbidden(_) {
+            // Authorization failure (email not verified, or a subscriber-gated
+            // option that slipped through on stale state). Neutral copy only —
+            // never surface the raw backend message, which may steer to purchase.
+            errorMessage = "You can't post this right now. Make sure your email is verified."
         } catch APIError.server(let message) {
             errorMessage = message
-        } catch APIError.status(403) {
-            errorMessage = "You may need to verify your email before posting."
         } catch {
             composeLog.error("postMessage failed: \(error)")
             errorMessage = "Connection failed. Please try again."

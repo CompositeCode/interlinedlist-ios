@@ -135,9 +135,22 @@ struct UserList: Identifiable, Codable, Hashable {
     let githubRepo: String?
     /// Refresh metadata for GitHub-backed lists (only present on `GET /api/lists`).
     let githubMeta: GitHubListMeta?
+    /// The id of the list's owner (backend `userId`). `GET /api/lists` is
+    /// owner-scoped so today this always equals the current user, but decoding it
+    /// lets owner-only UI gate correctly if the payload ever includes shared-in
+    /// lists. Optional because older data / other endpoints may omit it.
+    let ownerId: String?
 
     /// True when this list mirrors a GitHub repository's issues.
     var isGitHubBacked: Bool { source == "github" }
+
+    /// Whether `userId` identifies `user` as the owner. When `ownerId` is absent
+    /// (endpoint didn't send it) we optimistically treat the list as owned so
+    /// existing owner-scoped screens keep working.
+    func isOwned(by userId: String?) -> Bool {
+        guard let ownerId, !ownerId.isEmpty else { return true }
+        return ownerId == userId
+    }
 
     // Server sends "title" for name and "parentId" for list-in-list nesting.
     // convertFromSnakeCase is bypassed when CodingKeys are present, so spell the
@@ -148,6 +161,7 @@ struct UserList: Identifiable, Codable, Hashable {
         case name = "title"
         case parentId
         case source, githubRepo, githubMeta
+        case ownerId = "userId"
     }
 
     // Explicit memberwise init keeps the GitHub fields optional at call sites
@@ -155,7 +169,7 @@ struct UserList: Identifiable, Codable, Hashable {
     init(id: String, name: String, description: String?, parentId: String? = nil,
          isPublic: Bool?, createdAt: String, updatedAt: String?,
          itemCount: Int?, source: String? = nil, githubRepo: String? = nil,
-         githubMeta: GitHubListMeta? = nil) {
+         githubMeta: GitHubListMeta? = nil, ownerId: String? = nil) {
         self.id = id
         self.name = name
         self.description = description
@@ -167,6 +181,7 @@ struct UserList: Identifiable, Codable, Hashable {
         self.source = source
         self.githubRepo = githubRepo
         self.githubMeta = githubMeta
+        self.ownerId = ownerId
     }
 }
 

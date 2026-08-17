@@ -13,6 +13,7 @@ struct InterlinedListApp: App {
     @StateObject private var authState = AuthState()
     @StateObject private var store = AppDataStore()
     @StateObject private var router = AppRouter()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         configureNavigationBarAppearance()
@@ -34,6 +35,15 @@ struct InterlinedListApp: App {
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    // Subscriptions and other entitlements are managed on the web,
+                    // so `customerStatus` can change while the app is backgrounded.
+                    // Re-fetch the user on foreground so gated UI reflects the
+                    // current subscription/email-verified state.
+                    if phase == .active, authState.hasToken {
+                        Task { await authState.refreshUser() }
+                    }
                 }
                 .sheet(item: $router.pendingDeepLink) { link in
                     deepLinkSheet(for: link)

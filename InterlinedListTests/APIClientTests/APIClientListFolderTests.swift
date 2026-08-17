@@ -81,7 +81,7 @@ final class APIClientListFolderTests: XCTestCase {
         do {
             _ = try await sut.updateList(id: "l1", title: "X", description: nil, isPublic: nil)
             XCTFail("Expected throw")
-        } catch APIError.server(let msg) {
+        } catch APIError.forbidden(let msg) {
             XCTAssertEqual(msg, "forbidden")
         }
     }

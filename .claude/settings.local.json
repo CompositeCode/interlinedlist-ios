@@ -112,7 +112,8 @@
       "Bash(bash /private/tmp/claude-501/-Users-adron-Codez-interlinedlist-ios/e4665075-8f75-4abb-9a63-f2a985cfcbab/scratchpad/extract_routes.sh)",
       "mcp__xcodebuildmcp__session_set_defaults",
       "Bash(echo \"exit=$?\")",
-      "Bash(awk '/export async function getUserLists/,/^}/' lib/lists/queries.ts)"
+      "Bash(awk '/export async function getUserLists/,/^}/' lib/lists/queries.ts)",
+      "Bash(gh repo *)"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"

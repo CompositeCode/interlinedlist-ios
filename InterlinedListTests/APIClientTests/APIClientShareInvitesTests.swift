@@ -110,6 +110,8 @@ final class APIClientShareInvitesTests: XCTestCase {
         do {
             _ = try await sut.createShareInvite(kind: .lists, id: "l1", email: "alice@example.com", role: .watcher)
             XCTFail("Expected throw")
+        } catch APIError.forbidden(let msg) {
+            XCTAssertTrue(msg.contains("Subscribe"))
         } catch APIError.status(let code) {
             XCTAssertEqual(code, 403)
         } catch APIError.server(let msg) {

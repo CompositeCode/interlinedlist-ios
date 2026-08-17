@@ -120,7 +120,7 @@ struct ListsView: View {
         } else {
             List(searchResults) { list in
                 NavigationLink(value: list) {
-                    ListNameWithVisibility(name: list.name, isPublic: list.isPublic)
+                    ListNameWithVisibility(name: list.name, isPublic: list.isPublic, isGitHubBacked: list.isGitHubBacked)
                 }
             }
         }
@@ -247,7 +247,7 @@ struct ListTreeNodeRow: View {
                 }
             } label: {
                 NavigationLink(value: list) {
-                    ListNameWithVisibility(name: node.name, isPublic: list.isPublic)
+                    ListNameWithVisibility(name: node.name, isPublic: list.isPublic, isGitHubBacked: list.isGitHubBacked)
                 }
                 .contextMenu {
                     Button("Rename / Edit") { showRename = true }
@@ -270,7 +270,7 @@ struct ListTreeNodeRow: View {
             }
         } else if let list = node.list {
             NavigationLink(value: list) {
-                ListNameWithVisibility(name: node.name, isPublic: list.isPublic)
+                ListNameWithVisibility(name: node.name, isPublic: list.isPublic, isGitHubBacked: list.isGitHubBacked)
             }
             .contextMenu {
                 Button("Rename / Edit") { showRename = true }
@@ -312,10 +312,20 @@ struct ListTreeNodeRow: View {
 private struct ListNameWithVisibility: View {
     let name: String
     let isPublic: Bool?
+    var isGitHubBacked: Bool = false
 
     var body: some View {
         HStack(spacing: 6) {
             Text(name)
+            if isGitHubBacked {
+                Image("GitHubMark")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 13, height: 13)
+                    .foregroundStyle(Color.secondary)
+                    .accessibilityLabel("GitHub-backed")
+            }
             if isPublic == true {
                 Image(systemName: "globe")
                     .font(.ilMono())
@@ -354,6 +364,11 @@ struct ListDetailView: View {
     @State private var showInvites = false
     @State private var isRefreshingGitHub = false
     @State private var gitHubRefreshError: String?
+
+    /// Watchers / share-links / invites are owner-only server-side. The lists tab
+    /// is owner-scoped so this is true today, but gating on it keeps the
+    /// management controls hidden should a shared-in list ever reach this view.
+    private var isOwner: Bool { list.isOwned(by: authState.user?.id) }
 
     var body: some View {
         Group {
@@ -489,29 +504,31 @@ struct ListDetailView: View {
                     .accessibilityLabel("Add item to list")
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showWatchers = true
-                } label: {
-                    Image(systemName: "person.2")
+            if isOwner {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showWatchers = true
+                    } label: {
+                        Image(systemName: "person.2")
+                    }
+                    .accessibilityLabel("Manage watchers")
                 }
-                .accessibilityLabel("Manage watchers")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showShare = true
-                } label: {
-                    Image(systemName: "link")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showShare = true
+                    } label: {
+                        Image(systemName: "link")
+                    }
+                    .accessibilityLabel("Share list")
                 }
-                .accessibilityLabel("Share list")
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showInvites = true
-                } label: {
-                    Image(systemName: "envelope")
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showInvites = true
+                    } label: {
+                        Image(systemName: "envelope")
+                    }
+                    .accessibilityLabel("Invite by email")
                 }
-                .accessibilityLabel("Invite by email")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 if let url = ILWebURL.list(list.id) {
