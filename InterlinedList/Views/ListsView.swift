@@ -120,7 +120,7 @@ struct ListsView: View {
         } else {
             List(searchResults) { list in
                 NavigationLink(value: list) {
-                    ListNameWithVisibility(name: list.name, isPublic: list.isPublic)
+                    ListNameWithVisibility(name: list.name, isPublic: list.isPublic, isGitHubBacked: list.isGitHubBacked)
                 }
             }
         }
@@ -318,8 +318,11 @@ private struct ListNameWithVisibility: View {
         HStack(spacing: 6) {
             Text(name)
             if isGitHubBacked {
-                Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    .font(.ilMono())
+                Image("GitHubMark")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 13, height: 13)
                     .foregroundStyle(Color.secondary)
                     .accessibilityLabel("GitHub-backed")
             }
