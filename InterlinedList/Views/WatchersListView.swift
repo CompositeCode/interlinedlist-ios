@@ -104,6 +104,8 @@ struct WatchersListView: View {
         do {
             _ = try await APIClient.shared.setWatcherRole(listId: listId, userId: watcher.userId, role: role)
             await load()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
         } catch APIError.server(let msg) {
             actionError = msg
         } catch {
@@ -116,6 +118,8 @@ struct WatchersListView: View {
         do {
             try await APIClient.shared.removeWatcher(listId: listId, userId: watcher.userId)
             watchers.removeAll { $0.id == watcher.id }
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
         } catch APIError.server(let msg) {
             actionError = msg
         } catch {
