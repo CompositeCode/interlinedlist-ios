@@ -20,7 +20,12 @@ struct DocumentCollaboratorsView: View {
     @State private var actionError: String?
     @State private var showAdd = false
 
+    /// Adding a collaborator and changing roles are subscriber-only server-side.
     private var canManage: Bool { authState.user?.isSubscriber == true }
+    /// Removing a collaborator is an owner action the backend allows regardless of
+    /// subscription; this view is only presented for the owner's own document, so a
+    /// non-subscribing owner can still revoke access (they just can't add/re-add).
+    private var canRemove: Bool { true }
 
     var body: some View {
         NavigationStack {
@@ -80,7 +85,7 @@ struct DocumentCollaboratorsView: View {
                         onChangeRole: { role in Task { await changeRole(collaborator, to: role) } }
                     )
                     .swipeActions(edge: .trailing) {
-                        if canManage {
+                        if canRemove {
                             Button(role: .destructive) {
                                 Task { await remove(collaborator) }
                             } label: {
