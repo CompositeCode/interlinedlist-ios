@@ -247,7 +247,7 @@ struct ListTreeNodeRow: View {
                 }
             } label: {
                 NavigationLink(value: list) {
-                    ListNameWithVisibility(name: node.name, isPublic: list.isPublic)
+                    ListNameWithVisibility(name: node.name, isPublic: list.isPublic, isGitHubBacked: list.isGitHubBacked)
                 }
                 .contextMenu {
                     Button("Rename / Edit") { showRename = true }
@@ -270,7 +270,7 @@ struct ListTreeNodeRow: View {
             }
         } else if let list = node.list {
             NavigationLink(value: list) {
-                ListNameWithVisibility(name: node.name, isPublic: list.isPublic)
+                ListNameWithVisibility(name: node.name, isPublic: list.isPublic, isGitHubBacked: list.isGitHubBacked)
             }
             .contextMenu {
                 Button("Rename / Edit") { showRename = true }
@@ -312,10 +312,17 @@ struct ListTreeNodeRow: View {
 private struct ListNameWithVisibility: View {
     let name: String
     let isPublic: Bool?
+    var isGitHubBacked: Bool = false
 
     var body: some View {
         HStack(spacing: 6) {
             Text(name)
+            if isGitHubBacked {
+                Image(systemName: "chevron.left.forwardslash.chevron.right")
+                    .font(.ilMono())
+                    .foregroundStyle(Color.secondary)
+                    .accessibilityLabel("GitHub-backed")
+            }
             if isPublic == true {
                 Image(systemName: "globe")
                     .font(.ilMono())
