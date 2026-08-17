@@ -15,6 +15,12 @@ enum APIError: Error {
     case server(String)
     case status(Int)
     case network(Error)
+    /// 403 — an authorization failure (subscriber gate, role, ownership, or
+    /// email-verification) that arrived with an `{"error": ...}` body. Distinct
+    /// from `.server` so views can present neutral in-app copy instead of the
+    /// raw backend text, which may contain upsell ("Subscribe…") copy that must
+    /// not be surfaced inside the app. Bodyless 403s stay `.status(403)`.
+    case forbidden(String)
     /// 409 — the request conflicts with existing data (e.g. deleting a list
     /// property that still has row values without `?force=true`).
     case conflict(String)
@@ -1762,8 +1768,12 @@ final class APIClient {
             throw APIError.status(401)
         }
         if http.statusCode >= 400 {
-            if let err = try? decoder.decode(ErrorResponse.self, from: data) {
-                throw APIError.server(err.error)
+            let serverMessage = (try? decoder.decode(ErrorResponse.self, from: data))?.error
+            if http.statusCode == 403, let serverMessage {
+                throw APIError.forbidden(serverMessage)
+            }
+            if let serverMessage {
+                throw APIError.server(serverMessage)
             }
             throw APIError.status(http.statusCode)
         }

@@ -164,7 +164,7 @@ struct ShareInvitesSheet: View {
             await load()
         } catch APIError.status(401) {
             authState.handleUnauthorized()
-        } catch APIError.status(403) {
+        } catch APIError.forbidden(_) {
             // Subscriber-gated server-side. The UI already hides the form for free
             // users, so a 403 here is an edge case; surface a neutral message
             // rather than the backend's "Subscribe to…" copy.
