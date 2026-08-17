@@ -36,6 +36,14 @@ final class APIClientExportTests: XCTestCase {
         XCTAssertEqual(String(data: data, encoding: .utf8), "follower_id,following_id\n")
     }
 
+    func test_exportCSV_listDataRows_sendsGetToCorrectPath() async throws {
+        session.stub(data: Data("list_id,row_id\n".utf8))
+        let data = try await sut.exportCSV(.listDataRows)
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/exports/list-data-rows")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "GET")
+        XCTAssertEqual(String(data: data, encoding: .utf8), "list_id,row_id\n")
+    }
+
     func test_exportCSV_401_throwsStatusError() async throws {
         session.stub(json: #"{"error":"unauthorized"}"#, statusCode: 401)
         do {

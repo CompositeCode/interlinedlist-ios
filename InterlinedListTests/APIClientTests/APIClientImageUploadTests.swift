@@ -145,12 +145,12 @@ final class APIClientImageUploadTests: XCTestCase {
                         "Multipart body should declare a .png filename for PNG")
     }
 
-    func test_uploadDocumentImage_multipartFieldNameIsImage() async throws {
+    func test_uploadDocumentImage_multipartFieldNameIsFile() async throws {
         session.stub(json: #"{"url":"https://cdn.example.com/doc-img.jpg"}"#)
         _ = try await sut.uploadDocumentImage(documentId: "abc123", data: Data([0xFF, 0xD8]), mimeType: "image/jpeg")
         let body = session.lastRequest?.httpBody ?? Data()
-        XCTAssertNotNil(body.range(of: Data(#"name="image""#.utf8)),
-                        "Multipart form field must be named 'image'")
+        XCTAssertNotNil(body.range(of: Data(#"name="file""#.utf8)),
+                        "Multipart form field must be named 'file' (backend reads formData.get(\"file\"))")
     }
 
     func test_uploadDocumentImage_401_throwsStatusError() async throws {

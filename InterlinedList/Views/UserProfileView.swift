@@ -39,6 +39,7 @@ struct UserProfileView: View {
     @State private var showReportSheet = false
     @State private var isBlocked = false
     @State private var blockError: String?
+    @State private var showMessageThread = false
 
     var body: some View {
         NavigationStack {
@@ -72,6 +73,14 @@ struct UserProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if let url = ILWebURL.profile(username) {
+                        SwiftUI.ShareLink(item: url) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share link")
+                    }
                 }
                 if authState.user?.username != username {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -123,6 +132,19 @@ struct UserProfileView: View {
                     ShareSheet(data: data, filename: exportFilename)
                 }
             }
+            .sheet(isPresented: $showMessageThread) {
+                NavigationStack {
+                    DMThreadView(username: username, initialUser: targetUserId.map {
+                        DMUser(id: $0, username: username, displayName: nil, avatar: nil)
+                    })
+                    .environmentObject(authState)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showMessageThread = false }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -148,6 +170,7 @@ struct UserProfileView: View {
                 }
                 Spacer()
                 if targetUserId != nil {
+                    messageButton
                     followButton
                 }
             }
@@ -211,6 +234,17 @@ struct UserProfileView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
         }
+    }
+
+    private var messageButton: some View {
+        Button {
+            showMessageThread = true
+        } label: {
+            Image(systemName: "envelope")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .accessibilityLabel("Message @\(username)")
     }
 
     @ViewBuilder
@@ -460,6 +494,7 @@ struct UserProfileView: View {
                 .padding(.bottom, 8)
             exportButton(label: "Messages", type: .messages)
             exportButton(label: "Lists", type: .lists)
+            exportButton(label: "List Data Rows", type: .listDataRows)
             exportButton(label: "Follows", type: .follows)
             if let err = exportError {
                 Text(err)

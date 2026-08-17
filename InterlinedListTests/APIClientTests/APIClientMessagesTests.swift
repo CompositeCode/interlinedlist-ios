@@ -175,12 +175,23 @@ final class APIClientMessagesTests: XCTestCase {
 
     // MARK: editMessage()
 
-    func test_editMessage_sendsPutToCorrectPath() async throws {
+    func test_editMessage_sendsPatchToCorrectPath() async throws {
         let wrapped = #"{"data":\#(messageJSON)}"#
         session.stub(json: wrapped)
         _ = try await sut.editMessage(id: "m1", content: "Updated", publiclyVisible: nil)
-        XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "PATCH")
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/messages/m1")
+    }
+
+    func test_editMessage_bodyUsesCamelCaseKeys() async throws {
+        let wrapped = #"{"data":\#(messageJSON)}"#
+        session.stub(json: wrapped)
+        _ = try await sut.editMessage(id: "m1", content: "Updated", publiclyVisible: true)
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["content"] as? String, "Updated")
+        XCTAssertNotNil(json["publiclyVisible"], "Body must use camelCase key 'publiclyVisible'")
+        XCTAssertNil(json["publicly_visible"], "Body must NOT use snake_case key")
     }
 
     // MARK: dig() / undig()

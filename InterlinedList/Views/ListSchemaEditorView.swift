@@ -291,7 +291,6 @@ private struct PropertyRow: View {
         id: "list-1",
         name: "Books to Read",
         description: "Personal reading queue",
-        folderId: nil,
         isPublic: false,
         createdAt: "2026-01-01T00:00:00Z",
         updatedAt: nil,

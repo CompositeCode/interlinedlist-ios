@@ -123,26 +123,51 @@ struct UserList: Identifiable, Codable, Hashable {
     let id: String
     let name: String
     let description: String?
-    let folderId: String?
+    /// Parent list id for list-in-list nesting (backend `parentId` column).
+    let parentId: String?
     let isPublic: Bool?
     let createdAt: String
     let updatedAt: String?
     let itemCount: Int?
+    /// "github" for GitHub-backed lists, "local" (or nil on older data) otherwise.
+    let source: String?
+    /// "owner/repo" for a GitHub-backed list; nil for local lists.
+    let githubRepo: String?
+    /// Refresh metadata for GitHub-backed lists (only present on `GET /api/lists`).
+    let githubMeta: GitHubListMeta?
 
-    // Server sends "title" for name and "parentId" for the list-in-list hierarchy.
-    // convertFromSnakeCase is bypassed when CodingKeys are present, so use exact JSON keys.
+    /// True when this list mirrors a GitHub repository's issues.
+    var isGitHubBacked: Bool { source == "github" }
+
+    // Server sends "title" for name and "parentId" for list-in-list nesting.
+    // convertFromSnakeCase is bypassed when CodingKeys are present, so spell the
+    // exact JSON keys (the bare cases resolve to their own names, i.e. "parentId").
+    // source/githubRepo/githubMeta arrive camelCase (backend `serialize` preserves keys).
     enum CodingKeys: String, CodingKey {
         case id, description, createdAt, updatedAt, itemCount, isPublic
         case name = "title"
-        case folderId = "parentId"
+        case parentId
+        case source, githubRepo, githubMeta
     }
-}
 
-struct ListFolder: Identifiable, Codable, Equatable {
-    let id: String
-    let name: String
-    let parentId: String?
-    let createdAt: String?
+    // Explicit memberwise init keeps the GitHub fields optional at call sites
+    // (previews, tests) without forcing every constructor to pass them.
+    init(id: String, name: String, description: String?, parentId: String? = nil,
+         isPublic: Bool?, createdAt: String, updatedAt: String?,
+         itemCount: Int?, source: String? = nil, githubRepo: String? = nil,
+         githubMeta: GitHubListMeta? = nil) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.parentId = parentId
+        self.isPublic = isPublic
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.itemCount = itemCount
+        self.source = source
+        self.githubRepo = githubRepo
+        self.githubMeta = githubMeta
+    }
 }
 
 struct ListItem: Identifiable, Codable {
@@ -157,29 +182,18 @@ struct ListItem: Identifiable, Codable {
 struct ListTreeNode: Identifiable {
     let id: String
     let name: String
-    var children: [ListTreeNode]?  // nil = list leaf, non-nil = folder
+    var children: [ListTreeNode]?  // nil = leaf list, non-nil = parent with child lists
     let list: UserList?
 
-    static func buildTree(folders: [ListFolder], lists: [UserList]) -> [ListTreeNode] {
-        let knownFolderIds = Set(folders.map { $0.id })
+    static func buildTree(lists: [UserList]) -> [ListTreeNode] {
         let knownListIds = Set(lists.map { $0.id })
-
-        func folderNode(_ folder: ListFolder) -> ListTreeNode {
-            let childFolders = folders
-                .filter { !($0.parentId ?? "").isEmpty && $0.parentId == folder.id }
-                .map { folderNode($0) }
-            let childLists = lists
-                .filter { !($0.folderId ?? "").isEmpty && $0.folderId == folder.id }
-                .map { listNode($0) }
-            return ListTreeNode(id: folder.id, name: folder.name, children: childFolders + childLists, list: nil)
-        }
 
         // Builds a node for a list, recursing into child lists (parentId → this list's id).
         // API data is assumed acyclic; guard against any circular edge by ignoring a child
-        // whose id equals the ancestor's id.
+        // whose id equals the ancestor's.
         func listNode(_ list: UserList) -> ListTreeNode {
             let children = lists.filter { child in
-                guard let pid = child.folderId, !pid.isEmpty else { return false }
+                guard let pid = child.parentId, !pid.isEmpty else { return false }
                 return pid == list.id && child.id != list.id
             }.map { listNode($0) }
             return ListTreeNode(id: list.id, name: list.name,
@@ -187,16 +201,13 @@ struct ListTreeNode: Identifiable {
                                 list: list)
         }
 
-        let rootFolders = folders.filter { ($0.parentId ?? "").isEmpty }.map { folderNode($0) }
-        // Root lists: no parentId, orphaned parent (parent not in this response),
-        // or parentId points to a folder (handled by folderNode above).
-        let rootLists = lists.filter {
-            let fid = $0.folderId ?? ""
-            if fid.isEmpty { return true }
-            if knownFolderIds.contains(fid) { return false }
-            return !knownListIds.contains(fid)
+        // A list shows at root unless it nests under a known parent list; an empty or
+        // orphaned parentId falls through to root (CLAUDE.md: parentId may arrive "").
+        let rootLists = lists.filter { list in
+            if let pid = list.parentId, !pid.isEmpty, knownListIds.contains(pid) { return false }
+            return true
         }.map { listNode($0) }
-        return rootFolders + rootLists
+        return rootLists
     }
 }
 
@@ -206,17 +217,34 @@ struct ListsResponse: Decodable {
     let lists: [UserList]
 }
 
-struct FoldersResponse: Decodable {
-    let folders: [ListFolder]
-}
-
 // MARK: - List connections
+
+/// A list's relationship to another list, from the perspective of one side of a
+/// connection. The backend stores a directed edge `fromList → toList`; by
+/// convention (matching the web ERD) the `fromList` is the parent of the `toList`.
+enum ListRelationship: Equatable {
+    case parent
+    case child
+}
 
 struct ListConnection: Identifiable, Codable {
     let id: String
-    let sourceListId: String
-    let targetListId: String
+    let fromListId: String
+    let toListId: String
+    let label: String?
     let createdAt: String?
+
+    /// The id of the list on the other end of this connection, relative to `listId`.
+    func otherListId(relativeTo listId: String) -> String {
+        fromListId == listId ? toListId : fromListId
+    }
+
+    /// From `listId`'s perspective, is the other list its parent or its child?
+    /// `fromList` is the parent, so if `listId` is the `fromList` the other side
+    /// is its child; otherwise the other side is its parent.
+    func relationship(relativeTo listId: String) -> ListRelationship {
+        fromListId == listId ? .child : .parent
+    }
 }
 
 struct ConnectionsResponse: Decodable {

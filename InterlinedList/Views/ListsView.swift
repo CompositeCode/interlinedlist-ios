@@ -9,23 +9,14 @@ struct ListsView: View {
     @EnvironmentObject var authState: AuthState
     @EnvironmentObject var store: AppDataStore
     @State private var showCreateList = false
-    @State private var showCreateFolder = false
     @State private var createError: String?
     @State private var searchText = ""
     @State private var searchResults: [UserList] = []
     @State private var isSearching = false
     @State private var treeNodes: [ListTreeNode] = []
 
-    private var canCreateFolders: Bool {
-        authState.user?.isSubscriber == true
-    }
-
     private func rebuildTree() -> [ListTreeNode] {
-        // Folders are a subscriber-only feature. For free users we pass an empty
-        // folder array so any lists that were nested under folders (e.g. from when
-        // the user was a subscriber) surface at root via buildTree's orphan rule.
-        let visibleFolders = canCreateFolders ? store.listFolders : []
-        return ListTreeNode.buildTree(folders: visibleFolders, lists: store.userLists)
+        ListTreeNode.buildTree(lists: store.userLists)
     }
 
     var body: some View {
@@ -53,18 +44,14 @@ struct ListsView: View {
                 CreateListView { _ in
                     Task { await store.refreshLists() }
                 }
-            }
-            .sheet(isPresented: $showCreateFolder) {
-                CreateListFolderView(parentId: nil) {
-                    Task { await store.refreshLists() }
-                }
+                .environmentObject(authState)
+                .environmentObject(store)
             }
             .refreshable {
                 await store.refreshLists()
             }
             .onAppear { treeNodes = rebuildTree() }
             .onChange(of: store.userLists) { _, _ in treeNodes = rebuildTree() }
-            .onChange(of: store.listFolders) { _, _ in treeNodes = rebuildTree() }
         }
     }
 
@@ -96,7 +83,6 @@ struct ListsView: View {
                     ListTreeNodeRow(
                         node: node,
                         onDeleteList: { list in Task { await deleteList(list) } },
-                        onDeleteFolder: { folder in Task { await deleteFolder(folder) } },
                         onUpdateList: { _ in Task { await store.refreshLists() } }
                     )
                 }
@@ -110,11 +96,6 @@ struct ListsView: View {
         Menu {
             Button { showCreateList = true } label: {
                 Label("New List", systemImage: "plus.rectangle")
-            }
-            if canCreateFolders {
-                Button { showCreateFolder = true } label: {
-                    Label("New Folder", systemImage: "folder.badge.plus")
-                }
             }
         } label: {
             Image(systemName: "plus")
@@ -170,77 +151,6 @@ struct ListsView: View {
             await store.refreshLists()
         }
     }
-
-    private func deleteFolder(_ folder: ListFolder) async {
-        do {
-            try await APIClient.shared.deleteListFolder(id: folder.id)
-            store.removeListFolder(id: folder.id)
-        } catch APIError.status(401) {
-            authState.handleUnauthorized()
-        } catch {
-            await store.refreshLists()
-        }
-    }
-}
-
-// MARK: - Create list folder sheet
-
-private struct CreateListFolderView: View {
-    let parentId: String?
-    let onSave: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Folder Name") {
-                    TextField("Name", text: $name)
-                }
-                if let error = errorMessage {
-                    Section {
-                        Text(error).foregroundStyle(.red).font(.ilMono())
-                    }
-                }
-            }
-            .navigationTitle("New Folder")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Create") { Task { await save() } }
-                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
-                }
-            }
-        }
-    }
-
-    private func save() async {
-        isLoading = true
-        defer { isLoading = false }
-        errorMessage = nil
-        do {
-            _ = try await APIClient.shared.createListFolder(
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                parentId: parentId
-            )
-            onSave()
-            dismiss()
-        } catch APIError.server(let msg) {
-            errorMessage = msg
-        } catch {
-            // 403 falls through here — the New Folder button is hidden for
-            // non-subscribers, so this catch should only trigger on transient
-            // errors. Per the iOS-free-app direction, no subscription copy is
-            // ever surfaced.
-            errorMessage = "Failed to create folder."
-        }
-    }
 }
 
 // MARK: - Rename list sheet
@@ -249,6 +159,7 @@ private struct RenameListView: View {
     let list: UserList
     let onSave: (UserList) -> Void
 
+    @EnvironmentObject private var authState: AuthState
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var isPublic: Bool
@@ -305,6 +216,9 @@ private struct RenameListView: View {
             )
             onSave(updated)
             dismiss()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+            errorMessage = "Session expired. Please try again."
         } catch APIError.server(let msg) {
             errorMessage = msg
         } catch {
@@ -318,7 +232,6 @@ private struct RenameListView: View {
 struct ListTreeNodeRow: View {
     let node: ListTreeNode
     let onDeleteList: (UserList) -> Void
-    let onDeleteFolder: (ListFolder) -> Void
     let onUpdateList: (UserList) -> Void
     @State private var isExpanded = true
     @State private var showRename = false
@@ -330,7 +243,7 @@ struct ListTreeNodeRow: View {
         if let children = node.children, let list = node.list {
             DisclosureGroup(isExpanded: $isExpanded) {
                 ForEach(children) { child in
-                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList)
+                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onUpdateList: onUpdateList)
                 }
             } label: {
                 NavigationLink(value: list) {
@@ -354,24 +267,6 @@ struct ListTreeNodeRow: View {
             }
             .sheet(item: $schemaEditorList) { editing in
                 ListSchemaEditorView(list: editing, schema: schemaEditorSchema) { _ in onUpdateList(editing) }
-            }
-        } else if let children = node.children {
-            DisclosureGroup(isExpanded: $isExpanded) {
-                ForEach(children) { child in
-                    ListTreeNodeRow(node: child, onDeleteList: onDeleteList, onDeleteFolder: onDeleteFolder, onUpdateList: onUpdateList)
-                }
-            } label: {
-                Label(node.name, systemImage: "folder.fill")
-                    .foregroundStyle(.primary)
-            }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button(role: .destructive) {
-                    if let folder = folderFromNode(node) {
-                        onDeleteFolder(folder)
-                    }
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
             }
         } else if let list = node.list {
             NavigationLink(value: list) {
@@ -412,11 +307,6 @@ struct ListTreeNodeRow: View {
         schemaEditorSchema = schema
         schemaEditorList = list
     }
-
-    private func folderFromNode(_ node: ListTreeNode) -> ListFolder? {
-        guard node.list == nil, node.children != nil else { return nil }
-        return ListFolder(id: node.id, name: node.name, parentId: nil, createdAt: nil)
-    }
 }
 
 private struct ListNameWithVisibility: View {
@@ -454,11 +344,16 @@ struct ListDetailView: View {
     @State private var connections: [ListConnection] = []
     @State private var allLists: [UserList] = []
     @State private var showAddConnection = false
+    @State private var addRelationshipRole: ListRelationship = .parent
     @State private var showAddItem = false
     @State private var editingItem: ListItem? = nil
     @State private var deletingItem: ListItem? = nil
     @State private var showDeleteConfirm = false
     @State private var showWatchers = false
+    @State private var showShare = false
+    @State private var showInvites = false
+    @State private var isRefreshingGitHub = false
+    @State private var gitHubRefreshError: String?
 
     var body: some View {
         Group {
@@ -478,11 +373,14 @@ struct ListDetailView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
+                    if list.isGitHubBacked {
+                        gitHubStatusSection
+                    }
                     if items.isEmpty && !isLoading {
                         ContentUnavailableView {
-                            Label("Empty List", systemImage: "list.bullet")
+                            Label(list.isGitHubBacked ? "No Issues" : "Empty List", systemImage: "list.bullet")
                         } description: {
-                            Text("This list has no items yet.")
+                            Text(list.isGitHubBacked ? "No issues synced from GitHub yet. Pull to refresh." : "This list has no items yet.")
                         }
                     } else {
                         ForEach(items) { item in
@@ -505,18 +403,26 @@ struct ListDetailView: View {
                     }
                     Section {
                         if connections.isEmpty {
-                            Text("No connections yet")
+                            Text("No parent or child lists yet")
                                 .foregroundStyle(.secondary)
                                 .font(.ilBody(15))
                         } else {
                             ForEach(connections) { conn in
-                                let otherListId = conn.sourceListId == list.id ? conn.targetListId : conn.sourceListId
+                                let role = conn.relationship(relativeTo: list.id)
+                                let otherListId = conn.otherListId(relativeTo: list.id)
                                 let otherList = allLists.first { $0.id == otherListId }
+                                let roleLabel = role == .parent ? "Parent" : "Child"
                                 HStack {
-                                    Image(systemName: "link")
+                                    Image(systemName: role == .parent ? "arrow.up.forward.circle" : "arrow.down.forward.circle")
                                         .foregroundStyle(.secondary)
-                                    Text(otherList?.name ?? otherListId)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(otherList?.name ?? otherListId)
+                                        Text(roleLabel)
+                                            .font(.ilBody(13))
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
+                                .accessibilityLabel("\(roleLabel) list: \(otherList?.name ?? otherListId)")
                             }
                             .onDelete { indexSet in
                                 Task {
@@ -530,15 +436,26 @@ struct ListDetailView: View {
                         }
                     } header: {
                         HStack {
-                            Text("Connections")
+                            Text("Parents & Children")
                             Spacer()
-                            Button {
-                                showAddConnection = true
+                            Menu {
+                                Button {
+                                    addRelationshipRole = .parent
+                                    showAddConnection = true
+                                } label: {
+                                    Label("Add Parent…", systemImage: "arrow.up")
+                                }
+                                Button {
+                                    addRelationshipRole = .child
+                                    showAddConnection = true
+                                } label: {
+                                    Label("Add Child…", systemImage: "arrow.down")
+                                }
                             } label: {
                                 Image(systemName: "plus")
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("Add connection")
+                            .accessibilityLabel("Add a parent or child list")
                         }
                     }
                 }
@@ -547,14 +464,30 @@ struct ListDetailView: View {
         .navigationTitle(list.name)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAddItem = true
-                } label: {
-                    Image(systemName: "plus")
+            if list.isGitHubBacked {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await refreshGitHub() }
+                    } label: {
+                        if isRefreshingGitHub {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .disabled(isRefreshingGitHub)
+                    .accessibilityLabel("Refresh from GitHub")
                 }
-                .disabled(schema.isEmpty)
-                .accessibilityLabel("Add item to list")
+            } else {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showAddItem = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .disabled(schema.isEmpty)
+                    .accessibilityLabel("Add item to list")
+                }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -563,6 +496,30 @@ struct ListDetailView: View {
                     Image(systemName: "person.2")
                 }
                 .accessibilityLabel("Manage watchers")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showShare = true
+                } label: {
+                    Image(systemName: "link")
+                }
+                .accessibilityLabel("Share list")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showInvites = true
+                } label: {
+                    Image(systemName: "envelope")
+                }
+                .accessibilityLabel("Invite by email")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                if let url = ILWebURL.list(list.id) {
+                    SwiftUI.ShareLink(item: url) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share link")
+                }
             }
         }
         .task {
@@ -575,24 +532,43 @@ struct ListDetailView: View {
             WatchersListView(listId: list.id)
                 .environmentObject(authState)
         }
+        .sheet(isPresented: $showShare) {
+            ShareLinksSheet(kind: .lists, resourceId: list.id, title: list.name)
+                .environmentObject(authState)
+        }
+        .sheet(isPresented: $showInvites) {
+            ShareInvitesSheet(kind: .lists, resourceId: list.id, title: list.name)
+                .environmentObject(authState)
+        }
         .sheet(isPresented: $showAddConnection) {
+            let role = addRelationshipRole
+            let connectedIds = Set(connections.map { $0.otherListId(relativeTo: list.id) })
+            let candidates = allLists.filter { $0.id != list.id && !connectedIds.contains($0.id) }
             NavigationStack {
                 List {
-                    ForEach(allLists.filter { $0.id != list.id }) { candidate in
-                        Button(candidate.name) {
-                            Task {
-                                if let conn = try? await APIClient.shared.createListConnection(
-                                    sourceListId: list.id,
-                                    targetListId: candidate.id
-                                ) {
-                                    connections.append(conn)
+                    if candidates.isEmpty {
+                        Text("No other lists available to link.")
+                            .foregroundStyle(.secondary)
+                            .font(.ilBody(15))
+                    } else {
+                        ForEach(candidates) { candidate in
+                            Button(candidate.name) {
+                                Task {
+                                    let fromId = role == .parent ? candidate.id : list.id
+                                    let toId = role == .parent ? list.id : candidate.id
+                                    if let conn = try? await APIClient.shared.createListConnection(
+                                        fromListId: fromId,
+                                        toListId: toId
+                                    ) {
+                                        connections.append(conn)
+                                    }
+                                    showAddConnection = false
                                 }
-                                showAddConnection = false
                             }
                         }
                     }
                 }
-                .navigationTitle("Connect to List")
+                .navigationTitle(role == .parent ? "Choose a Parent List" : "Choose a Child List")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -616,6 +592,84 @@ struct ListDetailView: View {
                 if let item = deletingItem { Task { await deleteItem(item) } }
             }
             Button("Cancel", role: .cancel) { deletingItem = nil }
+        }
+    }
+
+    @ViewBuilder
+    private var gitHubStatusSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.branch")
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    if let repo = list.githubRepo {
+                        Text(repo)
+                            .font(.ilMono())
+                    }
+                    Text(gitHubStatusText)
+                        .font(.ilBody(13))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if isRefreshingGitHub {
+                    ProgressView()
+                }
+            }
+            if let gitHubRefreshError {
+                Text(gitHubRefreshError)
+                    .font(.ilMono())
+                    .foregroundStyle(.red)
+            } else if let metaError = list.githubMeta?.refreshError, !metaError.isEmpty {
+                Text(metaError)
+                    .font(.ilMono())
+                    .foregroundStyle(.red)
+            }
+        } header: {
+            Text("GitHub")
+        }
+    }
+
+    private var gitHubStatusText: String {
+        let status = (list.githubMeta?.refreshStatus ?? "").lowercased()
+        switch status {
+        case "pending", "syncing":
+            return "Syncing…"
+        case "failed", "error":
+            return "Last sync failed"
+        default:
+            if let refreshed = list.githubMeta?.lastRefreshedAt {
+                return "Last refreshed \(Self.relativeDate(refreshed))"
+            }
+            return "Not yet refreshed"
+        }
+    }
+
+    private static func relativeDate(_ iso: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var date = formatter.date(from: iso)
+        if date == nil {
+            formatter.formatOptions = [.withInternetDateTime]
+            date = formatter.date(from: iso)
+        }
+        guard let date else { return iso }
+        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
+    }
+
+    private func refreshGitHub() async {
+        guard !isRefreshingGitHub else { return }
+        isRefreshingGitHub = true
+        gitHubRefreshError = nil
+        defer { isRefreshingGitHub = false }
+        do {
+            try await APIClient.shared.refreshList(id: list.id)
+            await loadData()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.server(let msg) {
+            gitHubRefreshError = msg
+        } catch {
+            gitHubRefreshError = "Couldn't refresh from GitHub."
         }
     }
 
@@ -677,15 +731,15 @@ struct ListDetailView: View {
             async let schemaTask = APIClient.shared.listSchema(listId: list.id)
             async let itemsTask = APIClient.shared.listItems(listId: list.id)
             async let connectionsTask = APIClient.shared.listConnections()
-            async let allListsTask = APIClient.shared.listsAndFolders()
+            async let allListsTask = APIClient.shared.lists()
             let (fetchedSchema, fetchedItems) = try await (schemaTask, itemsTask)
             schema = fetchedSchema
             items = fetchedItems
             pendingUpdates = [:]
             let listId = list.id
             connections = (try? await connectionsTask)?
-                .filter { $0.sourceListId == listId || $0.targetListId == listId } ?? []
-            allLists = (try? await allListsTask)?.lists ?? []
+                .filter { $0.fromListId == listId || $0.toListId == listId } ?? []
+            allLists = (try? await allListsTask) ?? []
         } catch APIError.status(401) {
             authState.handleUnauthorized()
             errorMessage = "Session expired or not authorized."
@@ -879,6 +933,7 @@ struct FieldValueView: View {
 #Preview("Lists view") {
     ListsView()
         .environmentObject(AuthState())
+        .environmentObject(AppDataStore())
 }
 
 #Preview("Dynamic row — multi-column") {

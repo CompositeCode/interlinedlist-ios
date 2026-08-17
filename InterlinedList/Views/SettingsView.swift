@@ -139,6 +139,16 @@ struct SettingsView: View {
             } label: {
                 Label("Blocked users", systemImage: "person.slash")
             }
+            NavigationLink {
+                MutedUsersView().environmentObject(authState)
+            } label: {
+                Label("Muted users", systemImage: "speaker.slash")
+            }
+            NavigationLink {
+                SessionsView().environmentObject(authState)
+            } label: {
+                Label("Where you're signed in", systemImage: "laptopcomputer.and.iphone")
+            }
         }
     }
 

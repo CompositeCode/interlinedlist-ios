@@ -20,9 +20,13 @@ enum WatcherRole: String, Codable, CaseIterable, Comparable {
         }
     }
 
-    var detail: String {
+    var detail: String { detail(for: "list") }
+
+    /// Role description scoped to the resource being shared (e.g. "list" or
+    /// "document"), so a document's share sheet doesn't say "list".
+    func detail(for resourceNoun: String) -> String {
         switch self {
-        case .watcher: return "Can view this list"
+        case .watcher: return "Can view this \(resourceNoun)"
         case .collaborator: return "Can add and edit rows"
         case .manager: return "Can edit the schema and manage access"
         }

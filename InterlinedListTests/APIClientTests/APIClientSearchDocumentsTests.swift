@@ -101,7 +101,7 @@ final class APIClientSearchDocumentsTests: XCTestCase {
         _ = try await sut.updateDocument(id: "d1", title: "Doc", content: nil, isPublic: false, folderId: "f1")
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["folder_id"] as? String, "f1")
+        XCTAssertEqual(json["folderId"] as? String, "f1")
     }
 
     func test_updateDocument_nilFolderId_omitsFolderIdFromBody() async throws {
@@ -110,7 +110,7 @@ final class APIClientSearchDocumentsTests: XCTestCase {
         _ = try await sut.updateDocument(id: "d1", title: "Doc", content: nil, isPublic: false, folderId: nil)
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertNil(json["folder_id"], "folderId should be absent when nil is passed")
+        XCTAssertNil(json["folderId"], "folderId should be absent when nil is passed")
     }
 
     func test_updateDocument_emptyFolderId_sendsEmptyString() async throws {
@@ -119,7 +119,7 @@ final class APIClientSearchDocumentsTests: XCTestCase {
         _ = try await sut.updateDocument(id: "d1", title: "Doc", content: nil, isPublic: false, folderId: "")
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(json["folder_id"] as? String, "")
+        XCTAssertEqual(json["folderId"] as? String, "")
     }
 
     func test_updateDocument_withFolderId_usesPatchMethod() async throws {
@@ -135,6 +135,6 @@ final class APIClientSearchDocumentsTests: XCTestCase {
         _ = try await sut.updateDocument(id: "d1", title: "Doc", content: nil, isPublic: false)
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertNil(json["folder_id"])
+        XCTAssertNil(json["folderId"])
     }
 }

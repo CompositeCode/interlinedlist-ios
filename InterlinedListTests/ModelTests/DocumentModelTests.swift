@@ -63,3 +63,57 @@ final class DocumentFolderCodableTests: XCTestCase {
         XCTAssertEqual(r.folders.count, 2)
     }
 }
+
+final class DocumentTemplateCodableTests: XCTestCase {
+    private let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        return d
+    }()
+
+    func test_decode_withRelativePath() throws {
+        let json = #"{"id":"t1","title":"Weekly Notes","relative_path":"notes/weekly"}"#
+        let t = try decoder.decode(DocumentTemplate.self, from: Data(json.utf8))
+        XCTAssertEqual(t.id, "t1")
+        XCTAssertEqual(t.title, "Weekly Notes")
+        XCTAssertEqual(t.relativePath, "notes/weekly")
+    }
+
+    func test_decode_nullRelativePath() throws {
+        let json = #"{"id":"t2","title":"Meeting","relative_path":null}"#
+        let t = try decoder.decode(DocumentTemplate.self, from: Data(json.utf8))
+        XCTAssertNil(t.relativePath)
+    }
+
+    func test_decode_missingRelativePath_isNilNotCrash() throws {
+        let json = #"{"id":"t3","title":"Bare"}"#
+        let t = try decoder.decode(DocumentTemplate.self, from: Data(json.utf8))
+        XCTAssertNil(t.relativePath)
+    }
+
+    func test_decode_templatesResponse_ignoresExtraKeys() throws {
+        let json = #"""
+        {"folderCreated":true,"templatesFolderId":"tf","templates":[
+          {"id":"t1","title":"A","relativePath":"a"},
+          {"id":"t2","title":"B"}
+        ]}
+        """#
+        let r = try decoder.decode(DocumentTemplatesResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(r.templates.count, 2)
+        XCTAssertEqual(r.templates.first?.id, "t1")
+    }
+
+    func test_roundTrip_preservesFields() throws {
+        let original = DocumentTemplate(id: "t9", title: "Round", relativePath: "path/x")
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(original)
+        let decoded = try JSONDecoder().decode(DocumentTemplate.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+}
+
+extension DocumentTemplate: Equatable {
+    public static func == (lhs: DocumentTemplate, rhs: DocumentTemplate) -> Bool {
+        lhs.id == rhs.id && lhs.title == rhs.title && lhs.relativePath == rhs.relativePath
+    }
+}

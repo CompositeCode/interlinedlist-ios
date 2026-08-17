@@ -16,21 +16,21 @@ final class APIClientProfileTests: XCTestCase {
 
     // MARK: updateProfile()
 
-    func test_updateProfile_sendsPostToCorrectPath() async throws {
+    func test_updateProfile_sendsPatchToCorrectPath() async throws {
         session.stub(json: #"{"user":\#(userJSON)}"#)
         _ = try await sut.updateProfile(displayName: "Alice", bio: "Bio", defaultVisibility: true)
-        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "PATCH")
         XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/user/update") == true)
     }
 
-    func test_updateProfile_bodyContainsDisplayName() async throws {
+    func test_updateProfile_bodyContainsCamelCaseDisplayName() async throws {
         session.stub(json: #"{"user":\#(userJSON)}"#)
         _ = try await sut.updateProfile(displayName: "Alice", bio: nil, defaultVisibility: nil)
         let body = try XCTUnwrap(session.lastRequest?.httpBody)
         let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
-        // /api/user/update uses the default snake_case encoder (same as register), so the
-        // wire key is display_name, not displayName.
-        XCTAssertEqual(json["display_name"] as? String, "Alice")
+        // /api/user/update only reads camelCase keys — snake_case display_name is dropped.
+        XCTAssertEqual(json["displayName"] as? String, "Alice")
+        XCTAssertNil(json["display_name"], "Body must NOT use snake_case key")
     }
 
     func test_updateProfile_returnsUser() async throws {
@@ -58,5 +58,31 @@ final class APIClientProfileTests: XCTestCase {
         } catch APIError.status(let code) {
             XCTAssertEqual(code, 401)
         }
+    }
+
+    // MARK: updateUserSettings()
+
+    func test_updateUserSettings_sendsPatchToCorrectPath() async throws {
+        session.stub(json: #"{"user":\#(userJSON)}"#)
+        _ = try await sut.updateUserSettings(theme: "dark")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "PATCH")
+        XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/user/update") == true)
+    }
+
+    func test_updateUserSettings_bodyUsesCamelCaseKeys() async throws {
+        session.stub(json: #"{"user":\#(userJSON)}"#)
+        _ = try await sut.updateUserSettings(defaultVisibility: false, showAdvancedPostSettings: true)
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNotNil(json["defaultVisibility"], "Body must use camelCase key 'defaultVisibility'")
+        XCTAssertNotNil(json["showAdvancedPostSettings"], "Body must use camelCase key 'showAdvancedPostSettings'")
+        XCTAssertNil(json["default_visibility"], "Body must NOT use snake_case key")
+        XCTAssertNil(json["show_advanced_post_settings"], "Body must NOT use snake_case key")
+    }
+
+    func test_updateUserSettings_returnsUser() async throws {
+        session.stub(json: #"{"user":\#(userJSON)}"#)
+        let user = try await sut.updateUserSettings(theme: "light")
+        XCTAssertEqual(user.username, "alice")
     }
 }

@@ -16,8 +16,10 @@ private enum MainSection: Int, CaseIterable {
 struct MainTabView: View {
     @EnvironmentObject var authState: AuthState
     @EnvironmentObject var store: AppDataStore
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedSection: MainSection = .home
     @State private var showNotifications = false
+    @State private var showMessages = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,14 +35,22 @@ struct MainTabView: View {
         .onChange(of: authState.user?.id) { _, id in
             if let id { store.onUserIdAvailable(id) }
         }
+        .onChange(of: scenePhase) { _, phase in
+            // Replay any queued offline document edits when returning to the app.
+            if phase == .active {
+                Task { await store.pushOutbox() }
+            }
+        }
     }
 
     private var topBar: some View {
         HStack(spacing: 0) {
-            ForEach([MainSection.home, .lists, .documents, .profile], id: \.rawValue) { section in
+            ForEach([MainSection.home, .lists, .documents], id: \.rawValue) { section in
                 topBarButton(section: section)
             }
+            envelopeButton
             bellButton
+            topBarButton(section: .profile)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 10)
@@ -69,6 +79,38 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
+    }
+
+    private var envelopeButton: some View {
+        Button {
+            showMessages = true
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "envelope")
+                    .font(.ilTitle(20))
+                    .foregroundStyle(Color.secondary)
+                    .frame(maxWidth: .infinity)
+                if store.dmUnreadCount > 0 {
+                    Text(store.dmUnreadCount > 99 ? "99+" : "\(store.dmUnreadCount)")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(Color.red)
+                        .clipShape(Capsule())
+                        .offset(x: 6, y: -4)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Direct messages")
+        .sheet(isPresented: $showMessages, onDismiss: {
+            Task { await store.refreshDMUnread() }
+        }) {
+            MessagesInboxView()
+                .environmentObject(authState)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var bellButton: some View {
@@ -166,6 +208,9 @@ private struct ProfileView: View {
                     preferencesSection(user: user)
                 }
                 Section("Social") {
+                    NavigationLink(destination: FindPeopleView().environmentObject(authState)) {
+                        Label("Find people", systemImage: "magnifyingglass")
+                    }
                     if let userId = authState.user?.id {
                         NavigationLink(destination: FollowListView(userId: userId, mode: .followers, isOwnProfile: true).environmentObject(authState)) {
                             Label("Followers", systemImage: "person.2")

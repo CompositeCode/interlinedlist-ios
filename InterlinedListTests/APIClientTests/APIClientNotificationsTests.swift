@@ -42,10 +42,10 @@ final class APIClientNotificationsTests: XCTestCase {
 
     // MARK: markNotificationRead()
 
-    func test_markNotificationRead_sendsPutToCorrectPath() async throws {
+    func test_markNotificationRead_sendsPatchToCorrectPath() async throws {
         session.stub(json: #"{"ok":true}"#)
         try await sut.markNotificationRead(id: "n1")
-        XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "PATCH")
         XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/notifications/n1/read") == true)
     }
 

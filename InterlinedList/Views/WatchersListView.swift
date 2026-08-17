@@ -187,6 +187,7 @@ private struct AddWatcherView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authState: AuthState
     @State private var role: WatcherRole = .watcher
+    @State private var query = ""
     @State private var candidates: [WatcherCandidate] = []
     @State private var isLoading = false
     @State private var error: String?
@@ -206,12 +207,18 @@ private struct AddWatcherView: View {
                 }
 
                 Section("People") {
+                    TextField("Search by name or username", text: $query)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("Search people to add")
+                        .onSubmit { Task { await loadCandidates() } }
+
                     if isLoading {
                         ProgressView()
                     } else if let error {
                         Text(error).font(.ilMono()).foregroundStyle(.red)
                     } else if candidates.isEmpty {
-                        Text("No people available to add.")
+                        Text(query.trimmingCharacters(in: .whitespaces).isEmpty ? "No people available to add." : "No matching people.")
                             .font(.ilBody(15)).foregroundStyle(.secondary)
                     } else {
                         ForEach(candidates) { candidate in
@@ -244,15 +251,25 @@ private struct AddWatcherView: View {
                 }
             }
             .task { await loadCandidates() }
+            .onChange(of: query) { _, newValue in
+                Task { await debouncedSearch(for: newValue) }
+            }
         }
+    }
+
+    private func debouncedSearch(for value: String) async {
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard value == query else { return }
+        await loadCandidates()
     }
 
     private func loadCandidates() async {
         isLoading = true
         error = nil
         defer { isLoading = false }
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
         do {
-            candidates = try await APIClient.shared.searchWatcherCandidates(listId: listId)
+            candidates = try await APIClient.shared.searchWatcherCandidates(listId: listId, search: trimmed.isEmpty ? nil : trimmed)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch {

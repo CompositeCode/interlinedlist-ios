@@ -10,6 +10,9 @@ final class AuthState: ObservableObject {
     @Published private(set) var user: User?
     @Published private(set) var isRestoring = true
     @Published private(set) var hasToken: Bool = false
+    /// Provider types (e.g. "github", "mastodon") linked to this account, or nil
+    /// until first loaded. Populated lazily via `loadLinkedProvidersIfNeeded()`.
+    @Published private(set) var linkedProviders: Set<String>?
 
     private let api = APIClient.shared
 
@@ -90,11 +93,30 @@ final class AuthState: ObservableObject {
         }
     }
 
+    /// True once linked providers have been loaded and include GitHub. Returns
+    /// false while unloaded, so callers should trigger `loadLinkedProvidersIfNeeded()`.
+    var hasGitHubIdentity: Bool {
+        linkedProviders?.contains("github") == true
+    }
+
+    /// Loads the account's linked provider types once (cached until logout).
+    /// Failures leave `linkedProviders` unset so a later call can retry.
+    func loadLinkedProvidersIfNeeded() async {
+        guard linkedProviders == nil else { return }
+        do {
+            let identities = try await api.linkedIdentities()
+            linkedProviders = Set(identities.map { $0.providerType })
+        } catch {
+            // Leave nil to allow retry; callers treat absence as "no known GitHub".
+        }
+    }
+
     func logout() {
         _ = KeychainService.deleteToken()
         api.setBearerToken(nil)
         user = nil
         hasToken = false
+        linkedProviders = nil
     }
 
     func updateUser(_ updated: User) {
