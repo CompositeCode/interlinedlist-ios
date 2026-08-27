@@ -18,8 +18,10 @@ struct ListItemFormView: View {
 
     private var isEditMode: Bool { existingItem != nil }
 
+    // Read-only columns (e.g. a GitHub issue's number/url/timestamps) are shown
+    // elsewhere but never edited or sent, so they're excluded from the form.
     private var visibleProps: [ListPropertyDef] {
-        schema.filter { $0.isVisible }.sorted { $0.displayOrder < $1.displayOrder }
+        schema.filter { $0.isVisible && !$0.isReadOnly }.sorted { $0.displayOrder < $1.displayOrder }
     }
 
     private var isValid: Bool {
@@ -159,12 +161,32 @@ struct ListItemFormView: View {
             )
             .labelsHidden()
 
+        case "select":
+            Picker(prop.propertyName, selection: Binding(
+                get: { selectValue(for: prop) },
+                set: { fieldValues[prop.propertyKey] = $0 }
+            )) {
+                ForEach(prop.selectOptions, id: \.self) { option in
+                    Text(option.capitalized).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+            .accessibilityLabel(prop.propertyName)
+
         default:
             TextField(prop.placeholder ?? prop.propertyName, text: Binding(
                 get: { fieldValues[prop.propertyKey] ?? "" },
                 set: { fieldValues[prop.propertyKey] = $0 }
             ))
         }
+    }
+
+    /// The current value for a `select` field, falling back to its default or
+    /// first option so the Picker always has a valid, in-options selection.
+    private func selectValue(for prop: ListPropertyDef) -> String {
+        let current = fieldValues[prop.propertyKey] ?? ""
+        if prop.selectOptions.contains(current) { return current }
+        return prop.defaultValue ?? prop.selectOptions.first ?? current
     }
 
     private func attemptSave() {
@@ -190,6 +212,9 @@ struct ListItemFormView: View {
                     iso.formatOptions = [.withInternetDateTime]
                     rowData[prop.propertyKey] = .string(iso.string(from: date))
                 }
+            case "select":
+                let val = selectValue(for: prop)
+                if !val.isEmpty { rowData[prop.propertyKey] = .string(val) }
             default:
                 let str = fieldValues[prop.propertyKey] ?? ""
                 if !str.isEmpty {

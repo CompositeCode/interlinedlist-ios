@@ -156,4 +156,97 @@ final class APIClientListsTests: XCTestCase {
         XCTAssertEqual(updated.id, "l1")
         XCTAssertEqual(updated.isPublic, false)
     }
+
+    // MARK: list data rows — add / update / close
+    //
+    // The row endpoints return the saved row under `data` (not `row`) and wrap the
+    // request row under `data`. GitHub-backed lists reuse these exact routes: the
+    // backend proxies POST→create issue, PUT→patch issue (path id = issue number),
+    // DELETE→close issue. These guard the `row`→`data` decode fix and the payload
+    // shape the GitHub proxy requires (a FULL row incl. title on every update).
+
+    private let rowJSON = #"{"id":"42","rowData":{"title":"Fix login crash","state":"open"},"createdAt":"2024-01-01T00:00:00Z"}"#
+
+    func test_addListItem_postsToDataPath_wrapsRowUnderData() async throws {
+        session.stub(json: #"{"message":"Row created successfully","data":\#(rowJSON)}"#, statusCode: 201)
+        _ = try await sut.addListItem(listId: "l1", rowData: ["title": .string("Fix login crash"), "state": .string("open")])
+
+        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/lists/l1/data")
+
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let data = try XCTUnwrap(json["data"] as? [String: Any], "row must be wrapped under `data`")
+        XCTAssertEqual(data["title"] as? String, "Fix login crash")
+        XCTAssertEqual(data["state"] as? String, "open")
+    }
+
+    func test_addListItem_decodesRowFromDataKey() async throws {
+        session.stub(json: #"{"message":"Row created successfully","data":\#(rowJSON)}"#, statusCode: 201)
+        let item = try await sut.addListItem(listId: "l1", rowData: ["title": .string("Fix login crash")])
+        // Guards the row→data fix: previously this decoded `{row}` and threw noData.
+        XCTAssertEqual(item.id, "42")
+        XCTAssertEqual(item.rowData["title"], .string("Fix login crash"))
+        XCTAssertEqual(item.rowData["state"], .string("open"))
+    }
+
+    func test_updateItem_putsFullRowToIssueNumberPath() async throws {
+        session.stub(json: #"{"message":"Row updated successfully","data":{"id":"42","rowData":{"title":"Fix login crash","state":"closed"}}}"#)
+        let item = try await sut.updateItem(
+            listId: "l1",
+            itemId: "42",
+            rowData: ["title": .string("Fix login crash"), "state": .string("closed")]
+        )
+
+        XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/lists/l1/data/42")
+
+        // The GitHub proxy rebuilds the issue from the request alone, so the full
+        // row (incl. title) must be sent or the title would be blanked to "Untitled".
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let data = try XCTUnwrap(json["data"] as? [String: Any])
+        XCTAssertEqual(data["title"] as? String, "Fix login crash")
+        XCTAssertEqual(data["state"] as? String, "closed")
+
+        XCTAssertEqual(item.rowData["state"], .string("closed"))
+    }
+
+    func test_deleteListItem_sendsDeleteToRowPath() async throws {
+        session.stub(json: #"{"message":"Row deleted successfully"}"#)
+        try await sut.deleteListItem(listId: "l1", itemId: "42")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "DELETE")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/lists/l1/data/42")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+    }
+
+    // MARK: listSchema() — GitHub schema field metadata
+
+    func test_listSchema_decodesReadOnlyAndSelectOptions() async throws {
+        let props = """
+        [
+          {"id":"p1","propertyKey":"number","propertyName":"Issue #","propertyType":"number","displayOrder":0,"isVisible":true,"isRequired":false,"defaultValue":null,"helpText":null,"placeholder":null,"isReadOnly":true},
+          {"id":"p2","propertyKey":"state","propertyName":"State","propertyType":"select","displayOrder":3,"isVisible":true,"isRequired":false,"defaultValue":"open","helpText":null,"placeholder":null,"validationRules":{"options":["open","closed"]}}
+        ]
+        """
+        session.stub(json: #"{"data":{"id":"l1","title":"owner/repo","properties":\#(props)}}"#)
+        let schema = try await sut.listSchema(listId: "l1")
+
+        let number = try XCTUnwrap(schema.first { $0.propertyKey == "number" })
+        XCTAssertTrue(number.isReadOnly)
+        XCTAssertEqual(number.selectOptions, [])
+
+        let state = try XCTUnwrap(schema.first { $0.propertyKey == "state" })
+        XCTAssertFalse(state.isReadOnly, "fields without isReadOnly default to false")
+        XCTAssertEqual(state.selectOptions, ["open", "closed"])
+    }
+
+    func test_listSchema_localProperty_defaultsReadOnlyFalseAndNoOptions() async throws {
+        let props = #"[{"id":"p1","propertyKey":"title","propertyName":"Title","propertyType":"text","displayOrder":0,"isVisible":true,"isRequired":true,"defaultValue":null,"helpText":null,"placeholder":null}]"#
+        session.stub(json: #"{"data":{"id":"l1","title":"Books","properties":\#(props)}}"#)
+        let schema = try await sut.listSchema(listId: "l1")
+        let title = try XCTUnwrap(schema.first)
+        XCTAssertFalse(title.isReadOnly)
+        XCTAssertEqual(title.selectOptions, [])
+    }
 }
