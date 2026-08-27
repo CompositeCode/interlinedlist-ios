@@ -457,7 +457,9 @@ endpoints work over Bearer.
 
 - **Plan:** build models (`GitHubRepo`, `GitHubIssue`, `GitHubLabel`,
   `GitHubAssignee`) + `APIClient` methods; add a **repo picker in `CreateListView`**
-  for GitHub-backed lists and a read-only **issues view**; create-issue-from-message.
+  for GitHub-backed lists and an **editable issues view** (add issues; edit
+  title/body/state; one-tap Close/Reopen — the standard `/api/lists/:id/data`
+  routes proxy create→issue, PUT→patch, DELETE→close); create-issue-from-message.
   Surface the **`githubDefaultRepo`** user setting (from `GET /api/user`, set via
   the D1-fixed `PATCH /api/user/update`, validated `owner/repo`) as the default in
   that picker. Guard the whole surface on "has a linked GitHub identity" (from

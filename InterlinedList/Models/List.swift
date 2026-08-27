@@ -60,6 +60,82 @@ struct ListPropertyDef: Codable, Identifiable {
     let defaultValue: String?
     let helpText: String?
     let placeholder: String?
+    /// True for server-managed columns the client must not edit (e.g. a GitHub
+    /// issue's number/url/timestamps). Absent for local lists → defaults false.
+    let isReadOnly: Bool
+    /// Allowed values for `select`/`multiselect` fields, from the backend's
+    /// `validationRules.options`. Empty when the field isn't an enumerated type
+    /// or the options are loaded elsewhere (GitHub labels/assignees send `[]`).
+    let selectOptions: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case id, propertyKey, propertyName, propertyType, displayOrder
+        case isVisible, isRequired, defaultValue, helpText, placeholder
+        case isReadOnly, validationRules
+    }
+
+    private enum ValidationRulesKeys: String, CodingKey {
+        case options
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        propertyKey = try c.decode(String.self, forKey: .propertyKey)
+        propertyName = try c.decode(String.self, forKey: .propertyName)
+        propertyType = try c.decode(String.self, forKey: .propertyType)
+        displayOrder = try c.decode(Int.self, forKey: .displayOrder)
+        isVisible = try c.decode(Bool.self, forKey: .isVisible)
+        isRequired = try c.decode(Bool.self, forKey: .isRequired)
+        defaultValue = try c.decodeIfPresent(String.self, forKey: .defaultValue)
+        helpText = try c.decodeIfPresent(String.self, forKey: .helpText)
+        placeholder = try c.decodeIfPresent(String.self, forKey: .placeholder)
+        isReadOnly = try c.decodeIfPresent(Bool.self, forKey: .isReadOnly) ?? false
+        if let rules = try? c.nestedContainer(keyedBy: ValidationRulesKeys.self, forKey: .validationRules) {
+            selectOptions = (try? rules.decodeIfPresent([String].self, forKey: .options)) ?? []
+        } else {
+            selectOptions = []
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(propertyKey, forKey: .propertyKey)
+        try c.encode(propertyName, forKey: .propertyName)
+        try c.encode(propertyType, forKey: .propertyType)
+        try c.encode(displayOrder, forKey: .displayOrder)
+        try c.encode(isVisible, forKey: .isVisible)
+        try c.encode(isRequired, forKey: .isRequired)
+        try c.encodeIfPresent(defaultValue, forKey: .defaultValue)
+        try c.encodeIfPresent(helpText, forKey: .helpText)
+        try c.encodeIfPresent(placeholder, forKey: .placeholder)
+        try c.encode(isReadOnly, forKey: .isReadOnly)
+        if !selectOptions.isEmpty {
+            var rules = c.nestedContainer(keyedBy: ValidationRulesKeys.self, forKey: .validationRules)
+            try rules.encode(selectOptions, forKey: .options)
+        }
+    }
+
+    // Explicit memberwise init keeps the GitHub-schema fields optional at call
+    // sites (previews, tests) without threading them through every constructor.
+    init(id: String, propertyKey: String, propertyName: String, propertyType: String,
+         displayOrder: Int, isVisible: Bool, isRequired: Bool, defaultValue: String?,
+         helpText: String?, placeholder: String?, isReadOnly: Bool = false,
+         selectOptions: [String] = []) {
+        self.id = id
+        self.propertyKey = propertyKey
+        self.propertyName = propertyName
+        self.propertyType = propertyType
+        self.displayOrder = displayOrder
+        self.isVisible = isVisible
+        self.isRequired = isRequired
+        self.defaultValue = defaultValue
+        self.helpText = helpText
+        self.placeholder = placeholder
+        self.isReadOnly = isReadOnly
+        self.selectOptions = selectOptions
+    }
 }
 
 struct ListDetailData: Decodable {
