@@ -364,6 +364,15 @@ struct ListDetailView: View {
     @State private var showInvites = false
     @State private var isRefreshingGitHub = false
     @State private var gitHubRefreshError: String?
+    @State private var gitHubStateFilter: GitHubStateFilter = .open
+
+    /// Open/closed filter for GitHub-backed lists. GitHub issues carry a `state`
+    /// of `open`/`closed`; the list defaults to showing open issues only.
+    private enum GitHubStateFilter: String, CaseIterable, Identifiable {
+        case open, closed
+        var id: String { rawValue }
+        var label: String { self == .open ? "Open" : "Closed" }
+    }
 
     /// Watchers / share-links / invites are owner-only server-side. The lists tab
     /// is owner-scoped so this is true today, but gating on it keeps the
@@ -376,6 +385,30 @@ struct ListDetailView: View {
     private var formSchema: [ListPropertyDef] {
         guard list.isGitHubBacked else { return schema }
         return schema.filter { !$0.isReadOnly && $0.propertyType != "multiselect" }
+    }
+
+    /// Rows to render. Local lists show everything; GitHub-backed lists filter by
+    /// the selected open/closed state (a row is closed only if `state == "closed"`).
+    private var displayedItems: [ListItem] {
+        guard list.isGitHubBacked else { return items }
+        return items.filter { item in
+            let isClosed = (item.rowData["state"]?.displayString ?? "open").lowercased() == "closed"
+            return gitHubStateFilter == .closed ? isClosed : !isClosed
+        }
+    }
+
+    private var emptyStateTitle: String {
+        guard list.isGitHubBacked else { return "Empty List" }
+        if items.isEmpty { return "No Issues" }
+        return gitHubStateFilter == .open ? "No Open Issues" : "No Closed Issues"
+    }
+
+    private var emptyStateMessage: String {
+        guard list.isGitHubBacked else { return "This list has no items yet." }
+        if items.isEmpty { return "No issues synced from GitHub yet. Pull to refresh." }
+        return gitHubStateFilter == .open
+            ? "No open issues. Switch to Closed to see closed issues."
+            : "No closed issues. Switch to Open to see open issues."
     }
 
     var body: some View {
@@ -398,15 +431,18 @@ struct ListDetailView: View {
                 List {
                     if list.isGitHubBacked {
                         gitHubStatusSection
+                        if !items.isEmpty {
+                            gitHubStateFilterSection
+                        }
                     }
-                    if items.isEmpty && !isLoading {
+                    if displayedItems.isEmpty && !isLoading {
                         ContentUnavailableView {
-                            Label(list.isGitHubBacked ? "No Issues" : "Empty List", systemImage: "list.bullet")
+                            Label(emptyStateTitle, systemImage: "list.bullet")
                         } description: {
-                            Text(list.isGitHubBacked ? "No issues synced from GitHub yet. Pull to refresh." : "This list has no items yet.")
+                            Text(emptyStateMessage)
                         }
                     } else {
-                        ForEach(items) { item in
+                        ForEach(displayedItems) { item in
                             DynamicItemRow(
                                 item: item,
                                 schema: schema,
@@ -657,6 +693,19 @@ struct ListDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var gitHubStateFilterSection: some View {
+        Section {
+            Picker("Issue state", selection: $gitHubStateFilter) {
+                ForEach(GitHubStateFilter.allCases) { filter in
+                    Text(filter.label).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("Filter issues by open or closed state")
+        }
+    }
+
     private var gitHubStatusText: String {
         let status = (list.githubMeta?.refreshStatus ?? "").lowercased()
         switch status {
@@ -780,7 +829,13 @@ struct ListDetailView: View {
             async let connectionsTask = APIClient.shared.listConnections()
             async let allListsTask = APIClient.shared.lists()
             let (fetchedSchema, fetchedItems) = try await (schemaTask, itemsTask)
-            schema = fetchedSchema
+            // The server returns the synthetic issue schema for GitHub-backed
+            // lists (backend fix). The client fallback is a safety net for an
+            // older/undeployed backend or a transient empty response — without a
+            // schema the add button is disabled and the add/edit form is empty.
+            schema = (list.isGitHubBacked && fetchedSchema.isEmpty)
+                ? ListPropertyDef.gitHubIssueSchema()
+                : fetchedSchema
             items = fetchedItems
             pendingUpdates = [:]
             let listId = list.id
@@ -818,15 +873,30 @@ struct DynamicItemRow: View {
     }
 
     private var visibleProps: [ListPropertyDef] {
-        schema.filter { $0.isVisible }
+        schema.filter { $0.isVisible }.sorted { $0.displayOrder < $1.displayOrder }
     }
 
+    /// The most meaningful column to headline the row (title/name-like), not just
+    /// the first field — which is frequently an id, number, or timestamp.
     private var primaryProp: ListPropertyDef? {
-        visibleProps.first
+        ListPropertyDef.primaryDisplayField(from: schema)
     }
 
     private var remainingProps: [ListPropertyDef] {
-        visibleProps.count > 1 ? Array(visibleProps.dropFirst()) : []
+        guard let primary = primaryProp else { return [] }
+        return visibleProps.filter { $0.id != primary.id }
+    }
+
+    /// Shown when there's no schema to pick a column from: prefer a title-like
+    /// value over the alphabetically-first key (which is often an assignee/date).
+    private var fallbackText: String {
+        for key in ["title", "name", "subject", "summary"] {
+            if let v = item.rowData[key]?.displayString, !v.isEmpty { return v }
+        }
+        if let first = item.rowData.sorted(by: { $0.key < $1.key }).first(where: { !$0.value.displayString.isEmpty }) {
+            return first.value.displayString
+        }
+        return "—"
     }
 
     private func effectiveValue(for key: String) -> JSONValue {
@@ -847,7 +917,7 @@ struct DynamicItemRow: View {
                         } : nil
                     )
                 } else {
-                    Text(item.rowData.sorted(by: { $0.key < $1.key }).first?.value.displayString ?? "—")
+                    Text(fallbackText)
                         .foregroundStyle(.primary)
                 }
                 Spacer()
@@ -883,6 +953,13 @@ struct DynamicItemRow: View {
                 .padding(.bottom, 6)
             }
         }
+        // Tapping anywhere on the row opens the view/edit sheet. The inline
+        // toggle and the expand chevron are Buttons, so they capture their own
+        // taps ahead of this gesture.
+        .contentShape(Rectangle())
+        .onTapGesture { onEdit() }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Opens details to view or edit")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if isGitHubBacked, let onSetState {
                 if gitHubStateIsOpen {

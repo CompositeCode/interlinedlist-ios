@@ -249,4 +249,33 @@ final class APIClientListsTests: XCTestCase {
         XCTAssertFalse(title.isReadOnly)
         XCTAssertEqual(title.selectOptions, [])
     }
+
+    /// The backend returns the synthetic GitHub schema in `GET /api/lists/:id`
+    /// `properties`, shaped like DB rows (`getGitHubListProperties`): a synthetic
+    /// `id` (`gh_<key>`), a `listId`, and a `visibilityCondition` that iOS ignores.
+    /// This guards that the real server payload decodes into `ListPropertyDef`.
+    func test_listSchema_decodesRealServerGitHubProperties() async throws {
+        let props = """
+        [
+          {"id":"gh_number","listId":"l1","propertyKey":"number","propertyName":"Issue #","propertyType":"number","displayOrder":0,"isRequired":false,"defaultValue":null,"validationRules":null,"helpText":"Auto-assigned by GitHub when the issue is created","placeholder":null,"isVisible":true,"visibilityCondition":null,"isReadOnly":true},
+          {"id":"gh_title","listId":"l1","propertyKey":"title","propertyName":"Title","propertyType":"text","displayOrder":1,"isRequired":true,"defaultValue":null,"validationRules":null,"helpText":null,"placeholder":null,"isVisible":true,"visibilityCondition":null,"isReadOnly":false},
+          {"id":"gh_state","listId":"l1","propertyKey":"state","propertyName":"State","propertyType":"select","displayOrder":3,"isRequired":false,"defaultValue":"open","validationRules":{"options":["open","closed"]},"helpText":null,"placeholder":null,"isVisible":true,"visibilityCondition":null,"isReadOnly":false}
+        ]
+        """
+        session.stub(json: #"{"data":{"id":"l1","title":"owner/repo","properties":\#(props)}}"#)
+        let schema = try await sut.listSchema(listId: "l1")
+
+        let number = try XCTUnwrap(schema.first { $0.propertyKey == "number" })
+        XCTAssertEqual(number.id, "gh_number")
+        XCTAssertTrue(number.isReadOnly)
+
+        let title = try XCTUnwrap(schema.first { $0.propertyKey == "title" })
+        XCTAssertTrue(title.isRequired)
+        XCTAssertFalse(title.isReadOnly)
+
+        let state = try XCTUnwrap(schema.first { $0.propertyKey == "state" })
+        XCTAssertEqual(state.propertyType, "select")
+        XCTAssertEqual(state.selectOptions, ["open", "closed"])
+        XCTAssertEqual(state.defaultValue, "open")
+    }
 }
