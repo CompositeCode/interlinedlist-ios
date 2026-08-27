@@ -114,7 +114,8 @@
       "Bash(echo \"exit=$?\")",
       "Bash(awk '/export async function getUserLists/,/^}/' lib/lists/queries.ts)",
       "Bash(gh repo *)",
-      "Bash(curl -sS -i -o - -D - \"https://interlinedlist.com/api/auth/github/authorize?redirect_uri=interlinedlist://oauth/callback\")"
+      "Bash(curl -sS -i -o - -D - \"https://interlinedlist.com/api/auth/github/authorize?redirect_uri=interlinedlist://oauth/callback\")",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
     ],
     "additionalDirectories": [
       "/Users/adron/Codez/interlinedlist-ios/.claude"
