@@ -509,30 +509,31 @@ final class APIClient {
 
     func updateRow(listId: String, itemId: String, key: String, value: JSONValue) async throws -> ListItem {
         struct Body: Encodable { let data: [String: JSONValue] }
-        struct Response: Decodable { let row: ListItem? }
+        // The row-mutation endpoints return the saved row under `data`, not `row`.
+        struct Response: Decodable { let data: ListItem? }
         let encodedList = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
         let encodedItem = itemId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? itemId
         let response: Response = try await put("/api/lists/\(encodedList)/data/\(encodedItem)", body: Body(data: [key: value]))
-        guard let item = response.row else { throw APIError.noData }
+        guard let item = response.data else { throw APIError.noData }
         return item
     }
 
     func addListItem(listId: String, rowData: [String: JSONValue]) async throws -> ListItem {
         struct Body: Encodable { let data: [String: JSONValue] }
-        struct Response: Decodable { let row: ListItem? }
+        struct Response: Decodable { let data: ListItem? }
         let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
         let response: Response = try await post("/api/lists/\(encoded)/data", body: Body(data: rowData))
-        guard let item = response.row else { throw APIError.noData }
+        guard let item = response.data else { throw APIError.noData }
         return item
     }
 
     func updateItem(listId: String, itemId: String, rowData: [String: JSONValue]) async throws -> ListItem {
         struct Body: Encodable { let data: [String: JSONValue] }
-        struct Response: Decodable { let row: ListItem? }
+        struct Response: Decodable { let data: ListItem? }
         let encodedList = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
         let encodedItem = itemId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? itemId
         let response: Response = try await put("/api/lists/\(encodedList)/data/\(encodedItem)", body: Body(data: rowData))
-        guard let item = response.row else { throw APIError.noData }
+        guard let item = response.data else { throw APIError.noData }
         return item
     }
 

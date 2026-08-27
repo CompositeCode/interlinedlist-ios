@@ -370,6 +370,14 @@ struct ListDetailView: View {
     /// management controls hidden should a shared-in list ever reach this view.
     private var isOwner: Bool { list.isOwned(by: authState.user?.id) }
 
+    /// Fields shown in the add/edit form. GitHub-backed lists edit only
+    /// title/body/state for v1 — read-only columns (#, url, timestamps) and the
+    /// multiselect labels/assignees are excluded. Local lists use the full schema.
+    private var formSchema: [ListPropertyDef] {
+        guard list.isGitHubBacked else { return schema }
+        return schema.filter { !$0.isReadOnly && $0.propertyType != "multiselect" }
+    }
+
     var body: some View {
         Group {
             if isLoading && items.isEmpty {
@@ -403,6 +411,7 @@ struct ListDetailView: View {
                                 item: item,
                                 schema: schema,
                                 pendingUpdates: pendingUpdates[item.id] ?? [:],
+                                isGitHubBacked: list.isGitHubBacked,
                                 onUpdateField: { key, value in
                                     Task { await updateField(item: item, key: key, value: value) }
                                 },
@@ -412,7 +421,10 @@ struct ListDetailView: View {
                                 onDelete: {
                                     deletingItem = item
                                     showDeleteConfirm = true
-                                }
+                                },
+                                onSetState: list.isGitHubBacked ? { newState in
+                                    Task { await setGitHubState(item: item, to: newState) }
+                                } : nil
                             )
                         }
                     }
@@ -493,16 +505,15 @@ struct ListDetailView: View {
                     .disabled(isRefreshingGitHub)
                     .accessibilityLabel("Refresh from GitHub")
                 }
-            } else {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAddItem = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .disabled(schema.isEmpty)
-                    .accessibilityLabel("Add item to list")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showAddItem = true
+                } label: {
+                    Image(systemName: "plus")
                 }
+                .disabled(schema.isEmpty)
+                .accessibilityLabel(list.isGitHubBacked ? "New issue" : "Add item to list")
             }
             if isOwner {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -595,12 +606,12 @@ struct ListDetailView: View {
             }
         }
         .sheet(isPresented: $showAddItem) {
-            ListItemFormView(schema: schema, existingItem: nil) { rowData in
+            ListItemFormView(schema: formSchema, existingItem: nil) { rowData in
                 Task { await addItem(rowData: rowData) }
             }
         }
         .sheet(item: $editingItem) { item in
-            ListItemFormView(schema: schema, existingItem: item) { rowData in
+            ListItemFormView(schema: formSchema, existingItem: item) { rowData in
                 Task { await saveEdit(item: item, rowData: rowData) }
             }
         }
@@ -724,6 +735,25 @@ struct ListDetailView: View {
         }
     }
 
+    /// Flips a GitHub issue's state (open ⇄ closed). GitHub updates must carry the
+    /// FULL row: the backend rebuilds the issue payload from the request alone and
+    /// defaults a missing title to "Untitled", so a partial `{state}` would blank
+    /// the title. Merge the new state into the existing row and send the whole row.
+    private func setGitHubState(item: ListItem, to newState: String) async {
+        var rowData = item.rowData
+        rowData["state"] = .string(newState)
+        do {
+            let updated = try await APIClient.shared.updateItem(listId: list.id, itemId: item.id, rowData: rowData)
+            if let idx = items.firstIndex(where: { $0.id == item.id }) {
+                items[idx] = updated
+            }
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            await loadData()
+        }
+    }
+
     private func updateField(item: ListItem, key: String, value: JSONValue) async {
         pendingUpdates[item.id, default: [:]][key] = value
         do {
@@ -774,10 +804,18 @@ struct DynamicItemRow: View {
     let item: ListItem
     let schema: [ListPropertyDef]
     let pendingUpdates: [String: JSONValue]
+    var isGitHubBacked: Bool = false
     let onUpdateField: (String, JSONValue) -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    /// GitHub rows expose Close/Reopen instead of Delete; the callback flips the
+    /// issue state via a full-row update. `nil` for local lists.
+    var onSetState: ((String) -> Void)? = nil
     @State private var isExpanded = false
+
+    private var gitHubStateIsOpen: Bool {
+        (item.rowData["state"]?.displayString ?? "open").lowercased() != "closed"
+    }
 
     private var visibleProps: [ListPropertyDef] {
         schema.filter { $0.isVisible }
@@ -846,10 +884,28 @@ struct DynamicItemRow: View {
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Delete", systemImage: "trash")
+            if isGitHubBacked, let onSetState {
+                if gitHubStateIsOpen {
+                    Button {
+                        onSetState("closed")
+                    } label: {
+                        Label("Close", systemImage: "checkmark.circle")
+                    }
+                    .tint(.purple)
+                } else {
+                    Button {
+                        onSetState("open")
+                    } label: {
+                        Label("Reopen", systemImage: "arrow.uturn.backward.circle")
+                    }
+                    .tint(.green)
+                }
+            } else {
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
             }
             Button {
                 onEdit()
@@ -860,7 +916,15 @@ struct DynamicItemRow: View {
         }
         .contextMenu {
             Button("Edit") { onEdit() }
-            Button("Delete", role: .destructive) { onDelete() }
+            if isGitHubBacked, let onSetState {
+                if gitHubStateIsOpen {
+                    Button("Close Issue") { onSetState("closed") }
+                } else {
+                    Button("Reopen Issue") { onSetState("open") }
+                }
+            } else {
+                Button("Delete", role: .destructive) { onDelete() }
+            }
         }
     }
 }
@@ -924,6 +988,15 @@ struct FieldValueView: View {
             } else {
                 Text(raw).foregroundStyle(.primary)
             }
+
+        case "select":
+            let raw = value.displayString
+            Text(raw.isEmpty ? "—" : raw.capitalized)
+                .font(.ilBody(13))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                .foregroundStyle(.primary)
 
         default:
             Text(value.displayString)
