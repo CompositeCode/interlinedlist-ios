@@ -95,3 +95,82 @@ final class JSONValueTests: XCTestCase {
         XCTAssertEqual(JSONValue.null.displayString, "")
     }
 }
+
+// MARK: - GitHub synthetic schema + row-headline heuristic
+
+final class ListPropertyDefHelpersTests: XCTestCase {
+
+    private func def(_ key: String, _ name: String, _ type: String,
+                     order: Int = 0, readOnly: Bool = false) -> ListPropertyDef {
+        ListPropertyDef(id: key, propertyKey: key, propertyName: name, propertyType: type,
+                        displayOrder: order, isVisible: true, isRequired: false,
+                        defaultValue: nil, helpText: nil, placeholder: nil, isReadOnly: readOnly)
+    }
+
+    // gitHubIssueSchema mirrors the backend fixed schema so the add/edit form and
+    // row display work even though the detail endpoint returns empty properties.
+
+    func test_gitHubIssueSchema_hasExpectedFieldsAndFlags() {
+        let schema = ListPropertyDef.gitHubIssueSchema()
+        XCTAssertEqual(schema.map(\.propertyKey),
+                       ["number", "title", "body", "state", "labels", "assignees", "url", "created_at", "updated_at"])
+
+        let title = try! XCTUnwrap(schema.first { $0.propertyKey == "title" })
+        XCTAssertTrue(title.isRequired)
+        XCTAssertFalse(title.isReadOnly)
+
+        let state = try! XCTUnwrap(schema.first { $0.propertyKey == "state" })
+        XCTAssertEqual(state.propertyType, "select")
+        XCTAssertEqual(state.selectOptions, ["open", "closed"])
+        XCTAssertEqual(state.defaultValue, "open")
+
+        for key in ["number", "url", "created_at", "updated_at"] {
+            XCTAssertTrue(try! XCTUnwrap(schema.first { $0.propertyKey == key }).isReadOnly, "\(key) should be read-only")
+        }
+    }
+
+    func test_gitHubIssueSchema_formSubset_isTitleBodyState() {
+        // Mirrors ListDetailView.formSchema for GitHub: drop read-only + multiselect.
+        let editable = ListPropertyDef.gitHubIssueSchema()
+            .filter { !$0.isReadOnly && $0.propertyType != "multiselect" }
+            .map(\.propertyKey)
+        XCTAssertEqual(editable, ["title", "body", "state"])
+    }
+
+    // primaryDisplayField picks a meaningful headline, not just the first column.
+
+    func test_primaryDisplayField_prefersTitleOverLeadingNumber() {
+        // GitHub order: number (read-only) is first, but title should headline.
+        let field = ListPropertyDef.primaryDisplayField(from: ListPropertyDef.gitHubIssueSchema())
+        XCTAssertEqual(field?.propertyKey, "title")
+    }
+
+    func test_primaryDisplayField_prefersNameByPropertyName() {
+        let props = [
+            def("f1", "Created", "datetime", order: 0),
+            def("f2", "Full Name", "text", order: 1),
+        ]
+        XCTAssertEqual(ListPropertyDef.primaryDisplayField(from: props)?.propertyKey, "f2")
+    }
+
+    func test_primaryDisplayField_fallsBackToFirstEditableText() {
+        // No title/name-like key → first editable text field wins over a number.
+        let props = [
+            def("count", "Count", "number", order: 0),
+            def("desc", "Description", "text", order: 1),
+        ]
+        XCTAssertEqual(ListPropertyDef.primaryDisplayField(from: props)?.propertyKey, "desc")
+    }
+
+    func test_primaryDisplayField_skipsReadOnlyTextWhenEditableExists() {
+        let props = [
+            def("ro", "Ref", "text", order: 0, readOnly: true),
+            def("note", "Note", "text", order: 1),
+        ]
+        XCTAssertEqual(ListPropertyDef.primaryDisplayField(from: props)?.propertyKey, "note")
+    }
+
+    func test_primaryDisplayField_emptySchema_isNil() {
+        XCTAssertNil(ListPropertyDef.primaryDisplayField(from: []))
+    }
+}

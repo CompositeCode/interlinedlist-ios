@@ -138,6 +138,52 @@ struct ListPropertyDef: Codable, Identifiable {
     }
 }
 
+extension ListPropertyDef {
+    /// The fixed schema for GitHub-backed lists, mirroring the backend's
+    /// `getGitHubListSchema()`. The server now returns this schema in
+    /// `GET /api/lists/:id` `properties` (their columns are synthetic issue
+    /// fields, not stored `listProperty` rows). This client copy is a **fallback**
+    /// used only when the fetched schema is empty (older/undeployed backend or a
+    /// transient response), so the add/edit form and row display still work. Keep
+    /// in sync with the backend if the issue schema ever changes.
+    static func gitHubIssueSchema() -> [ListPropertyDef] {
+        [
+            ListPropertyDef(id: "gh_number", propertyKey: "number", propertyName: "Issue #", propertyType: "number", displayOrder: 0, isVisible: true, isRequired: false, defaultValue: nil, helpText: "Auto-assigned by GitHub when the issue is created", placeholder: nil, isReadOnly: true),
+            ListPropertyDef(id: "gh_title", propertyKey: "title", propertyName: "Title", propertyType: "text", displayOrder: 1, isVisible: true, isRequired: true, defaultValue: nil, helpText: nil, placeholder: nil),
+            ListPropertyDef(id: "gh_body", propertyKey: "body", propertyName: "Body", propertyType: "textarea", displayOrder: 2, isVisible: true, isRequired: false, defaultValue: nil, helpText: nil, placeholder: nil),
+            ListPropertyDef(id: "gh_state", propertyKey: "state", propertyName: "State", propertyType: "select", displayOrder: 3, isVisible: true, isRequired: false, defaultValue: "open", helpText: nil, placeholder: nil, selectOptions: ["open", "closed"]),
+            ListPropertyDef(id: "gh_labels", propertyKey: "labels", propertyName: "Labels", propertyType: "multiselect", displayOrder: 4, isVisible: true, isRequired: false, defaultValue: nil, helpText: "Comma-separated", placeholder: nil),
+            ListPropertyDef(id: "gh_assignees", propertyKey: "assignees", propertyName: "Assignees", propertyType: "multiselect", displayOrder: 5, isVisible: true, isRequired: false, defaultValue: nil, helpText: "Comma-separated", placeholder: nil),
+            ListPropertyDef(id: "gh_url", propertyKey: "url", propertyName: "Link", propertyType: "url", displayOrder: 6, isVisible: true, isRequired: false, defaultValue: nil, helpText: nil, placeholder: nil, isReadOnly: true),
+            ListPropertyDef(id: "gh_created_at", propertyKey: "created_at", propertyName: "Created", propertyType: "datetime", displayOrder: 7, isVisible: true, isRequired: false, defaultValue: nil, helpText: nil, placeholder: nil, isReadOnly: true),
+            ListPropertyDef(id: "gh_updated_at", propertyKey: "updated_at", propertyName: "Updated", propertyType: "datetime", displayOrder: 8, isVisible: true, isRequired: false, defaultValue: nil, helpText: nil, placeholder: nil, isReadOnly: true),
+        ]
+    }
+
+    /// Picks the most meaningful column to headline a row, rather than blindly
+    /// taking the first field (which is often an id/number/timestamp). Prefers a
+    /// human-readable "name"-like field, then the first editable text field, then
+    /// any editable field, then whatever is visible.
+    static func primaryDisplayField(from props: [ListPropertyDef]) -> ListPropertyDef? {
+        let visible = props.filter { $0.isVisible }.sorted { $0.displayOrder < $1.displayOrder }
+        guard !visible.isEmpty else { return nil }
+
+        let preferredKeys = ["title", "name", "subject", "summary", "heading", "headline", "task", "question", "label"]
+        for key in preferredKeys {
+            if let match = visible.first(where: { $0.propertyKey.lowercased() == key || $0.propertyName.lowercased() == key }) {
+                return match
+            }
+        }
+        if let text = visible.first(where: { ($0.propertyType == "text" || $0.propertyType == "textarea") && !$0.isReadOnly }) {
+            return text
+        }
+        if let editable = visible.first(where: { !$0.isReadOnly }) {
+            return editable
+        }
+        return visible.first
+    }
+}
+
 struct ListDetailData: Decodable {
     let id: String
     let title: String
