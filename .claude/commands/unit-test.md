@@ -123,10 +123,9 @@ final class UserListCodableTests: XCTestCase {
     func test_decode_emptyParentIdTreatedAsNil() throws {
         let json = #"{"id":"1","title":"L","parentId":"","createdAt":"2024-01-01T00:00:00Z"}"#
         let list = try JSONDecoder().decode(UserList.self, from: Data(json.utf8))
-        // folderId maps parentId; empty string is NOT nil at decode time — test the usage guard
-        XCTAssertEqual(list.folderId, "")
-        // The tree-builder treats "" as absent — verify that invariant here
-        XCTAssertTrue((list.folderId ?? "").isEmpty)
+        // "" is NOT nil at decode time; the tree-builder is what treats it as absent
+        XCTAssertEqual(list.parentId, "")
+        XCTAssertTrue((list.parentId ?? "").isEmpty)
     }
 }
 ```
@@ -135,20 +134,20 @@ final class UserListCodableTests: XCTestCase {
 
 ```swift
 final class ListTreeNodeTests: XCTestCase {
-    func test_buildTree_rootListWithNoFolder_appearsAtRoot() {
-        let list = UserList(id: "1", name: "Root", description: nil, folderId: nil,
+    func test_buildTree_rootListWithNoParent_appearsAtRoot() {
+        let list = UserList(id: "1", name: "Root", description: nil, parentId: nil,
                             isPublic: nil, createdAt: "2024-01-01T00:00:00Z",
                             updatedAt: nil, itemCount: nil)
-        let nodes = ListTreeNode.buildTree(folders: [], lists: [list])
+        let nodes = ListTreeNode.buildTree(lists: [list])
         XCTAssertEqual(nodes.count, 1)
         XCTAssertEqual(nodes.first?.name, "Root")
     }
 
-    func test_buildTree_listWithEmptyFolderIdTreatedAsRoot() {
-        let list = UserList(id: "1", name: "L", description: nil, folderId: "",
+    func test_buildTree_listWithEmptyParentIdTreatedAsRoot() {
+        let list = UserList(id: "1", name: "L", description: nil, parentId: "",
                             isPublic: nil, createdAt: "2024-01-01T00:00:00Z",
                             updatedAt: nil, itemCount: nil)
-        let nodes = ListTreeNode.buildTree(folders: [], lists: [list])
+        let nodes = ListTreeNode.buildTree(lists: [list])
         XCTAssertEqual(nodes.count, 1)
     }
 }
