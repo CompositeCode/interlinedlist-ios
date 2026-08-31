@@ -773,6 +773,9 @@ struct ListDetailView: View {
             if let idx = items.firstIndex(where: { $0.id == item.id }) {
                 items[idx] = updated
             }
+            // Refresh the issue list after a close/reopen so it reflects the new
+            // state (and any GitHub-side changes) consistently, not just the one row.
+            await loadData()
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch {
