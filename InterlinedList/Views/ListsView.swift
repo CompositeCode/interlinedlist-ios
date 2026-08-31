@@ -359,9 +359,7 @@ struct ListDetailView: View {
     @State private var editingItem: ListItem? = nil
     @State private var deletingItem: ListItem? = nil
     @State private var showDeleteConfirm = false
-    @State private var showWatchers = false
-    @State private var showShare = false
-    @State private var showInvites = false
+    @State private var showSharing = false
     @State private var isRefreshingGitHub = false
     @State private var gitHubRefreshError: String?
     @State private var gitHubStateFilter: GitHubStateFilter = .open
@@ -554,27 +552,11 @@ struct ListDetailView: View {
             if isOwner {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        showWatchers = true
+                        showSharing = true
                     } label: {
                         Image(systemName: "person.2")
                     }
-                    .accessibilityLabel("Manage watchers")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showShare = true
-                    } label: {
-                        Image(systemName: "link")
-                    }
                     .accessibilityLabel("Share list")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showInvites = true
-                    } label: {
-                        Image(systemName: "envelope")
-                    }
-                    .accessibilityLabel("Invite by email")
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -592,17 +574,12 @@ struct ListDetailView: View {
         .refreshable {
             await loadData()
         }
-        .sheet(isPresented: $showWatchers) {
-            WatchersListView(listId: list.id)
-                .environmentObject(authState)
-        }
-        .sheet(isPresented: $showShare) {
-            ShareLinksSheet(kind: .lists, resourceId: list.id, title: list.name)
-                .environmentObject(authState)
-        }
-        .sheet(isPresented: $showInvites) {
-            ShareInvitesSheet(kind: .lists, resourceId: list.id, title: list.name)
-                .environmentObject(authState)
+        .sheet(isPresented: $showSharing) {
+            SharingView(kind: .lists, resourceId: list.id, title: list.name,
+                        isPublic: list.isPublic ?? false) { newValue in
+                _ = try await APIClient.shared.updateList(id: list.id, title: nil, description: nil, isPublic: newValue)
+            }
+            .environmentObject(authState)
         }
         .sheet(isPresented: $showAddConnection) {
             let role = addRelationshipRole
