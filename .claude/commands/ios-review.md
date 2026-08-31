@@ -28,7 +28,7 @@ Perform a focused code review of the Swift/SwiftUI changes on the current branch
 
    ### Project-specific
    - [ ] Correct encoder per endpoint: camelCase bodies use the `postCamel`/`putCamel`/`patchCamel` helpers, snake_case bodies use `post`/`put`/`patch` — mismatches fail silently server-side (check the existing method, don't assume)
-   - [ ] Empty-string `folderId` / `parentId` treated same as `nil` (both `UserList.folderId` and `ListFolder.parentId`)
+   - [ ] Empty-string `UserList.parentId` treated same as `nil` (list nesting via `parentId`; list folders no longer exist)
    - [ ] Document-folder path-scoping honored: folder reads/creates use `/api/documents/folders/{id}/documents`; root routes are root-only
    - [ ] Tokens stored in Keychain only — no `UserDefaults`
    - [ ] New `.swift` files registered in `project.pbxproj` (no synced groups)

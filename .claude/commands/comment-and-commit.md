@@ -13,7 +13,21 @@ Optional argument (`$ARGUMENTS`): extra context to fold into the message — a t
   Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
   ```
 - **Never push** from this command.
-- **Never commit on the default branch** (`main`): if HEAD is `main`, create and switch to a descriptive feature branch first.
+- **Never commit on the default branch** (`main`): if HEAD is `main`, isolate the work first (see Worktrees).
+- Every commit also ends with any session trailer the harness specifies (e.g. `Claude-Session: <url>`) in addition to the `Co-Authored-By` line above.
+
+## Worktrees (default for feature work)
+
+Isolated/feature work happens in a dedicated **git worktree**, not by switching branches in the primary checkout — this keeps the main checkout clean and lets parallel efforts coexist. Agent worktrees live under `.claude/worktrees/`.
+
+- **Know where you are:** `git worktree list` (all trees + their branches) and `git rev-parse --show-toplevel` (current root). The first `worktree list` entry is the primary checkout.
+- **Already in a worktree** (a `.claude/worktrees/…` or `../interlinedlist-ios-<topic>` dir): just commit here — the steps below are identical. Still never commit on the base branch.
+- **Starting fresh isolated work** from the primary checkout: create a worktree with its own branch instead of editing in place, then work and commit inside it:
+  ```bash
+  git worktree add ../interlinedlist-ios-<topic> -b <type>/<short-topic>
+  ```
+  (If the harness exposes an `EnterWorktree` tool, prefer it — it does the same thing.)
+- **Changes already dirty in the primary checkout** (you edited in place before branching): don't fight it — branch in place (`git switch -c <type>/<topic>`) and commit; use a worktree from the outset next time. `git worktree add` creates a *clean* tree and will not carry your uncommitted edits.
 
 ## Steps
 
@@ -24,11 +38,12 @@ Optional argument (`$ARGUMENTS`): extra context to fold into the message — a t
    git diff HEAD            # full diff: staged + unstaged
    ```
 
-2. **Safety-check the branch**:
+2. **Safety-check the branch / worktree** (see Worktrees above):
    ```bash
    git rev-parse --abbrev-ref HEAD
+   git worktree list          # confirm whether you're in the primary checkout or a worktree
    ```
-   If it prints `main`, branch first: `git switch -c <type>/<short-topic>`.
+   If HEAD is `main`: create a worktree for the work (`git worktree add ../interlinedlist-ios-<topic> -b <type>/<topic>`) and continue there, or — if changes are already dirty here — `git switch -c <type>/<short-topic>` in place.
 
 3. **Review, then stage.** Read the diff and decide what belongs in this commit. By default stage everything that's part of the work:
    ```bash
