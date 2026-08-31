@@ -14,6 +14,10 @@ Optional argument (`$ARGUMENTS`): a PR title hint, a base-branch override, or ex
   ```
 - Opening a PR is outward-facing: verify the branch, base, and commit list look right before creating it.
 
+## Worktrees
+
+`/comment-and-commit` (step 1) creates or lands the commit in a dedicated git **worktree** by default (see its *Worktrees* section) so feature work stays isolated from the primary checkout. Everything here runs from **that** worktree — `git push -u origin HEAD` and `gh pr create` act on the current worktree's branch, so no special handling is needed; just stay in it. Confirm with `git worktree list`. After the PR merges, clean the worktree up (step 7). Never remove a worktree that has uncommitted changes or an un-pushed branch.
+
 ## Steps
 
 1. **Commit waiting work.** Perform every step of `/comment-and-commit` so the tree is clean and all work is committed. If there's nothing to commit but the branch is already ahead of the base, continue.
@@ -55,3 +59,10 @@ Optional argument (`$ARGUMENTS`): a PR title hint, a base-branch override, or ex
    ```
 
 6. **Report the PR URL** that `gh` prints. If `gh` isn't authenticated, surface the error and tell the user to run `! gh auth login` in the prompt (so the interactive login lands in this session), then re-run.
+
+7. **Clean up the worktree — only after the PR is merged.** If the commit landed in a dedicated worktree, remove it once merged so it doesn't linger:
+   ```bash
+   git worktree remove ../interlinedlist-ios-<topic>   # run from the primary checkout, not inside the worktree
+   git worktree prune
+   ```
+   Skip if the work was committed in place (no dedicated worktree) or the PR isn't merged yet — in that case leave the worktree and say so, so the user can remove it after merge.
