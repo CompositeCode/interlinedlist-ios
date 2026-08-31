@@ -946,6 +946,28 @@ final class APIClient {
         return try await get("/api/documents/shared/\(t)")
     }
 
+    /// Resolves a list share-link token to a read-only view (`GET /api/lists/shared/:token`).
+    /// Auth is optional (anonymous read works). Throws `.server`/`.status(404)` for an
+    /// unknown/expired/revoked token and `.status(429)` when rate-limited.
+    func resolveSharedList(token: String) async throws -> SharedListResolution {
+        let t = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
+        return try await get("/api/lists/shared/\(t)")
+    }
+
+    /// The rows of a shared list, read via its share-link token
+    /// (`GET /api/lists/shared/:token/data`). Same `{ rows }` shape as `listItems`;
+    /// the token is the capability, so this works with no session and regardless of
+    /// the list's `isPublic` flag.
+    func sharedListData(token: String, limit: Int = 100, offset: Int = 0) async throws -> [ListItem] {
+        let t = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
+        struct DataResponse: Decodable {
+            let rows: [ListItem]?
+            let items: [ListItem]?
+        }
+        let response: DataResponse = try await get("/api/lists/shared/\(t)/data?limit=\(limit)&offset=\(offset)")
+        return response.rows ?? response.items ?? []
+    }
+
     // MARK: - Notifications
 
     func notifications() async throws -> NotificationsResponse {

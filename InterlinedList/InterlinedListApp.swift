@@ -72,6 +72,9 @@ struct InterlinedListApp: App {
         case .sharedDocument(let token):
             SharedDocumentView(token: token)
                 .environmentObject(authState)
+        case .sharedList(let token):
+            SharedListView(token: token)
+                .environmentObject(authState)
         case .verifyEmail, .verifyEmailChange:
             // These never present a sheet — they run an async side effect in
             // handleDeepLink and are never assigned to pendingDeepLink.
@@ -98,7 +101,7 @@ struct InterlinedListApp: App {
             Task { await verifyEmail(token: token) }
         case .verifyEmailChange(let token):
             Task { await verifyEmailChange(token: token) }
-        case .resetPassword, .userProfile, .message, .document, .sharedDocument:
+        case .resetPassword, .userProfile, .message, .document, .sharedDocument, .sharedList:
             router.pendingDeepLink = link
         }
     }
@@ -152,6 +155,7 @@ enum AppDeepLink: Identifiable, Hashable {
     case message(id: String)
     case document(id: String)
     case sharedDocument(token: String)
+    case sharedList(token: String)
 
     var id: String {
         switch self {
@@ -162,6 +166,7 @@ enum AppDeepLink: Identifiable, Hashable {
         case .message(let id): return "message:" + id
         case .document(let id): return "document:" + id
         case .sharedDocument(let token): return "shared-document:" + token
+        case .sharedList(let token): return "shared-list:" + token
         }
     }
 
@@ -208,15 +213,20 @@ enum AppDeepLink: Identifiable, Hashable {
             return .message(id: id)
         case "documents":
             // `/documents/shared/<token>` resolves a share link; `/documents/<id>`
-            // opens a document permalink. (List permalinks are not routed: a bare
-            // `/lists/<id>` carries no owner username, which the list-detail endpoint
-            // requires — see the-gaps.md G10 follow-ons.)
+            // opens a document permalink.
             if segments.first == "shared" {
                 guard segments.count >= 2, !segments[1].isEmpty else { return nil }
                 return .sharedDocument(token: segments[1])
             }
             guard let id = segments.first, !id.isEmpty else { return nil }
             return .document(id: id)
+        case "lists":
+            // `/lists/shared/<token>` resolves a self-contained share-link token
+            // (read-only viewer). A bare `/lists/<id>` permalink is NOT routed — it
+            // carries no owner username, which the list-detail endpoint requires
+            // (see the-gaps.md); only the shared-token form is handled here.
+            guard segments.first == "shared", segments.count >= 2, !segments[1].isEmpty else { return nil }
+            return .sharedList(token: segments[1])
         case "reset-password":
             guard let token, !token.isEmpty else { return nil }
             return .resetPassword(token: token)
