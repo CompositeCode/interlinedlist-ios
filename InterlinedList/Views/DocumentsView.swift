@@ -636,9 +636,7 @@ private struct DocumentDetailView: View {
     @State private var current: Document
     @State private var showEdit = false
     @State private var showDeleteConfirm = false
-    @State private var showShare = false
-    @State private var showInvites = false
-    @State private var showCollaborators = false
+    @State private var showSharing = false
 
     init(document: Document, onUpdate: @escaping (Document) -> Void, onDelete: @escaping (String) -> Void) {
         self.document = document
@@ -666,15 +664,13 @@ private struct DocumentDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Edit") { showEdit = true }
-                    Button("Share") { showShare = true }
-                    Button("Invite by email") { showInvites = true }
+                    Button("Share") { showSharing = true }
                     if let url = ILWebURL.document(current.id) {
                         SwiftUI.ShareLink(item: url) {
                             Label("Share link", systemImage: "square.and.arrow.up")
                         }
                         .accessibilityLabel("Share link")
                     }
-                    Button("Collaborators") { showCollaborators = true }
                     Button("Delete", role: .destructive) { showDeleteConfirm = true }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -694,17 +690,16 @@ private struct DocumentDetailView: View {
                 onUpdate(updated)
             }
         }
-        .sheet(isPresented: $showShare) {
-            ShareLinksSheet(kind: .documents, resourceId: current.id, title: current.title)
-                .environmentObject(authState)
-        }
-        .sheet(isPresented: $showInvites) {
-            ShareInvitesSheet(kind: .documents, resourceId: current.id, title: current.title)
-                .environmentObject(authState)
-        }
-        .sheet(isPresented: $showCollaborators) {
-            DocumentCollaboratorsView(documentId: current.id)
-                .environmentObject(authState)
+        .sheet(isPresented: $showSharing) {
+            SharingView(kind: .documents, resourceId: current.id, title: current.title,
+                        isPublic: current.isPublic ?? false) { newValue in
+                let updated = try await APIClient.shared.updateDocument(
+                    id: current.id, title: current.title, content: current.content,
+                    isPublic: newValue, folderId: nil)
+                current = updated
+                onUpdate(updated)
+            }
+            .environmentObject(authState)
         }
         .confirmationDialog("Delete \"\(current.title)\"?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
