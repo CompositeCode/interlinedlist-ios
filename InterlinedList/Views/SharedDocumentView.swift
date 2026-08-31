@@ -15,6 +15,7 @@ struct SharedDocumentView: View {
 
     @EnvironmentObject private var authState: AuthState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var resolution: SharedDocumentResolution?
     @State private var errorMessage: String?
     @State private var isLoading = true
@@ -67,12 +68,22 @@ struct SharedDocumentView: View {
     }
 
     private var editLinkNotice: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "info.circle")
-            Text("This is an edit invite. Open the link on interlinedlist.com to accept it — editing a shared document isn't available in the app yet.")
-                .font(.ilMono())
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "info.circle")
+                Text("This is an edit invite. Editing a shared document isn't available in the app yet — accept it on the web to start collaborating.")
+                    .font(.ilMono())
+            }
+            .foregroundStyle(.secondary)
+            if let url = ILWebURL.sharedDocument(token: token) {
+                Button {
+                    openURL(url)
+                } label: {
+                    Label("Open on interlinedlist.com to accept", systemImage: "safari")
+                }
+                .buttonStyle(.borderless)
+            }
         }
-        .foregroundStyle(.secondary)
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ILColor.surface)
