@@ -69,9 +69,24 @@ final class AppDeepLinkParseTests: XCTestCase {
         XCTAssertNil(parse("https://interlinedlist.com/documents/shared"))
     }
 
-    func test_parse_httpsCanonicalSharedList_isNotRouted_returnsNil() {
-        // List share-link resolution is deferred (see the-gaps.md G10 / lists refactor).
-        XCTAssertNil(parse("https://interlinedlist.com/lists/shared/tok-9"))
+    func test_parse_httpsSharedList_returnsSharedList() {
+        XCTAssertEqual(parse("https://interlinedlist.com/lists/shared/tok-9"),
+                       .sharedList(token: "tok-9"))
+    }
+
+    func test_parse_customSchemeSharedList_returnsSharedList() {
+        XCTAssertEqual(parse("interlinedlist://lists/shared/tok-9"),
+                       .sharedList(token: "tok-9"))
+    }
+
+    func test_parse_sharedListMissingToken_returnsNil() {
+        XCTAssertNil(parse("https://interlinedlist.com/lists/shared"))
+    }
+
+    func test_parse_bareListPermalink_isNotRouted_returnsNil() {
+        // A bare `/lists/<id>` carries no owner username the list-detail endpoint
+        // needs, so it stays deferred; only the self-contained shared-token form routes.
+        XCTAssertNil(parse("https://interlinedlist.com/lists/list-1"))
     }
 
     // MARK: Rejections

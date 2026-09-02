@@ -29,6 +29,17 @@ enum ILWebURL {
         make("/documents", id)
     }
 
+    /// Web landing page for a list share-link token (`/lists/shared/<token>`) — where
+    /// an edit-capable link is *claimed*, since the claim endpoint is session-only.
+    static func sharedList(token: String) -> URL? {
+        make("/lists/shared", token)
+    }
+
+    /// Web landing page for a document share-link token (`/documents/shared/<token>`).
+    static func sharedDocument(token: String) -> URL? {
+        make("/documents/shared", token)
+    }
+
     private static func make(_ prefix: String, _ segment: String) -> URL? {
         guard !segment.isEmpty,
               let encoded = segment.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
