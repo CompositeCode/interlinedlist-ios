@@ -122,6 +122,43 @@ final class AppDataStoreTests: XCTestCase {
         XCTAssertTrue(store.pendingSyncDocIds.contains(doc.id))
     }
 
+    func test_createDocumentOffline_pushedOpCarriesRelativePath() async {
+        // The sync POST silently drops a create/update op without a non-empty
+        // relativePath, so the queued op (and the optimistic doc) must carry one.
+        let api = RecordingSyncAPI(pushCursor: "c1",
+                                   pullResponse: DocumentSyncResponse(lastSyncAt: "c1"))
+        let store = AppDataStore(syncAPI: api)
+        let doc = store.createDocumentOffline(title: "Draft", content: "hi", isPublic: false, folderId: nil)
+        await store.pushOutbox()
+        let op = api.pushedOperations.first { $0.data.id == doc.id }
+        XCTAssertEqual(op?.op, .create)
+        XCTAssertEqual(op?.data.relativePath?.isEmpty, false)
+        XCTAssertEqual(store.documents.first { $0.id == doc.id }?.relativePath?.isEmpty, false)
+    }
+
+    func test_updateDocumentOffline_pushedOpEchoesExistingRelativePath() async {
+        // Seed a pulled doc with a known server path, then edit it: the update op
+        // must echo that path so the server accepts the edit.
+        let api = ControllableSyncAPI()
+        api.nextPull = DocumentSyncResponse(
+            documents: [Document(id: "d1", title: "Server", content: "v1", folderId: nil,
+                                 isPublic: false, createdAt: "2026-07-01T00:00:00Z",
+                                 updatedAt: "2026-07-01T00:00:00Z", relativePath: "server-path.md")],
+            lastSyncAt: "c1")
+        let store = AppDataStore(syncAPI: api)
+        await store.pushOutbox()
+
+        api.nextPull = nil
+        _ = store.updateDocumentOffline(id: "d1", title: "Edited", content: "v2",
+                                        isPublic: false, folderId: nil)
+        api.nextPull = DocumentSyncResponse(lastSyncAt: "c2")
+        await store.pushOutbox()
+
+        let op = api.lastPushedOps.first { $0.data.id == "d1" }
+        XCTAssertEqual(op?.op, .update)
+        XCTAssertEqual(op?.data.relativePath, "server-path.md")
+    }
+
     func test_pushOutbox_failure_keepsPendingState() async {
         let api = FailingSyncAPI()
         let store = AppDataStore(syncAPI: api)
