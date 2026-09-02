@@ -645,6 +645,21 @@ field). What's left:
 - **A6 — Doc the new endpoints (low priority).** `/api/tags/{trending,autocomplete}`
   (G13) and `/api/link-metadata` (G14) shipped but aren't yet in `/help/api/*`; add
   pages so future integrators (and this doc) can rely on the published contract.
+- **A7 — `POST /api/documents/sync` silently drops document create/update ops that
+  omit `relativePath`.** The handler gates *both* create and update on
+  `if (!id || !relativePath) continue;` (`app/api/documents/sync/route.ts:194`), so
+  an op without a `relativePath` is skipped — yet the response is always
+  `200 { lastSyncAt }`, so the client can't tell the op was dropped. Two defects:
+  (1) **update shouldn't require `relativePath`** — the row already exists and the
+  update branch never writes the field, it's only used as a gate; require just `id`.
+  (2) **create should fall back** the way `POST /api/documents` does
+  (`route.ts:61`, `relativePath ?? \`${title-slug}.md\``) instead of dropping the row.
+  Ideally the POST response should also echo per-op results (applied/skipped) so
+  clients can reconcile instead of assuming success. **iOS worked around this
+  2026-09-02** by generating/echoing a `relativePath` on every sync create/update
+  and conflict-copy op (see `AppDataStore.{create,update}DocumentOffline`,
+  `DocumentSyncConflict.makeConflictCopy`); the server-side hardening above is still
+  worth doing for other clients (`il-sync`, web) and for the silent-failure blind spot.
 
 ---
 

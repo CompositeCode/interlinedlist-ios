@@ -125,6 +125,15 @@ final class DocumentSyncConflictTests: XCTestCase {
         XCTAssertEqual(copy.operation.data.isPublic, false)
     }
 
+    func test_makeConflictCopy_opCarriesNonEmptyRelativePath() {
+        // The sync POST silently drops a create op without a relativePath, so the
+        // copy must carry one (and the copy document mirrors it).
+        let server = doc("d1", title: "T", updatedAt: "2026-08-02T00:00:00Z")
+        let copy = DocumentSyncConflict.makeConflictCopy(server: server, date: fixedDate, newId: "n1")
+        XCTAssertEqual(copy.operation.data.relativePath?.isEmpty, false)
+        XCTAssertEqual(copy.document.relativePath, copy.operation.data.relativePath)
+    }
+
     func test_conflictCopyTitle_isDeterministicForDate() {
         XCTAssertEqual(
             DocumentSyncConflict.conflictCopyTitle(original: "X", date: fixedDate),

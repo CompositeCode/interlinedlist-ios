@@ -27,6 +27,15 @@ final class DocumentCodableTests: XCTestCase {
         XCTAssertNil(d.content)
         XCTAssertNil(d.folderId)
         XCTAssertNil(d.isPublic)
+        XCTAssertNil(d.relativePath)
+    }
+
+    func test_decode_relativePathFromSyncRow() throws {
+        // `GET /api/documents/sync` rows carry the server file-path key that the
+        // client echoes back on offline edits.
+        let json = #"{"id":"d3","title":"Notes","relative_path":"notes/notes.md"}"#
+        let d = try decoder.decode(Document.self, from: Data(json.utf8))
+        XCTAssertEqual(d.relativePath, "notes/notes.md")
     }
 
     func test_decode_documentsResponse() throws {

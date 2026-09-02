@@ -350,13 +350,18 @@ final class AppDataStore: ObservableObject {
     func createDocumentOffline(title: String, content: String?, isPublic: Bool, folderId: String?) -> Document {
         let normalizedFolderId = (folderId?.isEmpty == true) ? nil : folderId
         let now = ISO8601DateFormatter().string(from: Date())
-        let doc = Document(id: UUID().uuidString, title: title, content: content,
+        let id = UUID().uuidString
+        // The sync POST requires a non-empty, folder-unique relativePath; a fresh
+        // UUID basename can't collide with the `@@unique([folderId, relativePath])`.
+        let relativePath = "\(id).md"
+        let doc = Document(id: id, title: title, content: content,
                            folderId: normalizedFolderId, isPublic: isPublic,
-                           createdAt: now, updatedAt: now)
+                           createdAt: now, updatedAt: now, relativePath: relativePath)
         documents.insert(doc, at: 0)
         enqueue(SyncOperation(op: .create, type: .document,
                               data: SyncOpData(id: doc.id, folderId: normalizedFolderId,
-                                               title: title, content: content, isPublic: isPublic)))
+                                               title: title, content: content,
+                                               relativePath: relativePath, isPublic: isPublic)))
         return doc
     }
 
@@ -365,9 +370,13 @@ final class AppDataStore: ObservableObject {
         let normalizedFolderId = (folderId?.isEmpty == true) ? nil : folderId
         let now = ISO8601DateFormatter().string(from: Date())
         let existing = documents.first { $0.id == id }
+        // Echo the doc's existing path; fall back for rows cached before the field
+        // existed. Without a non-empty relativePath the server drops the update op.
+        let relativePath = existing?.relativePath ?? "\(id).md"
         let updated = Document(id: id, title: title, content: content,
                                folderId: normalizedFolderId, isPublic: isPublic,
-                               createdAt: existing?.createdAt, updatedAt: now)
+                               createdAt: existing?.createdAt, updatedAt: now,
+                               relativePath: relativePath)
         if let idx = documents.firstIndex(where: { $0.id == id }) {
             documents[idx] = updated
         } else {
@@ -375,7 +384,8 @@ final class AppDataStore: ObservableObject {
         }
         enqueue(SyncOperation(op: .update, type: .document,
                               data: SyncOpData(id: id, folderId: normalizedFolderId,
-                                               title: title, content: content, isPublic: isPublic)))
+                                               title: title, content: content,
+                                               relativePath: relativePath, isPublic: isPublic)))
         return updated
     }
 
