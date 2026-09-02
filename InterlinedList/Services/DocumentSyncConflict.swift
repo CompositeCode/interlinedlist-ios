@@ -56,18 +56,24 @@ enum DocumentSyncConflict {
     static func makeConflictCopy(server: Document, date: Date, newId: String) -> ConflictCopy {
         let title = conflictCopyTitle(original: server.title, date: date)
         let now = ISO8601DateFormatter().string(from: date)
+        // A fresh basename for the copy; the sync POST drops a create op without a
+        // non-empty relativePath, and reusing the server doc's path would collide
+        // with `@@unique([folderId, relativePath])`.
+        let relativePath = "\(newId).md"
         let document = Document(id: newId,
                                 title: title,
                                 content: server.content,
                                 folderId: server.folderId,
                                 isPublic: server.isPublic,
                                 createdAt: now,
-                                updatedAt: now)
+                                updatedAt: now,
+                                relativePath: relativePath)
         let operation = SyncOperation(op: .create, type: .document,
                                       data: SyncOpData(id: newId,
                                                        folderId: server.folderId,
                                                        title: title,
                                                        content: server.content,
+                                                       relativePath: relativePath,
                                                        isPublic: server.isPublic))
         return ConflictCopy(document: document, operation: operation)
     }
