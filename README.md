@@ -36,7 +36,7 @@ An email-verification banner appears beneath the top bar until the account's ema
 ### Accounts & auth
 - **Email / password** sign-in (issues a sync token stored in the Keychain) and registration.
 - **Forgot / reset password** and **email verification**, reachable via `interlinedlist://` deep links.
-- **OAuth sign-in** via the system browser (`ASWebAuthenticationSession`) for Mastodon, Bluesky, LinkedIn, and Twitter. *(GitHub is hidden pending backend support for the native callback.)*
+- **OAuth sign-in** via the system browser (`ASWebAuthenticationSession`) for Mastodon, Bluesky, LinkedIn, and Twitter. GitHub is included — the backend's mobile OAuth branch shipped 2026-08-14.
 - **Linked accounts** management (subscribers).
 - **Change email** and **delete account** from Settings.
 
