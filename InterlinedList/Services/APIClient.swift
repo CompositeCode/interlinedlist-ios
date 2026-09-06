@@ -1205,21 +1205,21 @@ final class APIClient {
     }
 
     @discardableResult
-    func addWatcher(listId: String, userId: String, role: WatcherRole) async throws -> Bool {
-        struct Body: Encodable { let userId: String; let role: String }
+    func addWatcher(listId: String, userId: String, role: WatcherRole, notify: Bool = false) async throws -> Bool {
+        struct Body: Encodable { let userId: String; let role: String; let notify: Bool }
         struct Response: Decodable { let watching: Bool? }
         let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
-        let response: Response = try await postCamel("/api/lists/\(encoded)/watchers", body: Body(userId: userId, role: role.rawValue))
+        let response: Response = try await postCamel("/api/lists/\(encoded)/watchers", body: Body(userId: userId, role: role.rawValue, notify: notify))
         return response.watching ?? true
     }
 
     @discardableResult
-    func setWatcherRole(listId: String, userId: String, role: WatcherRole) async throws -> String {
-        struct Body: Encodable { let role: String }
+    func setWatcherRole(listId: String, userId: String, role: WatcherRole, notify: Bool = true) async throws -> String {
+        struct Body: Encodable { let role: String; let notify: Bool }
         struct Response: Decodable { let role: String? }
         let encodedList = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
         let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
-        let response: Response = try await putCamel("/api/lists/\(encodedList)/watchers/\(encodedUser)", body: Body(role: role.rawValue))
+        let response: Response = try await putCamel("/api/lists/\(encodedList)/watchers/\(encodedUser)", body: Body(role: role.rawValue, notify: notify))
         return response.role ?? role.rawValue
     }
 

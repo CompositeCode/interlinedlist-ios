@@ -174,3 +174,44 @@ final class ListPropertyDefHelpersTests: XCTestCase {
         XCTAssertNil(ListPropertyDef.primaryDisplayField(from: []))
     }
 }
+
+// MARK: - Sharing role labels + expiry presets (SharingView parity)
+
+final class SharingHelpersTests: XCTestCase {
+
+    // Web-aligned labels: per-person grants use Read-only/Edit/Admin; share links
+    // use Viewer/Editor/Admin.
+    func test_watcherRole_accessLabels() {
+        XCTAssertEqual(WatcherRole.watcher.accessLabel, "Read-only")
+        XCTAssertEqual(WatcherRole.collaborator.accessLabel, "Edit")
+        XCTAssertEqual(WatcherRole.manager.accessLabel, "Admin")
+    }
+
+    func test_watcherRole_linkLabels() {
+        XCTAssertEqual(WatcherRole.watcher.linkLabel, "Viewer")
+        XCTAssertEqual(WatcherRole.collaborator.linkLabel, "Editor")
+        XCTAssertEqual(WatcherRole.manager.linkLabel, "Admin")
+    }
+
+    func test_shareExpiryPreset_labels() {
+        XCTAssertEqual(ShareExpiryPreset.never.label, "Never")
+        XCTAssertEqual(ShareExpiryPreset.week.label, "7 days")
+        XCTAssertEqual(ShareExpiryPreset.month.label, "30 days")
+    }
+
+    func test_shareExpiryPreset_never_hasNoExpiry() {
+        XCTAssertNil(ShareExpiryPreset.never.expiresAt())
+    }
+
+    func test_shareExpiryPreset_presetsAddCalendarDays() throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+
+        let week = try XCTUnwrap(iso.date(from: try XCTUnwrap(ShareExpiryPreset.week.expiresAt(from: now))))
+        XCTAssertEqual(Calendar.current.dateComponents([.day], from: now, to: week).day, 7)
+
+        let month = try XCTUnwrap(iso.date(from: try XCTUnwrap(ShareExpiryPreset.month.expiresAt(from: now))))
+        XCTAssertEqual(Calendar.current.dateComponents([.day], from: now, to: month).day, 30)
+    }
+}
