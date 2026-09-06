@@ -14,6 +14,7 @@ struct NotificationsView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var selectedNotification: AppNotification?
+    @State private var deleteError: String?
 
     var body: some View {
         NavigationStack {
@@ -55,6 +56,14 @@ struct NotificationsView: View {
                                         selectedNotification = notification
                                         Task { await markRead(notification) }
                                     }
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            Task { await deleteNotification(notification) }
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                        .accessibilityLabel("Delete notification")
+                                    }
                                 }
                             }
                         }
@@ -80,6 +89,14 @@ struct NotificationsView: View {
             .task { await load() }
             .sheet(item: $selectedNotification) { notification in
                 NotificationDetailView(notification: notification)
+            }
+            .alert("Couldn't delete", isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(deleteError ?? "")
             }
         }
     }
@@ -130,6 +147,22 @@ struct NotificationsView: View {
                     : $0
             }
         } catch {}
+    }
+
+    /// Removed optimistically: the row disappears on swipe and is restored only
+    /// if the server rejects the delete, so the gesture never feels laggy.
+    private func deleteNotification(_ notification: AppNotification) async {
+        let removed = notifications
+        notifications.removeAll { $0.id == notification.id }
+        do {
+            try await APIClient.shared.deleteNotification(id: notification.id)
+        } catch APIError.status(401) {
+            notifications = removed
+            authState.handleUnauthorized()
+        } catch {
+            notifications = removed
+            deleteError = "That notification couldn't be deleted. Please try again."
+        }
     }
 
     private func markAllRead() async {

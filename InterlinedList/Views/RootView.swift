@@ -17,6 +17,11 @@ struct RootView: View {
             }
         }
         .preferredColorScheme(preferredScheme)
+        // The server resizes every image upload to its own cap regardless of
+        // what the client sends, so read the caps once at launch and let
+        // ImageUploadProcessor size to them. Public route — no token needed,
+        // and a failure just leaves the documented fallbacks in place.
+        .task { await ServerLimitsStore.shared.refresh() }
     }
 
     /// Honor the user's saved theme preference ("light" / "dark"); "system" or

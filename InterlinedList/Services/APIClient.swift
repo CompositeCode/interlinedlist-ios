@@ -902,6 +902,12 @@ final class APIClient {
         let _: OkResponse = try await patch("/api/notifications/\(encoded)/read", body: Empty())
     }
 
+    /// `DELETE /api/notifications/:id` — removes one notification for good
+    /// (answers 204, and 404 if it isn't the caller's).
+    func deleteNotification(id: String) async throws {
+        try await delete("/api/notifications/\(pathSegment(id))")
+    }
+
     func markAllNotificationsRead() async throws {
         struct Empty: Encodable {}
         struct OkResponse: Decodable { let ok: Bool; let updated: Int? }

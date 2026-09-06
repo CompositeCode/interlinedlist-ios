@@ -31,6 +31,10 @@ Guidance for Claude Code in this repo. Follow it exactly — it overrides defaul
 
 - Pin a concrete simulator **UDID** — `name=iPhone 16` alone is ambiguous across runtimes (`xcrun simctl list devices`).
 - **Parallelization is disabled** (`InterlinedList.xctestplan`, `parallelizable:false`): the E2E suite shares a static login token that parallel cloned sims break. `-parallel-testing-enabled NO` is reinforcement; keep the plan setting in sync.
+- **Parallel worktrees must not share a simulator or DerivedData.** Two threads testing at once on the
+  same UDID kill each other's runner mid-suite; the survivor reports a bogus failure and may even run
+  the *other* worktree's test bundle. Give each worktree its own `-destination id=` **and**
+  `-derivedDataPath`.
 - Unit tests stub HTTP via `MockURLSession` (`stub`/`enqueue`) — no network.
 - E2E tests (`InterlinedListTests/E2E`) hit the **live** API, **read-only**; auto-`XCTSkip` unless `INTERLINEDLIST_EMAIL`/`INTERLINEDLIST_PASSWORD` are set (process env or a gitignored `.env`). Network-flaky — for a deterministic run add `-skip-testing:InterlinedListTests/E2EReadOnlyTests`.
 - CI (`.github/workflows/ios.yml`) **builds only** (no tests) on push/PR to `main`, signing disabled.
