@@ -56,7 +56,10 @@ xcodebuild test -scheme InterlinedList -destination 'platform=iOS Simulator,id=<
 ## Reference docs
 
 - `App-Store-Deployment.md` / `App-Store-Deployment-Checklist.md` — submission status, credentials/assets, pre-flight checklist.
-- `the-gaps.md` — merged iOS↔web parity/gap doc (iOS defects + backend asks, paste-ready prompts). `the-gaps-access.md` — access/subscription gating notes.
+- `work-consolidation.md` — **current** open-work source of truth: remaining parity gaps (D4, G15–G21, papercuts),
+  the three parallel workstreams, and backend asks A8–A12. Start here.
+- `the-gaps.md` — historical parity record (phases 1–19, D1–D3, G1–G14, X1–X4, A1–A7); **superseded for open work**.
+  `the-gaps-access.md` — access/subscription gating notes.
 
 ## Subagents & skills (`.claude/`)
 

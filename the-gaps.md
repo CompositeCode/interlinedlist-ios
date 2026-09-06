@@ -1,5 +1,28 @@
 # The Gaps — InterlinedList iOS ↔ interlinedlist.com
 
+> ## ⚠️ SUPERSEDED FOR OPEN WORK — see [`work-consolidation.md`](work-consolidation.md)
+>
+> **2026-09-05 (second pass, same day).** A fresh backend-source + live-API audit found
+> that this document's closing claim — *"parity work is complete except G11"* — is **no
+> longer true**. Three user-facing, documented, Bearer-ready backend areas have **no iOS
+> consumer**, and one shipped feature is broken:
+>
+> - **D4** 🔴 avatar changes 405 (`applyAvatarUrl` still POSTs `/api/user/update`; the D1
+>   pass fixed two of three call sites) — *live-confirmed 405*
+> - **G15** ❌ **AI writing assistance** — `/api/ai/{status,suggest,generate}`, five
+>   features, live in production and **included with the subscription** (the app holds the
+>   provider key server-side — **no BYO-key, ever**). Supersedes **X4** on both counts:
+>   there *is* a generative endpoint in the core app, and there is *no* user key to enter.
+> - **G16** ❌ **"Create from…" (Materialize)** — `POST /api/materialize`, a documented user
+>   feature (**this doc wrongly lists `materialize` as "internal / web-only by design"**)
+> - **G17** ❌ **Lists shared with me** — `GET /api/lists/watching` has never been wired up,
+>   so lists shared *to* an iOS user are invisible in the Lists tab
+>
+> **This file remains the historical record** (phases 1–19, D1–D3, G1–G14, X1–X4, A1–A7)
+> and its conventions, gating map, and parity matrix are still accurate for shipped work.
+> For **what is left to build and who works on it**, use `work-consolidation.md`.
+> The full list of stale statements is in its §7.
+
 Single source of truth for the iOS↔web feature/parity gaps and the plan to close
 them. **This is a full rewrite (2026-07-31)** — the landscape changed materially
 since the 2026-07-18/22 assessment (see [What changed](#what-changed-since-2026-07-22)).
@@ -95,10 +118,14 @@ Every open gap, most-actionable first. IDs are used throughout the plan below.
 Billing/Stripe (App Store Guideline 3.1.1 — no price/upgrade/pay copy or links) ·
 dashboard & front-wall layout persistence · engagement stats · web widgets
 (bike-share/markets/news) · admin console · `materialize` / `architecture-aggregates`
-(internal) · **X4 — Generative AI BYO-keys** (OpenAI/Anthropic/Gemini keys stored
+(internal — but see the correction below) · **X4 — Generative AI BYO-keys** (OpenAI/Anthropic/Gemini keys stored
 via `PATCH /api/user/update`, consumed only by the web integrations page /
 `architecture-aggregates`; **no iOS-side consumer**, so defer). These are correct
-absences, not gaps.
+absences, not gaps. **⚠️ Two entries above are now wrong** (see
+[`work-consolidation.md`](work-consolidation.md) §7): **X4 is superseded by G15** —
+`/api/ai/*` is a live, documented, Bearer-ready feature backing three web UIs — and
+**`materialize` is not internal**: `POST /api/materialize` backs the user-facing
+**"Create from…"** feature (`/help/create-from`) → **G16**.
 
 ---
 
@@ -221,9 +248,16 @@ Bearer rejected**; none did.
   `PATCH /api/user/update`). The keys are consumed **only** by the web
   `integrations` page and the internal `architecture-aggregates` tooling — there is
   **no generative endpoint in the core app**. So it's a **web-only integrations
-  feature with no iOS-side consumer** → **out of scope** (X4), not a parity gap. iOS
+  feature with no iOS-side consumer** → **out of scope** (X4), not a parity gap. ~~iOS
   could add key-entry fields cheaply once the D1 `PATCH /api/user/update` fix lands,
-  but nothing on iOS would use them, so defer.
+  but nothing on iOS would use them, so defer.~~
+  > **⚠️ CORRECTED 2026-09-05 — see [`work-consolidation.md`](work-consolidation.md) §5.1.**
+  > The BYO-key model is **gone**. AI is now a **subscriber entitlement**: a subscriber gets
+  > AI by default on the **app's own server-side key**, and `/api/ai/{status,suggest,generate}`
+  > is live in the core app (→ **G15**). So the struck-through advice inverts: iOS must
+  > **never** build key-entry fields, a provider picker, or an Integrations-style AI screen,
+  > and must not read `hasOpenaiApiKey`/`hasAnthropicApiKey`/`hasGeminiApiKey` (vestigial).
+  > G15 gates on **`aiStatus().subscriber` alone**.
 
 ---
 
@@ -713,8 +747,16 @@ for mobile are **multi-account** (session-only) and a **general realtime channel
 (none exists — poll instead). *(Tag discovery is no longer a dead-end — see the
 2026-08-15 update below.)*
 
-> **Update 2026-09-05.** Parity work is **complete except G11** (document presence,
-> optional) and the bare `/lists/:id` permalink inbound (**backend-limited**). Verified
+> **Update 2026-09-05 (b) — CORRECTED by [`work-consolidation.md`](work-consolidation.md).**
+> The "complete except G11" reading below was wrong: it was derived from this document's
+> own gap IDs rather than from a fresh diff of the backend's 296 verb+path pairs. The
+> re-audit found **D4, G15, G16, G17** open (see the banner at the top), and confirmed
+> **A7 as delivered** on the backend (`1eaf4b4` — `POST /api/documents/sync` now reports
+> per-op results, so the iOS `relativePath` workaround can be simplified). The verified
+> baseline below (823 tests green, clean tree) still holds.
+>
+> **Update 2026-09-05 (a) — superseded.** ~~Parity work is **complete except G11** (document presence,
+> optional) and the bare `/lists/:id` permalink inbound (**backend-limited**).~~ Verified
 > on 2026-09-05: build green, **823 unit tests, 0 failures** (E2E excluded); `dev` =
 > `main` = origin, clean tree, no open PRs or issues. The access-control audit
 > (`the-gaps-access.md` G1–G7) is likewise fully remediated. Remaining backend asks:
