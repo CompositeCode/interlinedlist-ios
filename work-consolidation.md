@@ -104,13 +104,13 @@ found exactly one mismatch across all 104 iOS call sites, and the suite is green
 |----|-----|---------|--------|
 | **G17** ❌ | **Lists shared with me** — surface `GET /api/lists/watching` in the Lists tab (web parity: *"Lists you're watching"*). Today these lists are invisible on iOS. | 🟢 Bearer, free | **S** |
 | **G15** ❌ | **AI writing assistance** — 5 features: composer *Writing Assistant* (rewrite/tighten/expand/grammar/thread/suggest-tags), *Message Series*, *Article Series*, *Powered Templates* (list create), *Powered Document* (4 modes). | 🟢 `/api/ai/{status,suggest,generate}` · 💲 **subscriber-included** (app's server-side key — no user key, no provider picker) · 50/day quota | **L** |
-| **G16** ❌ | **"Create from…" (Materialize)** — message / list / rows / document → new List, Document, or both, with a preview-and-edit confirm step. | 🟢 `POST /api/materialize` · 💲 subscriber | **M** |
+| **G16** ✅ | **"Create from…" (Materialize)** — message / list / rows / document → new List, Document, or both, with a preview-and-edit confirm step. **SHIPPED** — Thread C, `feat/create-from-and-github-depth`. | 🟢 `POST /api/materialize` · 💲 subscriber | **M** |
 
 ### Tier 2 — smaller systems / lower urgency
 
 | ID | Gap | Backend | Effort |
 |----|-----|---------|--------|
-| **G18** ◑ | **GitHub metadata depth** — iOS ships only `githubRepos()` + `githubIssues()`. Unconsumed: `/api/github/orgs`, `/repos/:owner/:repo/{labels,assignees,next-issue-number}`, `PATCH /api/github/issues/:owner/:repo/:number`, `POST …/comments`. Label/assignee pickers on GitHub-backed rows are the visible win. | 🟢 (GitHub-context auth, not the standard helper) | **M** |
+| **G18** ✅ | **GitHub metadata depth** — **SHIPPED** (Thread C): `githubOrgs` / `githubLabels` / `githubAssignees` / `githubNextIssueNumber`; real label + assignee pickers on GitHub-backed rows (previously hidden from the form entirely), an org filter on the repo picker, next-issue-number on list detail. **Deliberately still unconsumed:** `PATCH /api/github/issues/…` and `POST …/comments` — iOS writes issues through the `/api/lists/:id/data` proxy, which is the supported path. | 🟢 (GitHub-context auth, not the standard helper) | **M** |
 | **G19** ❌ | **Organization LinkedIn management** — web has `/organizations/[slug]/linkedin`; iOS has no equivalent. `status` / `assignments` / `credential` / `sync-pages`. Behind the backend flag `LINKEDIN_ORG_SCOPES_ENABLED` — **re-verify the flag before building.** | 🟢 Bearer (owner-role gated) | **M** |
 | **G21** ❌ | **Cross-device app-settings sync** — `/api/user/app-settings/{appKey}/…` (account doc + per-device docs + `bootstrap` provenance + CAS `baseVersion`, 64 KiB cap). Explicitly built for native clients (`platform: "ios"`, deviceId "kept in Keychain"). **Not a web-parity gap** — infrastructure iOS could adopt for settings continuity. | 🟢 Bearer, free | **M** |
 | **G11** ❌ | **Live document presence** (collaborative cursors) — carried forward unchanged from `the-gaps.md`. Heartbeat + poll. | 🟢 `POST/DELETE /api/documents/:id/presence` | **M** |
@@ -183,9 +183,44 @@ Sized so three threads can run concurrently. **One rule makes this safe:**
 **Files** new `APIClient+AI.swift` + `Models/AI*.swift` + new views; touches `ComposeView`, `CreateListView`, `DocumentsView`.
 **Size** L.
 
-### Thread C — "Create from…" (G16) + GitHub depth (G18)
+### Thread C — "Create from…" (G16) + GitHub depth (G18) — ✅ SHIPPED
 
-**Deliverables**
+Branch `feat/create-from-and-github-depth` (commit `bb6f64a`), **stacked on
+`refactor/apiclient-transport-seam`** — the new endpoints live in `APIClient+*.swift`
+files, which that refactor is what makes possible.
+**Build green; 902 unit tests, 0 failures** (823 baseline + 79 new); the app launches
+clean in the simulator with no runtime errors.
+
+> **Residual verification.** The flows have **not** been driven by hand against a live
+> account: the XcodeBuildMCP UI-automation tools (tap/type) aren't enabled here, and
+> tapping **Create** writes real lists/documents to the shared test account. A manual
+> pass over "Create from…" (all five sources) and the label/assignee pickers on a real
+> GitHub-backed list is the one outstanding check.
+
+**What landed**
+- `Models/Materialize.swift` — the camelCase wire contract (`postCamel`, never `post`).
+  A user-added column encodes `sourceKey` as an **explicit `null`**, not an omitted key.
+- `Services/MaterializePlanner.swift` + `Services/MarkdownBlocks.swift` — pure ports of
+  the backend's `build-list.ts` / `markdown-blocks.ts`, so the seeded columns and the
+  preview match what the server actually builds. 56 unit tests over the pure logic.
+- `Views/CreateFromSheet.swift` + `CreateFromColumnEditor.swift` — destination picker,
+  column rename / retype / remove / add, live preview, created-result summary.
+- `Views/SelectionActionBar.swift` — the selectable row + bottom bar the feed and list
+  detail both needed (extracted rather than written twice).
+- `Services/APIClient+GitHub.swift` + `Models/GitHubMetadata.swift`, plus a `multiselect`
+  case in `ListItemFormView` driven by the repo's real labels and assignees.
+
+**Two implementation decisions worth knowing**
+1. **Optionless `select`/`multiselect` columns are seeded as `text`.** The server's DSL
+   validator rejects a select with no `options`, and a GitHub-backed list's synthetic
+   `labels`/`assignees` columns are exactly that — so "create a list from a GitHub list's
+   rows" would otherwise have been a guaranteed 400.
+2. **The document title is client-derived and sent explicitly.** The server derives its
+   own default via `defaultDocPaths` using helpers iOS doesn't mirror; rather than guess
+   at them, the sheet shows a simpler default and sends it, so what the user sees is what
+   gets created. `relativePath` is still omitted, leaving the canonical path server-owned.
+
+**Original deliverables**
 1. **G16** — `APIClient+Materialize.swift`: `materialize(target:source:listConfig:docConfig:)`. Entry points mirroring the web: a message, multi-select messages, a list, list rows, a document. Shared **finalize sheet** (destination switch List / Doc / Both · list title+description+columns+public · doc title+path+public+listStyle+rowDataStyle) with a live preview, then Create. **Send id-only references** — the server re-fetches and authorizes every id and ignores client-supplied cell values. 💲 subscriber-gated.
 2. **G18** — GitHub metadata: `githubOrgs()`, `githubLabels(owner:repo:)`, `githubAssignees(owner:repo:)`, `githubNextIssueNumber(...)`; label + assignee pickers on GitHub-backed list rows. **Keep the existing full-row `updateItem` write path** (`ListDetailView.setGitHubState`) — a partial `PUT` renames the issue to "Untitled".
 
@@ -296,6 +331,20 @@ response shape is adopted.
   lists but no document equivalent, so documents shared *to* a user are unlistable on
   **both** web and iOS. **Ask:** add `GET /api/documents/shared-with-me` (or extend
   `/api/documents` with a `scope=` param).
+- **A13 — A GitHub-backed row can never have its labels or assignees cleared.**
+  `rowDataToIssuePayload` (`lib/lists/github-list-adapter.ts`) only attaches the field
+  when the parsed set is non-empty (`if (labels && labels.length > 0)`), and an empty
+  string parses to nothing. So *removing* every label from an issue is unrepresentable
+  from **any** client — web, iOS, or CLI — even though adding and replacing work.
+  iOS now sends an explicit empty string so the intent is on the wire and a server fix
+  would take effect with no client change. **Ask:** distinguish "field absent" (leave
+  alone) from "field present but empty" (clear it).
+- **A14 — `GET /api/github/orgs` returns two different shapes.** The deployed route
+  answers a **bare array** (`[]`, live-verified); the source in `app/api/github/orgs/route.ts`
+  returns `NextResponse.json(orgs)` where `orgs` is `{ orgs: OrgSummary[] }` — an
+  **envelope**. iOS decodes either, but one of the two is a bug. **Ask:** pick one and
+  document it. *(Note `GET /api/github/repos` returns a bare array, so the array shape
+  is the consistent choice.)*
 - **A12 — Document the new surfaces.** `/api/lists/watching`, `/api/lists/:id/contributors`,
   `/api/dm/conversations`, `/api/limits`, `/api/messages/:id/reply-counts`, and
   `/api/organizations/:id/users` have no `/help/api/*` page.
