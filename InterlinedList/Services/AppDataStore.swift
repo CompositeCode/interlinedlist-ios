@@ -12,6 +12,11 @@ final class AppDataStore: ObservableObject {
     @Published private(set) var feedError: String?
 
     @Published private(set) var userLists: [UserList] = []
+    /// Lists owned by other people and shared with this user. Kept separate from
+    /// `userLists` because `ListTreeNode.buildTree` nests by `parentId` within
+    /// the *owner's* tree, and because every owner-only action (rename, schema,
+    /// delete) must stay off these rows.
+    @Published private(set) var watchedLists: [UserList] = []
     @Published private(set) var listsLoading = true
     @Published private(set) var listsError: String?
 
@@ -129,15 +134,26 @@ final class AppDataStore: ObservableObject {
         listsLoading = userLists.isEmpty
         listsError = nil
         defer { listsLoading = false }
+        // Owned and shared-in lists come from two routes, fetched concurrently.
+        async let watchingTask = APIClient.shared.listsWatching()
+        var fetched = false
         do {
             userLists = try await APIClient.shared.lists()
-            saveListsCache()
+            fetched = true
         } catch APIError.status(401) {
         } catch APIError.server(let msg) {
             if userLists.isEmpty { listsError = msg }
         } catch {
             if userLists.isEmpty { listsError = error.localizedDescription }
         }
+        // A failed shared-in fetch keeps whatever was already shown and never
+        // sets listsError: an empty "Shared with me" section beats an error
+        // state over the lists the user does own.
+        if let watched = try? await watchingTask {
+            watchedLists = watched
+            fetched = true
+        }
+        if fetched { saveListsCache() }
     }
 
     func refreshDocuments() async {
@@ -501,6 +517,7 @@ final class AppDataStore: ObservableObject {
     func reset() {
         feedMessages = []
         userLists = []
+        watchedLists = []
         documentFolders = []
         documents = []
         feedLoading = true
@@ -529,6 +546,7 @@ final class AppDataStore: ObservableObject {
         if let msgs: [Message] = await cache.load(key: "\(userId)_feed") { feedMessages = msgs }
         if let cached: ListsCache = await cache.load(key: "\(userId)_lists") {
             userLists = cached.lists
+            watchedLists = cached.watched ?? []
         }
         if offlineDocSyncEnabled {
             if let state: DocumentSyncState = await cache.load(key: "\(userId)_docsync") {
@@ -554,7 +572,7 @@ final class AppDataStore: ObservableObject {
 
     private func saveListsCache() {
         guard let uid = userId else { return }
-        let snapshot = ListsCache(lists: userLists)
+        let snapshot = ListsCache(lists: userLists, watched: watchedLists)
         Task { await cache.save(snapshot, key: "\(uid)_lists") }
     }
 
@@ -582,6 +600,9 @@ extension APIClient: DocumentSyncAPI {}
 
 private struct ListsCache: Codable {
     let lists: [UserList]
+    /// Absent in caches written before shared-in lists existed, so the section
+    /// simply starts empty on first launch after upgrading and fills on refresh.
+    let watched: [UserList]?
 }
 
 private struct DocsCache: Codable {

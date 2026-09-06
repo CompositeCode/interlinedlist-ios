@@ -258,10 +258,19 @@ struct UserList: Identifiable, Codable, Hashable {
     /// Refresh metadata for GitHub-backed lists (only present on `GET /api/lists`).
     let githubMeta: GitHubListMeta?
     /// The id of the list's owner (backend `userId`). `GET /api/lists` is
-    /// owner-scoped so today this always equals the current user, but decoding it
-    /// lets owner-only UI gate correctly if the payload ever includes shared-in
-    /// lists. Optional because older data / other endpoints may omit it.
+    /// owner-scoped, so on that endpoint this always equals the current user;
+    /// on `GET /api/lists/watching` it is somebody else, which is what makes
+    /// `isOwned(by:)` gate the owner-only UI correctly. Optional because older
+    /// data / other endpoints may omit it.
     let ownerId: String?
+    /// The **viewer's** role on a list shared with them ("watcher" /
+    /// "collaborator" / "manager"), sent only by `GET /api/lists/watching`.
+    /// nil on owned lists.
+    let role: String?
+
+    /// Typed form of `role`; nil when the list is owned or the wire value is
+    /// unrecognized.
+    var watcherRole: WatcherRole? { role.flatMap(WatcherRole.init(rawValue:)) }
 
     /// True when this list mirrors a GitHub repository's issues.
     var isGitHubBacked: Bool { source == "github" }
@@ -284,6 +293,7 @@ struct UserList: Identifiable, Codable, Hashable {
         case parentId
         case source, githubRepo, githubMeta
         case ownerId = "userId"
+        case role
     }
 
     // Explicit memberwise init keeps the GitHub fields optional at call sites
@@ -291,7 +301,7 @@ struct UserList: Identifiable, Codable, Hashable {
     init(id: String, name: String, description: String?, parentId: String? = nil,
          isPublic: Bool?, createdAt: String, updatedAt: String?,
          itemCount: Int?, source: String? = nil, githubRepo: String? = nil,
-         githubMeta: GitHubListMeta? = nil, ownerId: String? = nil) {
+         githubMeta: GitHubListMeta? = nil, ownerId: String? = nil, role: String? = nil) {
         self.id = id
         self.name = name
         self.description = description
@@ -304,6 +314,7 @@ struct UserList: Identifiable, Codable, Hashable {
         self.githubRepo = githubRepo
         self.githubMeta = githubMeta
         self.ownerId = ownerId
+        self.role = role
     }
 }
 
