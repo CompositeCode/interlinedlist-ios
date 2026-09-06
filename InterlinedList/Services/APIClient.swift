@@ -4,9 +4,6 @@
 //
 
 import Foundation
-import os.log
-
-private let apiLog = Logger(subsystem: "com.interlinedlist.app", category: "APIClient")
 
 enum APIError: Error {
     case invalidURL
@@ -37,24 +34,29 @@ enum ExportType: String, CaseIterable {
 
 final class APIClient {
     static let shared = APIClient()
-    private let baseURL: String
-    private let session: URLSessionProtocol
+
+    // The five members below are read by `APIClientTransport.swift` and so are
+    // `internal`, not `private` — Swift's `private` is file-scoped and would hide
+    // them from the transport extension (and from every per-feature
+    // `APIClient+<Feature>.swift`). All are `let`, so the seam stays read-only.
+    let baseURL: String
+    let session: URLSessionProtocol
     private(set) var bearerToken: String?
 
-    private let decoder: JSONDecoder = {
+    let decoder: JSONDecoder = {
         let d = JSONDecoder()
         d.keyDecodingStrategy = .convertFromSnakeCase
         return d
     }()
 
-    private let encoder: JSONEncoder = {
+    let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.keyEncodingStrategy = .convertToSnakeCase
         return e
     }()
 
     /// Encoder that keeps camelCase keys (for APIs that expect camelCase in the request body, e.g. POST /api/messages).
-    private let camelCaseEncoder: JSONEncoder = {
+    let camelCaseEncoder: JSONEncoder = {
         let e = JSONEncoder()
         return e
     }()
@@ -169,15 +171,7 @@ final class APIClient {
 
     func unlinkIdentity(provider: String, providerId: String) async throws {
         struct Body: Encodable { let provider: String; let providerId: String }
-        guard let url = URL(string: baseURL + "/api/user/identities") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        request.httpBody = try camelCaseEncoder.encode(Body(provider: provider, providerId: providerId))
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await deleteCamel("/api/user/identities", body: Body(provider: provider, providerId: providerId))
     }
 
     func verifyIdentity(provider: String, providerId: String) async throws {
@@ -213,22 +207,10 @@ final class APIClient {
     // MARK: - Avatar upload (Phase 3 — sister agent dependency)
 
     func uploadAvatar(data: Data, mimeType: String) async throws -> User {
-        guard let url = URL(string: baseURL + "/api/user/avatar/upload") else { throw APIError.invalidURL }
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let ext = mimeType == "image/png" ? "png" : "jpg"
-        var body = Data()
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"avatar.\(ext)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
-        body.append(data)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
-        let (responseData, response) = try await session.data(for: request)
-        try checkResponse(data: responseData, response: response)
+        let responseData = try await postMultipartRawData(
+            "/api/user/avatar/upload", fileName: "avatar.\(ext)", mimeType: mimeType, fileData: data
+        )
         struct UploadResp: Decodable { let url: String? }
         if let avatarUrl = (try? decoder.decode(UploadResp.self, from: responseData))?.url {
             return try await applyAvatarUrl(avatarUrl)
@@ -409,14 +391,7 @@ final class APIClient {
 
     func undig(messageId: String) async throws -> DigResponse {
         let encoded = messageId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? messageId
-        guard let url = URL(string: baseURL + "/api/messages/\(encoded)/dig") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
-        return try decoder.decode(DigResponse.self, from: data)
+        return try await deleteDecoding("/api/messages/\(encoded)/dig")
     }
 
     func replies(messageId: String, limit: Int = 50, offset: Int = 0) async throws -> [Message] {
@@ -498,13 +473,7 @@ final class APIClient {
 
     func deleteList(id: String) async throws {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: baseURL + "/api/lists/\(encoded)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/lists/\(encoded)")
     }
 
     func updateRow(listId: String, itemId: String, key: String, value: JSONValue) async throws -> ListItem {
@@ -540,13 +509,7 @@ final class APIClient {
     func deleteListItem(listId: String, itemId: String) async throws {
         let encodedList = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
         let encodedItem = itemId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? itemId
-        guard let url = URL(string: baseURL + "/api/lists/\(encodedList)/data/\(encodedItem)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/lists/\(encodedList)/data/\(encodedItem)")
     }
 
     // MARK: - Documents
@@ -642,13 +605,7 @@ final class APIClient {
 
     func deleteDocument(id: String) async throws {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: baseURL + "/api/documents/\(encoded)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/documents/\(encoded)")
     }
 
     func documentFolders() async throws -> [DocumentFolder] {
@@ -670,13 +627,7 @@ final class APIClient {
     /// subfolders and documents inside it (`DELETE /api/documents/folders/{id}`).
     func deleteDocumentFolder(id: String) async throws {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: baseURL + "/api/documents/folders/\(encoded)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/documents/folders/\(encoded)")
     }
 
     func searchDocuments(q: String, limit: Int = 20, offset: Int = 0) async throws -> ([Document], Pagination?) {
@@ -789,22 +740,10 @@ final class APIClient {
     // MARK: - Image upload
 
     func uploadImage(data: Data, mimeType: String) async throws -> String {
-        guard let url = URL(string: baseURL + "/api/messages/images/upload") else { throw APIError.invalidURL }
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        var body = Data()
         let ext = mimeType == "image/png" ? "png" : "jpg"
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
-        body.append(data)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
-        let (responseData, response) = try await session.data(for: request)
-        try checkResponse(data: responseData, response: response)
+        let responseData = try await postMultipartRawData(
+            "/api/messages/images/upload", fileName: "upload.\(ext)", mimeType: mimeType, fileData: data
+        )
         struct UploadResponse: Decodable { let url: String }
         return try decoder.decode(UploadResponse.self, from: responseData).url
     }
@@ -812,23 +751,11 @@ final class APIClient {
     // MARK: - Document image upload
 
     func uploadDocumentImage(documentId: String, data: Data, mimeType: String) async throws -> String {
-        let encoded = documentId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? documentId
-        guard let url = URL(string: baseURL + "/api/documents/\(encoded)/images/upload") else { throw APIError.invalidURL }
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let ext = mimeType == "image/png" ? "png" : "jpg"
-        var body = Data()
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
-        body.append(data)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
-        let (responseData, response) = try await session.data(for: request)
-        try checkResponse(data: responseData, response: response)
+        let responseData = try await postMultipartRawData(
+            "/api/documents/\(pathSegment(documentId))/images/upload",
+            fileName: "upload.\(ext)", mimeType: mimeType, fileData: data
+        )
         struct UploadResponse: Decodable { let url: String }
         return try decoder.decode(UploadResponse.self, from: responseData).url
     }
@@ -836,22 +763,10 @@ final class APIClient {
     // MARK: - Video upload
 
     func uploadVideo(data: Data, mimeType: String) async throws -> String {
-        guard let url = URL(string: baseURL + "/api/messages/videos/upload") else { throw APIError.invalidURL }
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let ext = mimeType.contains("mp4") ? "mp4" : "mov"
-        var body = Data()
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
-        body.append(data)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
-        let (responseData, response) = try await session.data(for: request)
-        try checkResponse(data: responseData, response: response)
+        let responseData = try await postMultipartRawData(
+            "/api/messages/videos/upload", fileName: "upload.\(ext)", mimeType: mimeType, fileData: data
+        )
         struct UploadResponse: Decodable { let url: String }
         return try decoder.decode(UploadResponse.self, from: responseData).url
     }
@@ -997,13 +912,7 @@ final class APIClient {
 
     func unfollowUser(userId: String) async throws {
         let encoded = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
-        guard let url = URL(string: baseURL + "/api/follow/\(encoded)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/follow/\(encoded)")
     }
 
     func followStatus(userId: String) async throws -> FollowStatus {
@@ -1062,22 +971,11 @@ final class APIClient {
     }
 
     func deleteMessage(id: String) async throws {
-        var request = URLRequest(url: URL(string: baseURL + "/api/messages/" + id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!)!)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        let (_, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { return }
-        if http.statusCode == 401 {
-            throw APIError.status(401)
-        }
-        if http.statusCode >= 400 {
-            if http.statusCode == 403 {
-                throw APIError.server("You can only delete your own messages.")
-            }
-            throw APIError.status(http.statusCode)
+        do {
+            try await delete("/api/messages/\(pathSegment(id))")
+        } catch APIError.status(403) {
+            // The route answers 403 with no body, so supply the copy here.
+            throw APIError.server("You can only delete your own messages.")
         }
     }
 
@@ -1106,13 +1004,7 @@ final class APIClient {
 
     func deleteListConnection(id: String) async throws {
         let enc = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: baseURL + "/api/lists/connections/\(enc)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/lists/connections/\(enc)")
     }
 
     // MARK: - List schema (structured)
@@ -1135,8 +1027,7 @@ final class APIClient {
         request.httpBody = try camelCaseEncoder.encode(StructuredSchemaBody(properties: properties))
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode == 409 {
-            let msg = (try? decoder.decode(ErrorResponse.self, from: data))?.error
-                ?? "This property still contains data."
+            let msg = serverErrorMessage(from: data) ?? "This property still contains data."
             throw APIError.conflict(msg)
         }
         try checkResponse(data: data, response: response)
@@ -1164,13 +1055,7 @@ final class APIClient {
 
     func removeFollower(userId: String) async throws {
         let encoded = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
-        guard let url = URL(string: baseURL + "/api/follow/\(encoded)/remove") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/follow/\(encoded)/remove")
     }
 
     // MARK: - List watchers (Phase 6)
@@ -1226,13 +1111,7 @@ final class APIClient {
     func removeWatcher(listId: String, userId: String) async throws {
         let encodedList = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
         let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
-        guard let url = URL(string: baseURL + "/api/lists/\(encodedList)/watchers/\(encodedUser)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/lists/\(encodedList)/watchers/\(encodedUser)")
     }
 
     // MARK: - Sharing (G2): share-links & document collaborators
@@ -1252,13 +1131,7 @@ final class APIClient {
     func revokeShareLink(kind: ShareResourceKind, id: String, token: String) async throws {
         let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
-        guard let url = URL(string: baseURL + "/api/\(kind.pathSegment)/\(encodedId)/share-links/\(encodedToken)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/\(kind.pathSegment)/\(encodedId)/share-links/\(encodedToken)")
     }
 
     // MARK: - Sharing: email share-invites (owner-only send/list/revoke)
@@ -1282,13 +1155,7 @@ final class APIClient {
     func revokeShareInvite(kind: ShareResourceKind, id: String, token: String) async throws {
         let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         let encodedToken = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
-        guard let url = URL(string: baseURL + "/api/\(kind.pathSegment)/\(encodedId)/invites/\(encodedToken)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/\(kind.pathSegment)/\(encodedId)/invites/\(encodedToken)")
     }
 
     func documentCollaborators(id: String) async throws -> [DocumentCollaborator] {
@@ -1322,13 +1189,7 @@ final class APIClient {
     func removeDocumentCollaborator(id: String, userId: String) async throws {
         let encodedId = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
-        guard let url = URL(string: baseURL + "/api/documents/\(encodedId)/collaborators/\(encodedUser)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/documents/\(encodedId)/collaborators/\(encodedUser)")
     }
 
     func searchDocumentCollaboratorCandidates(id: String, query: String) async throws -> [WatcherCandidate] {
@@ -1398,13 +1259,7 @@ final class APIClient {
 
     func deleteOrganization(id: String) async throws {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: baseURL + "/api/organizations/\(encoded)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/organizations/\(encoded)")
     }
 
     func organizationMembers(id: String, limit: Int = 50, offset: Int = 0) async throws -> (members: [OrganizationMember], pagination: Pagination?) {
@@ -1431,13 +1286,7 @@ final class APIClient {
     func removeOrganizationMember(id: String, userId: String) async throws {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         let encodedUser = userId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? userId
-        guard let url = URL(string: baseURL + "/api/organizations/\(encoded)/members/\(encodedUser)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/organizations/\(encoded)/members/\(encodedUser)")
     }
 
     func joinOrganization(organizationId: String) async throws {
@@ -1491,13 +1340,7 @@ final class APIClient {
 
     func unblockUser(id: String) async throws {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: baseURL + "/api/users/\(encoded)/block") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/users/\(encoded)/block")
     }
 
     func blockedUsers(limit: Int = 50, offset: Int = 0) async throws -> BlockedUsersResponse {
@@ -1513,13 +1356,7 @@ final class APIClient {
 
     func unmuteUser(id: String) async throws {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: baseURL + "/api/users/\(encoded)/mute") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/users/\(encoded)/mute")
     }
 
     func mutedUsers(limit: Int = 50, offset: Int = 0) async throws -> MutedUsersResponse {
@@ -1535,13 +1372,7 @@ final class APIClient {
 
     func revokeSession(id: String) async throws {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        guard let url = URL(string: baseURL + "/api/user/sessions/\(encoded)") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await delete("/api/user/sessions/\(encoded)")
     }
 
     // MARK: - Push notifications (Phase 9)
@@ -1554,15 +1385,7 @@ final class APIClient {
 
     func unregisterPushDevice(token: String) async throws {
         struct Body: Encodable { let token: String }
-        guard let url = URL(string: baseURL + "/api/push/unregister") else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        request.httpBody = try camelCaseEncoder.encode(Body(token: token))
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
+        try await deleteCamel("/api/push/unregister", body: Body(token: token))
     }
 
     // MARK: - Direct messages
@@ -1640,169 +1463,11 @@ final class APIClient {
 
     /// Uploads a DM image (multipart field `file`). Requires a verified email — not a subscription.
     func uploadDMImage(data: Data, mimeType: String) async throws -> String {
-        guard let url = URL(string: baseURL + "/api/dm/images/upload") else { throw APIError.invalidURL }
-        let boundary = UUID().uuidString
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         let ext = mimeType == "image/png" ? "png" : "jpg"
-        var body = Data()
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"upload.\(ext)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
-        body.append(data)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-        request.httpBody = body
-        let (responseData, response) = try await session.data(for: request)
-        try checkResponse(data: responseData, response: response)
+        let responseData = try await postMultipartRawData(
+            "/api/dm/images/upload", fileName: "upload.\(ext)", mimeType: mimeType, fileData: data
+        )
         struct UploadResponse: Decodable { let url: String }
         return try decoder.decode(UploadResponse.self, from: responseData).url
     }
-
-    // MARK: - Private helpers
-
-    private func getRawData(_ path: String) async throws -> Data {
-        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
-        return data
-    }
-
-    private func postCamelRawData<B: Encodable>(_ path: String, body: B) async throws -> Data {
-        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        request.httpBody = try camelCaseEncoder.encode(body)
-        let (data, response) = try await session.data(for: request)
-        try checkResponse(data: data, response: response)
-        return data
-    }
-
-    private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
-        let method = request.httpMethod ?? "GET"
-        let path = request.url?.path ?? ""
-        apiLog.debug("\(method) \(path) auth=\(request.value(forHTTPHeaderField: "Authorization") != nil)")
-        let (data, response) = try await session.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-        if status >= 400 {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            apiLog.error("\(method) \(path) → \(status): \(body)")
-        } else {
-            apiLog.debug("\(method) \(path) → \(status) (\(data.count) bytes)")
-        }
-        try checkResponse(data: data, response: response)
-        do {
-            return try decoder.decode(T.self, from: data)
-        } catch {
-            apiLog.error("Decode failed for \(path): \(error)")
-            throw error
-        }
-    }
-
-    private func get<T: Decodable>(_ path: String) async throws -> T {
-        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        return try await perform(request)
-    }
-
-    private func put<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
-        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        request.httpBody = try encoder.encode(body)
-        return try await perform(request)
-    }
-
-    private func patch<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
-        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "PATCH"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        request.httpBody = try encoder.encode(body)
-        return try await perform(request)
-    }
-
-    private func post<T: Decodable, B: Encodable>(_ path: String, body: B, authenticated: Bool = true) async throws -> T {
-        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if authenticated, let token = bearerToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        request.httpBody = try encoder.encode(body)
-        return try await perform(request)
-    }
-
-    private func postCamel<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
-        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        request.httpBody = try camelCaseEncoder.encode(body)
-        return try await perform(request)
-    }
-
-    private func putCamel<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
-        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        request.httpBody = try camelCaseEncoder.encode(body)
-        return try await perform(request)
-    }
-
-    private func patchCamel<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
-        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "PATCH"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = bearerToken { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        request.httpBody = try camelCaseEncoder.encode(body)
-        return try await perform(request)
-    }
-
-    private func checkResponse(data: Data, response: URLResponse) throws {
-        guard let http = response as? HTTPURLResponse else { return }
-        if http.statusCode == 401 {
-            throw APIError.status(401)
-        }
-        if http.statusCode >= 400 {
-            let serverMessage = (try? decoder.decode(ErrorResponse.self, from: data))?.error
-            if http.statusCode == 403, let serverMessage {
-                throw APIError.forbidden(serverMessage)
-            }
-            if let serverMessage {
-                throw APIError.server(serverMessage)
-            }
-            throw APIError.status(http.statusCode)
-        }
-    }
-}
-
-private struct ErrorResponse: Decodable {
-    let error: String
 }
