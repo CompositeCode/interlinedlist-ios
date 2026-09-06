@@ -2,7 +2,14 @@
 
 **Scope:** Does a user only get the things they have access to based on **subscription**, **role**, or **approved/cleared status**? This reviews the iOS client (`InterlinedList/`) and cross-references the backend at `~/Codez/interlinedlist/` for the source-of-truth enforcement.
 
-**Date:** 2026-08-15 · **Reviewer:** automated audit (Claude)
+**Audited:** 2026-08-15 · **Reviewer:** automated audit (Claude) · **Remediation verified:** 2026-09-05
+
+> **✅ ALL SEVEN GAPS ARE CLOSED.** G1–G7 were fixed on 2026-08-15 and merged
+> 2026-08-16 as one PR each (**#17–#23**). Re-verified against the working tree on
+> 2026-09-05 — every remediation below is present in shipped code (per-gap evidence
+> in each section and in the [§5 table](#5-prioritized-remediation)). This document is
+> retained as the **audit record and the pattern reference** for future access-control
+> work, not as an open backlog.
 
 ---
 
@@ -12,24 +19,26 @@
 
 The gaps are therefore **client-side correctness / consistency / UX**, plus **one App Store-review risk**:
 
-- The client uses three separate access axes — **subscription** (`isSubscriber`), **role** (`OrgRole`, `WatcherRole`), and **cleared status** (`emailVerified`) — but applies them **inconsistently**. One premium surface (list-watcher management) isn't gated at all, while its exact twin (document collaborators) is.
-- Entitlement state (`customerStatus`) is **cached and rarely refreshed**, so it goes stale when the subscription changes on the web (where billing lives).
-- Authorization `403`s surface the **raw backend message**, and the app's intended friendly/typed 403 handling is **dead code** — a correctness bug and a potential IAP-steering issue if that text contains upsell copy.
+*(All three findings below describe the **2026-08-15 audit state**; each was fixed the same day — see the status column and the per-gap "Shipped" notes.)*
 
-None of these leak data. All of them can make a paying/entitled user see the wrong thing, or make a non-entitled user tap controls that always fail.
+- The client uses three separate access axes — **subscription** (`isSubscriber`), **role** (`OrgRole`, `WatcherRole`), and **cleared status** (`emailVerified`) — but applied them **inconsistently**. One premium surface (list-watcher management) wasn't gated at all, while its exact twin (document collaborators) was. *(Fixed — G1.)*
+- Entitlement state (`customerStatus`) was **cached and rarely refreshed**, so it went stale when the subscription changed on the web (where billing lives). *(Fixed — G2.)*
+- Authorization `403`s surfaced the **raw backend message**, and the app's intended friendly/typed 403 handling was **dead code** — a correctness bug and a potential IAP-steering issue if that text contains upsell copy. *(Fixed — G3.)*
+
+None of these leaked data. All of them could make a paying/entitled user see the wrong thing, or make a non-entitled user tap controls that always fail.
 
 ### Severity legend
 Severity reflects **product/UX correctness and store-review risk**, not data security (all paths are server-enforced).
 
-| ID | Gap | Severity |
-|----|-----|----------|
-| G1 | List-watcher management not subscriber-gated (inconsistent with documents) | **Medium** |
-| G2 | Stale subscription/entitlement state — no refresh on foreground | **Medium** |
-| G3 | Authorization 403s surface raw backend text; friendly/typed handling is dead code | **Medium** (store-review) |
-| G4 | Client can't distinguish owned vs shared lists (`UserList` has no owner/role field) | **Low** (latent) |
-| G5 | Free owners over-restricted from removing document collaborators | **Low** |
-| G6 | Email-verification gating coverage is uneven (media upload not pre-gated) | **Low** |
-| G7 | `WatchersListView` 401 handling deviates from the app's 401 contract | **Low** |
+| ID | Gap | Severity | Status |
+|----|-----|----------|--------|
+| G1 | List-watcher management not subscriber-gated (inconsistent with documents) | **Medium** | ✅ Fixed `65169a9` (PR #17) |
+| G2 | Stale subscription/entitlement state — no refresh on foreground | **Medium** | ✅ Fixed `0fa483a` (PR #18) |
+| G3 | Authorization 403s surface raw backend text; friendly/typed handling is dead code | **Medium** (store-review) | ✅ Fixed `eb6b964` (PR #19) |
+| G4 | Client can't distinguish owned vs shared lists (`UserList` has no owner/role field) | **Low** (latent) | ✅ Fixed `179889a` (PR #20) |
+| G5 | Free owners over-restricted from removing document collaborators | **Low** | ✅ Fixed `a284d60` (PR #21) |
+| G6 | Email-verification gating coverage is uneven (media upload not pre-gated) | **Low** | ✅ Fixed `f772fd1` (PR #22) |
+| G7 | `WatchersListView` 401 handling deviates from the app's 401 contract | **Low** | ✅ Fixed `d4c5fd6` (PR #23) |
 
 ---
 
@@ -60,7 +69,7 @@ Verified in the backend repo. Representative guards:
 
 ## 3. Gaps
 
-### G1 — List-watcher management is not subscriber-gated (Medium)
+### G1 — List-watcher management is not subscriber-gated (Medium) — ✅ FIXED
 
 **The app gates the identical feature two different ways.** Document collaborators, share-links, and share-invites all hide their *create* controls for non-subscribers:
 
@@ -74,9 +83,11 @@ But **`Views/WatchersListView.swift` has no subscriber gate at all.** The "Add w
 
 **Fix:** Mirror `DocumentCollaboratorsView`: introduce `canManage = authState.user?.isSubscriber == true`, gate the toolbar "Add watcher" button and the role-change menu on it. Viewing/removing existing watchers can stay available to any owner (the GET and DELETE are not subscriber-gated server-side).
 
+**Shipped (`65169a9`, PR #17):** `WatchersListView.swift:26` now defines `canManage = authState.user?.isSubscriber == true`; the toolbar "Add watcher" button (`:51`) and the row role-change menu (`:82`, `:142`, `:156`) are gated on it. Viewing and removing existing watchers stay available to any owner, matching the server.
+
 ---
 
-### G2 — Stale subscription/entitlement state; no foreground refresh (Medium)
+### G2 — Stale subscription/entitlement state; no foreground refresh (Medium) — ✅ FIXED
 
 `isSubscriber` is derived from `User.customerStatus`, which is cached in `AuthState.user` and only re-fetched on:
 - launch/login/OAuth (`Services/AuthState.swift:33,52,76`),
@@ -91,9 +102,11 @@ There is **no `scenePhase == .active` refresh** and no refresh before presenting
 
 **Fix:** Refresh the user on foreground (`.onChange(of: scenePhase)` → `.active` → `authState.refreshUser()`), and immediately after returning from any web billing/settings link. Cheap `GET /api/user`; keeps entitlement fresh.
 
+**Shipped (`0fa483a`, PR #18):** `InterlinedListApp.swift:39-46` refreshes on foreground — `.onChange(of: scenePhase)` → `if phase == .active, authState.hasToken { await authState.refreshUser() }` — so entitlement and `emailVerified` re-sync after any web-side subscription change.
+
 ---
 
-### G3 — Authorization 403s surface raw backend text; typed handling is dead code (Medium, store-review)
+### G3 — Authorization 403s surface raw backend text; typed handling is dead code (Medium, store-review) — ✅ FIXED
 
 `checkResponse` maps **any 4xx that has a JSON `{"error": …}` body** to `APIError.server(msg)` — *not* to `APIError.status(403)`:
 
@@ -118,9 +131,11 @@ The backend's `forbidden(msg)` returns `{"error": msg}`, so **403s arrive as `.s
 
 **Fix:** Add a typed forbidden case (e.g. map `403` to `APIError.forbidden(msg)` in `checkResponse`, distinct from generic `.server`). Then views can convert authorization failures to **neutral in-app copy** and never surface raw upsell text. At minimum, stop relying on the currently-dead `.status(403)` branches.
 
+**Shipped (`eb6b964`, PR #19):** `APIError.forbidden(String)` exists (`APIClient.swift:23`) and `checkResponse` maps body-bearing 403s to it (`:1796`); bodyless 403s stay `.status(403)`. Views catch the typed case and substitute neutral copy — `ComposeView.swift:728`, `ShareInvitesSheet.swift:167`, `NotificationsView.swift:105`, `DMThreadView.swift:252` — so raw backend text (and any upsell phrasing in it) is never rendered in-app.
+
 ---
 
-### G4 — Client can't distinguish owned vs shared lists (Low, latent)
+### G4 — Client can't distinguish owned vs shared lists (Low, latent) — ✅ FIXED
 
 `UserList` (`Models/List.swift:122-171`) carries **no `userId` / owner / role field**. `ListDetailView`'s toolbar shows **Manage watchers / Share / Invite** unconditionally (`Views/ListsView.swift:492-515`) with no ownership gate — it *can't* gate, because the model has no ownership signal.
 
@@ -130,9 +145,11 @@ The backend's `forbidden(msg)` returns `{"error": msg}`, so **403s arrive as `.s
 
 **Fix:** Add an owner/role field to `UserList` (e.g. `myRole: WatcherRole?` or `isOwner: Bool`) and gate the management toolbar on it — even though it's harmless today, it future-proofs the surface and lets you drop the "presented from a list the user owns" assumption documented at `WatchersListView.swift:8-10`.
 
+**Shipped (`179889a`, PR #20):** `UserList` now decodes `ownerId` and exposes `isOwned(by:)` (`Models/List.swift:272`), which treats a missing `ownerId` as owned so owner-scoped screens keep working on endpoints that omit it. `ListsView.swift:378` gates the management toolbar on `list.isOwned(by: authState.user?.id)`.
+
 ---
 
-### G5 — Free owners over-restricted from removing document collaborators (Low, inverse gap)
+### G5 — Free owners over-restricted from removing document collaborators (Low, inverse gap) — ✅ FIXED
 
 `DocumentCollaboratorsView.canManage = isSubscriber` (`:23`) hides **Remove** (`:82-90`) as well as Add/role-change. But the backend only subscriber-gates *add* and *role-change* — an **owner can remove a collaborator regardless of subscription** (DELETE is owner-only, not subscriber-gated).
 
@@ -140,9 +157,11 @@ The backend's `forbidden(msg)` returns `{"error": msg}`, so **403s arrive as `.s
 
 **Fix:** Split the gate — `Remove` on `isOwner` (always, for an owned doc), `Add`/`role-change` on `isSubscriber`.
 
+**Shipped (`a284d60`, PR #21):** the gate is split in `DocumentCollaboratorsView.swift` — `canManage` (`:24`) still requires a subscription for Add and role-change, while `canRemove` (`:28`) is available to the owner regardless of subscription, matching the owner-only-but-not-subscriber-gated DELETE.
+
 ---
 
-### G6 — Email-verification gating coverage is uneven (Low)
+### G6 — Email-verification gating coverage is uneven (Low) — ✅ FIXED
 
 Cleared-status gating is applied in some places but not others:
 
@@ -153,13 +172,17 @@ Cleared-status gating is applied in some places but not others:
 
 **Fix:** Fold `isEmailVerified` into the media entry-point gates (image/video pickers), consistent with the post button.
 
+**Shipped (`f772fd1`, PR #22):** `ComposeView.canAttachMedia` (`:80`) is now `canUseSubscriberFeatures && isEmailVerified`, so the image/video pickers are hidden for a subscriber with an unverified email instead of failing late with a 403.
+
 ---
 
-### G7 — `WatchersListView` 401 handling deviates from the app's 401 contract (Low, robustness)
+### G7 — `WatchersListView` 401 handling deviates from the app's 401 contract (Low, robustness) — ✅ FIXED
 
 `changeRole` and `remove` in `WatchersListView.swift:101-124` catch only `APIError.server` and the generic case — they **do not** catch `APIError.status(401)` and route it through `authState.handleUnauthorized()`. This violates the documented 401 contract (`CLAUDE.md`: "Don't log out on a feature-endpoint 401 — route through `handleUnauthorized()`"). Every other management view (`DocumentCollaboratorsView`, `OrganizationMembersView`, `ShareLinksSheet`, `ShareInvitesSheet`) handles it.
 
 **Fix:** Add `catch APIError.status(401) { authState.handleUnauthorized() }` to both methods.
+
+**Shipped (`d4c5fd6`, PR #23):** `WatchersListView` routes 401s through `authState.handleUnauthorized()` in all four mutating paths (`:104`, `:117`, `:131`, `:296`), restoring the documented 401 contract.
 
 ---
 
@@ -177,14 +200,24 @@ Cleared-status gating is applied in some places but not others:
 
 ## 5. Prioritized remediation
 
-| Priority | Gap | Action | Effort |
-|----------|-----|--------|--------|
-| 1 | **G1** | Add `isSubscriber` gate to `WatchersListView` Add button + role menu (mirror `DocumentCollaboratorsView`) | S |
-| 2 | **G3** | Introduce typed `APIError.forbidden`; map subscriber/authorization 403s to neutral in-app copy; drop dead `.status(403)` branches | S–M |
-| 3 | **G2** | Refresh `authState.user` on `scenePhase == .active` and after web billing links | S |
-| 4 | **G5** | Split document-collaborator gate: `Remove` on owner, `Add`/role-change on subscriber | S |
-| 5 | **G6** | Gate compose media pickers on `isEmailVerified` too | S |
-| 6 | **G7** | Route `WatchersListView` 401s through `handleUnauthorized()` | XS |
-| 7 | **G4** | Add owner/role field to `UserList`; gate `ListDetailView` management toolbar on it (future-proofing) | M |
+**All seven landed 2026-08-15, merged 2026-08-16 (PRs #17–#23), one PR per gap.** Nothing on this list is open.
 
-**Bottom line:** No user can *obtain* data or actions the backend doesn't authorize — the server gates every axis. The work here is making the client's affordances match entitlement **consistently** (G1), keep entitlement **fresh** (G2), and present authorization failures **cleanly and store-safely** (G3).
+| Priority | Gap | Action | Effort | Status |
+|----------|-----|--------|--------|--------|
+| 1 | **G1** | Add `isSubscriber` gate to `WatchersListView` Add button + role menu (mirror `DocumentCollaboratorsView`) | S | ✅ `65169a9` · PR #17 |
+| 2 | **G3** | Introduce typed `APIError.forbidden`; map subscriber/authorization 403s to neutral in-app copy; drop dead `.status(403)` branches | S–M | ✅ `eb6b964` · PR #19 |
+| 3 | **G2** | Refresh `authState.user` on `scenePhase == .active` and after web billing links | S | ✅ `0fa483a` · PR #18 |
+| 4 | **G5** | Split document-collaborator gate: `Remove` on owner, `Add`/role-change on subscriber | S | ✅ `a284d60` · PR #21 |
+| 5 | **G6** | Gate compose media pickers on `isEmailVerified` too | S | ✅ `f772fd1` · PR #22 |
+| 6 | **G7** | Route `WatchersListView` 401s through `handleUnauthorized()` | XS | ✅ `d4c5fd6` · PR #23 |
+| 7 | **G4** | Add owner/role field to `UserList`; gate `ListDetailView` management toolbar on it (future-proofing) | M | ✅ `179889a` · PR #20 |
+
+**Bottom line:** No user can *obtain* data or actions the backend doesn't authorize — the server gates every axis. The work here was making the client's affordances match entitlement **consistently** (G1), keep entitlement **fresh** (G2), and present authorization failures **cleanly and store-safely** (G3) — **all done**.
+
+### Residual verification (not a gap, a coverage note)
+
+The **free-user gating path has still never been observed live**: the only test
+account (`messenger`) is a subscriber, so every 💲 403 branch above is verified by
+source reading and unit tests, not by a live non-subscriber session. A one-off probe
+with a free account would close the last observational hole. Carried in
+`the-gaps.md` → Part VII as well.

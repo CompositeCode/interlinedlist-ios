@@ -124,7 +124,11 @@ Live implementation status — updated as work lands on `dev` (uncommitted unles
 | **14 — lists into folders** | ~~`folderId` on create/update list, folder picker + move-to-folder + `RenameFolderView`; split `parentId` vs `folderId`~~ | ↩️ **Reverted 2026-08-15** — the list-folder concept was removed by product decision. Lists organize only via parent/child nesting (`parentId`); `ListFolder`, `folderId`, and the `/api/folders` client calls are gone. `ListTreeNode.buildTree(lists:)` now nests purely on `parentId` |
 | **15 — API re-verification (this pass)** | Live Bearer re-probe + backend-source re-read (2026-08-15): confirmed **A5 shipped** (`folderId` in list GET), surfaced **G13** (tags trending/autocomplete now exist — was X2) and **G14** (`/api/link-metadata` composer preview). No code changes — doc-only update | ✅ **Done** 2026-08-15 |
 | **16 — G13/G14 + G10 doc deep links (this session)** | **G13**: `TrendingTag`/`TagSuggestion` + `trendingTags()`/`tagAutocomplete()`; server-wide **Trending** strip & `#`-autocomplete wired into `FeedView`'s existing `tagFilter`. **G14**: `linkMetadata(url:)` + live OG preview card in `ComposeView` (`NSDataDetector` URL detection, 400 ms debounce, 429/`failed`→no card). **G10 (documents)**: `.document(id:)` + `.sharedDocument(token:)` deep links → `DocumentLinkView` / read-only `SharedDocumentView` + `resolveSharedDocument()`; parser routes `/documents/:id` and `/documents/shared/:token` (custom-scheme + https) | ✅ **Done** 2026-08-15 — app builds green; **787-test unit suite passes** (+31 new: 12 tags, 9 link-metadata, 6 resolver, +4 parse) |
-| — | **iOS-only tail of A1/A2** — merge staged `feat/github-oauth-universal-links` (1 commit ahead of `dev`: flips GitHub `supportsNativeAuth→true` + Associated Domains entitlement); enable the Apple-portal Associated Domains capability & regen profile · **G10 list follow-ons** *(list **share-token** inbound now shipped — `/lists/shared/:token` routes to a read-only `SharedListView` via `resolveSharedList()`/`sharedListData()`; bare `/lists/:id` permalink inbound remains **backend-limited** — no owner username in the URL)* · **G11 presence** *(optional)* | ⏳ remaining |
+| **17 — GitHub OAuth + Universal Links entitlement (A1/A2 iOS tail)** | `feat/github-oauth-universal-links` merged: GitHub `supportsNativeAuth → true` (in-app linking via the backend's mobile OAuth branch) + `com.apple.developer.associated-domains = applinks:interlinedlist.com` in `InterlinedList.entitlements` | ✅ **Done** 2026-08 — code side complete. **Residual is non-code:** enable Associated Domains on the App ID in the Apple portal & regen the provisioning profile (tracked in `App-Store-Deployment-Checklist.md`) |
+| **18 — sharing parity + GitHub-list fixes** | Unified document + list sharing screen (web parity) · inbound shared-list viewer + web-accept for edit links · GitHub issue list refresh after close/reopen · multi-image compose | ✅ **Done** 2026-09-02/05 (PRs #30–#32, restored to `main` in #35) |
+| **19 — offline-sync `relativePath` workaround** | Send `relativePath` on every sync create/update/conflict-copy op so the backend stops silently dropping them (see ask **A7**) | ✅ **Done** 2026-09-02 (`a7d0976`, PR #34) |
+| — | **G10 list follow-on** — bare `/lists/:id` permalink inbound *(share-token inbound already ships: `/lists/shared/:token` → read-only `SharedListView` via `resolveSharedList()`/`sharedListData()`)* | ⛔ **backend-limited** — the permalink carries no owner username |
+| — | **G11 document presence** — `/api/documents/:id/presence` heartbeat + poll | ⏳ **remaining, optional** — the only unbuilt parity item |
 
 **Whole-tree gate (2026-07-31, after the fix pass):** full unit suite **694 tests,
 0 failures** (E2E excluded). All work builds and passes together; Phases 1–9
@@ -616,16 +620,17 @@ field). What's left:
   2026-08-14).** `/auth/github/{authorize,callback}` now carry the mobile branch
   (mints a sync token → `interlinedlist://oauth/callback?token=…`); live probe:
   authorize accepts the mobile `redirect_uri` (307 → github.com) and rejects invalid
-  ones. Residual is **iOS-only**: merge the staged `feat/github-oauth-universal-links`
-  branch (**1 commit ahead of `dev`**, still unmerged as of 2026-08-15; flips GitHub
-  `supportsNativeAuth → true`). *(The standalone `Backend-Asks-A1-A2.md` spec has been
-  removed; the summary here is authoritative.)*
+  ones. **iOS tail closed** — `feat/github-oauth-universal-links` is merged (Phase 17):
+  `OAuthCoordinator.supportsNativeAuth` is now `true` for every provider, so GitHub
+  links in-app. Nothing outstanding. *(The standalone `Backend-Asks-A1-A2.md` spec has
+  been removed; the summary here is authoritative.)*
 - **A2 — Universal Links assets. ✅ DELIVERED (deployed + Apple-CDN-verified
   2026-08-14).** `GET /.well-known/apple-app-site-association` serves the AASA JSON
-  (200, `application/json`, no auth); Apple's CDN copy is cached (200). Residual is
-  **iOS-only**: enable the Associated Domains capability in the Apple portal + regen
-  the profile, then merge the staged entitlement (same `feat/github-oauth-universal-links`
-  branch as A1).
+  (200, `application/json`, no auth; re-verified 2026-09-05 — `appID:
+  BJA9558E4B.com.interlinedlist.app`, Apple CDN copy 200). The **entitlement is merged**
+  (Phase 17). Residual is **non-code**: enable the Associated Domains capability on the
+  App ID in the Apple portal and regenerate the provisioning profile — tracked in
+  `App-Store-Deployment-Checklist.md`, not here.
 - **A3 — Bearer for multi-account?** `/api/auth/{accounts,switch,remove-account}`
   are session-only. If mobile multi-account is desired, expose a Bearer-compatible
   switch (or per-account sync-tokens the client caches). Otherwise confirm it stays
@@ -708,6 +713,16 @@ for mobile are **multi-account** (session-only) and a **general realtime channel
 (none exists — poll instead). *(Tag discovery is no longer a dead-end — see the
 2026-08-15 update below.)*
 
+> **Update 2026-09-05.** Parity work is **complete except G11** (document presence,
+> optional) and the bare `/lists/:id` permalink inbound (**backend-limited**). Verified
+> on 2026-09-05: build green, **823 unit tests, 0 failures** (E2E excluded); `dev` =
+> `main` = origin, clean tree, no open PRs or issues. The access-control audit
+> (`the-gaps-access.md` G1–G7) is likewise fully remediated. Remaining backend asks:
+> **A3** (decide Bearer multi-account or formally drop it), **A4/A6** (doc pages), and
+> **A7** (`documents/sync` silently dropping ops — iOS has a working client-side
+> workaround). Everything else outstanding is **App Store submission logistics** —
+> see `App-Store-Deployment-Checklist.md`.
+>
 > **Update 2026-08-14.** The plan above has been executed. **D1–D3 are fixed** and
 > **G1–G10 + G12 all shipped** (see Progress log; G9 complete through Slice 3). What's
 > left: **G11** presence (optional); **G10 follow-ons** (list/doc inbound + shared-token
