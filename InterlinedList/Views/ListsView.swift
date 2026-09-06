@@ -59,9 +59,9 @@ struct ListsView: View {
     private var listContent: some View {
         if !searchText.isEmpty {
             searchResultsList
-        } else if store.listsLoading && treeNodes.isEmpty {
+        } else if store.listsLoading && treeNodes.isEmpty && store.watchedLists.isEmpty {
             ListSkeletonView()
-        } else if let error = store.listsError, treeNodes.isEmpty {
+        } else if let error = store.listsError, treeNodes.isEmpty, store.watchedLists.isEmpty {
             ContentUnavailableView {
                 Label("Unable to load", systemImage: "exclamationmark.triangle")
             } description: {
@@ -70,7 +70,7 @@ struct ListsView: View {
                 Button("Retry") { Task { await store.refreshLists() } }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if treeNodes.isEmpty {
+        } else if treeNodes.isEmpty && store.watchedLists.isEmpty {
             ContentUnavailableView {
                 Label("No Lists", systemImage: "list.bullet.rectangle")
             } description: {
@@ -86,8 +86,26 @@ struct ListsView: View {
                         onUpdateList: { _ in Task { await store.refreshLists() } }
                     )
                 }
+                sharedWithMeSection
             }
             .listStyle(.sidebar)
+        }
+    }
+
+    /// Lists other people have shared with this user. They live in their own
+    /// section rather than the tree because their `parentId` points into the
+    /// *owner's* hierarchy, and because none of the owner-only row actions
+    /// (rename, schema, delete) apply to them.
+    @ViewBuilder
+    private var sharedWithMeSection: some View {
+        if !store.watchedLists.isEmpty {
+            Section("Shared with me") {
+                ForEach(store.watchedLists) { list in
+                    NavigationLink(value: list) {
+                        SharedListRow(list: list)
+                    }
+                }
+            }
         }
     }
 
@@ -306,6 +324,24 @@ struct ListTreeNodeRow: View {
         let schema = (try? await APIClient.shared.listSchema(listId: list.id)) ?? []
         schemaEditorSchema = schema
         schemaEditorList = list
+    }
+}
+
+private struct SharedListRow: View {
+    let list: UserList
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ListNameWithVisibility(name: list.name, isPublic: list.isPublic, isGitHubBacked: list.isGitHubBacked)
+            if let role = list.watcherRole {
+                Text(role.accessLabel)
+                    .font(.ilMono(10))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(list.watcherRole.map { "\(list.name), shared with you, \($0.accessLabel)" }
+                            ?? "\(list.name), shared with you")
     }
 }
 
@@ -1101,4 +1137,20 @@ struct FieldValueView: View {
         FieldValueView(value: .bool(false), propertyType: "boolean", label: "Completed", showLabel: true, onToggle: { _ in })
         FieldValueView(value: .string("hello@example.com"), propertyType: "email", label: "Email", showLabel: true, onToggle: nil)
     }
+}
+
+#Preview("Shared with me") {
+    let shared = UserList(id: "s1", name: "Team Roadmap", description: nil, isPublic: false,
+                          createdAt: "2026-09-01T00:00:00.000Z", updatedAt: nil, itemCount: 12,
+                          ownerId: "someone-else", role: "collaborator")
+    let readOnly = UserList(id: "s2", name: "Conference Talks", description: nil, isPublic: true,
+                            createdAt: "2026-09-01T00:00:00.000Z", updatedAt: nil, itemCount: 3,
+                            ownerId: "someone-else", role: "watcher")
+    return List {
+        Section("Shared with me") {
+            SharedListRow(list: shared)
+            SharedListRow(list: readOnly)
+        }
+    }
+    .listStyle(.sidebar)
 }

@@ -96,6 +96,14 @@ final class AppDataStoreTests: XCTestCase {
         XCTAssertTrue(sut.feedLoading)
     }
 
+    /// G17. Shared-in lists are another account's data, so signing out must drop
+    /// them along with the owned lists.
+    func test_reset_clearsWatchedLists() {
+        sut.reset()
+        XCTAssertTrue(sut.watchedLists.isEmpty)
+        XCTAssertTrue(sut.userLists.isEmpty)
+    }
+
     // MARK: - optimistic document mutations
 
     func test_insertDocument_insertsAtHead() {
