@@ -38,6 +38,9 @@ struct FeedView: View {
     @State private var detailMessage: Message?
     @State private var trendingTags: [TrendingTag] = []
     @State private var tagSuggestions: [TagSuggestion] = []
+    @State private var isSelectingMessages = false
+    @State private var selectedMessageIds: Set<String> = []
+    @State private var createFromSource: CreateFromSourceBox?
 
     /// Blocked and muted authors are both hidden from the feed; mute is the softer
     /// control but the row has to disappear either way for the action to read as
@@ -191,33 +194,37 @@ struct FeedView: View {
                     }
                 }
             }
-            ForEach(messages.filter { isVisibleAuthor($0.userId) }) { message in
-                MessageRow(
-                    message: message,
-                    currentUserId: authState.user?.id,
-                    showPreviews: showPreviews,
-                    digState: digStates[message.id],
-                    onReply: {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                        threadMessage = message
-                    },
-                    onDelete: {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                        messageToDelete = message
-                    },
-                    onEdit: { messageToEdit = message },
-                    onDig: { Task { await toggleDig(for: message) } },
-                    onRepost: { messageToRepost = message },
-                    onTapAuthor: { username in profileUsername = username },
-                    onReport: { reportTarget = .message(id: message.id) },
-                    onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } },
-                    onMute: { muteTarget = MuteTarget(message: message) },
-                    onOpenDetail: {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                        detailMessage = message
-                    },
-                    truncateContent: true
-                )
+            ForEach(visibleMessages) { message in
+                if isSelectingMessages {
+                    messageSelectionRow(message)
+                } else {
+                    MessageRow(
+                        message: message,
+                        currentUserId: authState.user?.id,
+                        showPreviews: showPreviews,
+                        digState: digStates[message.id],
+                        onReply: {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            threadMessage = message
+                        },
+                        onDelete: {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            messageToDelete = message
+                        },
+                        onEdit: { messageToEdit = message },
+                        onDig: { Task { await toggleDig(for: message) } },
+                        onRepost: { messageToRepost = message },
+                        onTapAuthor: { username in profileUsername = username },
+                        onReport: { reportTarget = .message(id: message.id) },
+                        onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } },
+                        onMute: { muteTarget = MuteTarget(message: message) },
+                        onOpenDetail: {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            detailMessage = message
+                        },
+                        truncateContent: true
+                    )
+                }
             }
             if let pagination = pagination, pagination.hasMore, !isLoading {
                 HStack {
@@ -239,8 +246,57 @@ struct FeedView: View {
         }
     }
 
+    private var visibleMessages: [Message] {
+        messages.filter { isVisibleAuthor($0.userId) }
+    }
+
+    /// "Create from…" writes a list/document, both subscriber-gated on the
+    /// backend — hide it for free users rather than surface a 403.
+    private var canCreateFrom: Bool { authState.user?.isSubscriber == true }
+
+    private func messageSelectionRow(_ message: Message) -> some View {
+        SelectableSummaryRow(
+            title: message.content,
+            caption: message.authorDisplay,
+            isSelected: selectedMessageIds.contains(message.id)
+        ) {
+            if selectedMessageIds.contains(message.id) {
+                selectedMessageIds.remove(message.id)
+            } else {
+                selectedMessageIds.insert(message.id)
+            }
+        }
+    }
+
+    /// Bottom bar shown while picking messages to create a list/document from.
+    private var messageSelectionBar: some View {
+        SelectionActionBar(
+            countLabel: selectedMessageIds.count == 1 ? "1 post" : "\(selectedMessageIds.count) posts",
+            actionTitle: "Create from…",
+            isActionEnabled: !selectedMessageIds.isEmpty,
+            onCancel: {
+                isSelectingMessages = false
+                selectedMessageIds = []
+            },
+            onAction: {
+                let selected = visibleMessages.filter { selectedMessageIds.contains($0.id) }
+                createFromSource = CreateFromSourceBox(source: .messages(selected))
+            }
+        )
+    }
+
     var body: some View {
         navigationContent
+            .safeAreaInset(edge: .bottom) {
+                if isSelectingMessages { messageSelectionBar }
+            }
+            .sheet(item: $createFromSource) { box in
+                CreateFromSheet(source: box.source) { _ in
+                    isSelectingMessages = false
+                    selectedMessageIds = []
+                }
+                .environmentObject(authState)
+            }
             .sheet(item: $threadMessage) { message in
                 MessageThreadView(rootMessage: message, currentUserId: authState.user?.id)
                     .environmentObject(authState)
@@ -378,6 +434,23 @@ struct FeedView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Scheduled posts")
+            }
+        }
+        if canCreateFrom {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    selectedMessageIds = []
+                    isSelectingMessages.toggle()
+                } label: {
+                    Image(systemName: isSelectingMessages ? "checklist.checked" : "checklist")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.white.opacity(0.15))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isSelectingMessages ? "Done selecting posts" : "Select posts")
             }
         }
         ToolbarItem(placement: .topBarTrailing) {

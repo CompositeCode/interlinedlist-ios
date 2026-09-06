@@ -8,6 +8,11 @@ import SwiftUI
 struct ListItemFormView: View {
     let schema: [ListPropertyDef]
     let existingItem: ListItem?
+    /// Runtime options for `multiselect` columns, keyed by `propertyKey` — a
+    /// GitHub-backed list supplies its repo's real labels and assignees here.
+    /// A column with no entry falls back to free-text comma-separated entry,
+    /// which is what the backend parses either way.
+    let multiSelectOptions: [String: [String]]
     let onSave: ([String: JSONValue]) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -36,9 +41,13 @@ struct ListItemFormView: View {
         }
     }
 
-    init(schema: [ListPropertyDef], existingItem: ListItem?, onSave: @escaping ([String: JSONValue]) -> Void) {
+    init(schema: [ListPropertyDef],
+         existingItem: ListItem?,
+         multiSelectOptions: [String: [String]] = [:],
+         onSave: @escaping ([String: JSONValue]) -> Void) {
         self.schema = schema
         self.existingItem = existingItem
+        self.multiSelectOptions = multiSelectOptions
         self.onSave = onSave
 
         var fields: [String: String] = [:]
@@ -161,6 +170,24 @@ struct ListItemFormView: View {
             )
             .labelsHidden()
 
+        case "multiselect":
+            let options = multiSelectOptions[prop.propertyKey] ?? []
+            if options.isEmpty {
+                TextField(prop.placeholder ?? prop.propertyName, text: Binding(
+                    get: { fieldValues[prop.propertyKey] ?? "" },
+                    set: { fieldValues[prop.propertyKey] = $0 }
+                ))
+            } else {
+                MultiSelectField(
+                    label: prop.propertyName,
+                    options: options,
+                    value: Binding(
+                        get: { fieldValues[prop.propertyKey] ?? "" },
+                        set: { fieldValues[prop.propertyKey] = $0 }
+                    )
+                )
+            }
+
         case "select":
             Picker(prop.propertyName, selection: Binding(
                 get: { selectValue(for: prop) },
@@ -215,6 +242,12 @@ struct ListItemFormView: View {
             case "select":
                 let val = selectValue(for: prop)
                 if !val.isEmpty { rowData[prop.propertyKey] = .string(val) }
+            case "multiselect":
+                // Sent even when empty so clearing every value is expressed
+                // rather than silently omitted. (GitHub-backed lists still
+                // won't clear server-side — `rowDataToIssuePayload` drops an
+                // empty label/assignee set from the issue payload.)
+                rowData[prop.propertyKey] = .string(fieldValues[prop.propertyKey] ?? "")
             default:
                 let str = fieldValues[prop.propertyKey] ?? ""
                 if !str.isEmpty {

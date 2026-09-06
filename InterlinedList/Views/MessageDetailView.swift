@@ -22,6 +22,7 @@ struct MessageDetailView: View {
     @ObservedObject private var muteStore = MuteStore.shared
     @State private var muteTarget: MuteTarget?
     @State private var muteError: String?
+    @State private var showCreateFrom = false
     @EnvironmentObject var authState: AuthState
     @EnvironmentObject var store: AppDataStore
 
@@ -38,6 +39,9 @@ struct MessageDetailView: View {
         guard let uid = currentUserId else { return false }
         return message.userId != uid
     }
+    /// "Create from…" writes a list/document, both subscriber-gated on the
+    /// backend — hide it for free users rather than surface a 403.
+    private var canCreateFrom: Bool { authState.user?.isSubscriber == true }
 
     private var isMuted: Bool { muteStore.isMuted(message.userId) }
 
@@ -64,7 +68,7 @@ struct MessageDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                shareLinkButton
+                actionsMenu
             }
         }
         .sheet(isPresented: $showReplyCompose) {
@@ -89,6 +93,10 @@ struct MessageDetailView: View {
         }
         .sheet(item: $reportTarget) { target in
             ReportSheet(target: target, onDismiss: { reportTarget = nil })
+                .environmentObject(authState)
+        }
+        .sheet(isPresented: $showCreateFrom) {
+            CreateFromSheet(source: .messages([message]))
                 .environmentObject(authState)
         }
         .muteConfirmation(target: $muteTarget, errorMessage: $muteError) { target in
@@ -120,13 +128,24 @@ struct MessageDetailView: View {
     }
 
     @ViewBuilder
-    private var shareLinkButton: some View {
-        if let url = shareURL {
-            SwiftUI.ShareLink(item: url) {
-                Label("Share link", systemImage: "square.and.arrow.up")
+    private var actionsMenu: some View {
+        Menu {
+            if let url = shareURL {
+                SwiftUI.ShareLink(item: url) {
+                    Label("Share link", systemImage: "square.and.arrow.up")
+                }
             }
-            .accessibilityLabel("Share link")
+            if canCreateFrom {
+                Button {
+                    showCreateFrom = true
+                } label: {
+                    Label("Create from…", systemImage: "plus.square.on.square")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
         }
+        .accessibilityLabel("Post actions")
     }
 
     private var header: some View {

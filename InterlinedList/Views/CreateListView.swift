@@ -40,6 +40,8 @@ struct CreateListView: View {
 
     @State private var githubBacked = false
     @State private var repos: [GitHubRepo] = []
+    @State private var orgs: [GitHubOrg] = []
+    @State private var selectedOwner: String?
     @State private var selectedRepo: String?
     @State private var reposLoading = false
     @State private var reposError: String?
@@ -138,6 +140,14 @@ struct CreateListView: View {
 
     // MARK: - GitHub section
 
+    /// Repos narrowed to the selected org. An org with no approved OAuth-App
+    /// access simply yields no repos — the backend can list the membership
+    /// without being able to list its repositories.
+    private var filteredRepos: [GitHubRepo] {
+        guard let selectedOwner else { return repos }
+        return repos.filter { $0.owner == selectedOwner }
+    }
+
     @ViewBuilder
     private var githubSection: some View {
         if canOfferGitHub {
@@ -156,9 +166,18 @@ struct CreateListView: View {
                             .foregroundStyle(.secondary)
                             .font(.ilMono())
                     } else {
+                        if !orgs.isEmpty {
+                            Picker("Owner", selection: $selectedOwner) {
+                                Text("All").tag(String?.none)
+                                ForEach(orgs) { org in
+                                    Text(org.login).tag(String?.some(org.login))
+                                }
+                            }
+                            .accessibilityLabel("Filter repositories by organization")
+                        }
                         Picker("Repository", selection: $selectedRepo) {
                             Text("Select a repository").tag(String?.none)
-                            ForEach(repos) { repo in
+                            ForEach(filteredRepos) { repo in
                                 Text(repo.fullName).tag(String?.some(repo.fullName))
                             }
                         }
@@ -174,6 +193,12 @@ struct CreateListView: View {
             }
             .onChange(of: githubBacked) { _, on in
                 if on { Task { await loadReposIfNeeded() } }
+            }
+            .onChange(of: selectedOwner) { _, _ in
+                if let current = selectedRepo,
+                   !filteredRepos.contains(where: { $0.fullName == current }) {
+                    selectedRepo = nil
+                }
             }
         } else if isSubscriber && !hasGitHubIdentity {
             Section {
@@ -223,8 +248,13 @@ struct CreateListView: View {
         reposError = nil
         defer { reposLoading = false }
         do {
-            let fetched = try await APIClient.shared.githubRepos()
+            async let reposTask = APIClient.shared.githubRepos()
+            // Best-effort: org listing needs the `read:org` scope, and the picker
+            // works fine without it — the filter just doesn't appear.
+            async let orgsTask = APIClient.shared.githubOrgs()
+            let fetched = try await reposTask
             repos = fetched
+            orgs = (try? await orgsTask) ?? []
             reposLoaded = true
             if selectedRepo == nil,
                let preferred = authState.user?.githubDefaultRepo,

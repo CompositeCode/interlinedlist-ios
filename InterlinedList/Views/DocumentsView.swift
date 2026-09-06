@@ -767,6 +767,11 @@ private struct DocumentDetailView: View {
     @State private var showEdit = false
     @State private var showDeleteConfirm = false
     @State private var showSharing = false
+    @State private var showCreateFrom = false
+
+    /// "Create from…" writes a list/document, both subscriber-gated on the
+    /// backend — hide it for free users rather than surface a 403.
+    private var canCreateFrom: Bool { authState.user?.isSubscriber == true }
 
     init(document: Document, onUpdate: @escaping (Document) -> Void, onDelete: @escaping (String) -> Void) {
         self.document = document
@@ -795,6 +800,13 @@ private struct DocumentDetailView: View {
                 Menu {
                     Button("Edit") { showEdit = true }
                     Button("Share") { showSharing = true }
+                    if canCreateFrom {
+                        Button {
+                            showCreateFrom = true
+                        } label: {
+                            Label("Create from…", systemImage: "plus.square.on.square")
+                        }
+                    }
                     if let url = ILWebURL.document(current.id) {
                         SwiftUI.ShareLink(item: url) {
                             Label("Share link", systemImage: "square.and.arrow.up")
@@ -819,6 +831,14 @@ private struct DocumentDetailView: View {
                 current = updated
                 onUpdate(updated)
             }
+        }
+        .sheet(isPresented: $showCreateFrom) {
+            CreateFromSheet(source: .document(MaterializeDocumentSummary(
+                documentId: current.id,
+                title: current.title,
+                content: current.content ?? ""
+            )))
+            .environmentObject(authState)
         }
         .sheet(isPresented: $showSharing) {
             SharingView(kind: .documents, resourceId: current.id, title: current.title,

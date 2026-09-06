@@ -401,6 +401,12 @@ struct ListDetailView: View {
     @State private var gitHubStateFilter: GitHubStateFilter = .open
     @State private var contributors = ListContributorsResult.empty
     @State private var showContributors = false
+    @State private var createFromSource: CreateFromSourceBox?
+    @State private var isSelectingRows = false
+    @State private var selectedRowIds: Set<String> = []
+    @State private var gitHubLabels: [String] = []
+    @State private var gitHubAssignees: [String] = []
+    @State private var gitHubNextIssueNumber: Int?
 
     /// Open/closed filter for GitHub-backed lists. GitHub issues carry a `state`
     /// of `open`/`closed`; the list defaults to showing open issues only.
@@ -415,12 +421,72 @@ struct ListDetailView: View {
     /// management controls hidden should a shared-in list ever reach this view.
     private var isOwner: Bool { list.isOwned(by: authState.user?.id) }
 
-    /// Fields shown in the add/edit form. GitHub-backed lists edit only
-    /// title/body/state for v1 — read-only columns (#, url, timestamps) and the
-    /// multiselect labels/assignees are excluded. Local lists use the full schema.
+    /// "Create from…" writes a list/document, both subscriber-gated on the
+    /// backend — hide it for free users rather than surface a 403.
+    private var canCreateFrom: Bool { authState.user?.isSubscriber == true }
+
+    private var listSourceSummary: MaterializeListSummary {
+        MaterializeListSummary(
+            listId: list.id,
+            listTitle: list.name,
+            description: list.description,
+            isPublic: list.isPublic ?? false,
+            fields: schema,
+            rows: items,
+            totalRows: list.itemCount ?? items.count
+        )
+    }
+
+    /// A one-line label for a row while picking rows to create from.
+    private func rowSummary(_ item: ListItem) -> String {
+        guard let field = ListPropertyDef.primaryDisplayField(from: schema),
+              let value = item.rowData[field.propertyKey]?.displayString,
+              !value.isEmpty else {
+            return "Row \(item.rowNumber.map(String.init) ?? item.id.prefix(8).description)"
+        }
+        return value
+    }
+
+    /// Bottom bar shown while picking rows to create a list/document from.
+    private var rowSelectionBar: some View {
+        SelectionActionBar(
+            countLabel: selectedRowIds.count == 1 ? "1 row" : "\(selectedRowIds.count) rows",
+            actionTitle: "Create from…",
+            isActionEnabled: !selectedRowIds.isEmpty,
+            onCancel: {
+                isSelectingRows = false
+                selectedRowIds = []
+            },
+            onAction: {
+                let rows = displayedItems.filter { selectedRowIds.contains($0.id) }
+                createFromSource = CreateFromSourceBox(source: .rows(
+                    listId: list.id, listTitle: list.name, fields: schema, rows: rows
+                ))
+            }
+        )
+    }
+
+    /// Fields shown in the add/edit form. GitHub-backed lists hide read-only
+    /// columns (#, url, timestamps). Their multiselect `labels`/`assignees` are
+    /// shown only once the repo's real options have loaded — without options the
+    /// field degrades to raw comma-separated text, which is worse than hiding it.
+    /// Local lists use the full schema.
     private var formSchema: [ListPropertyDef] {
         guard list.isGitHubBacked else { return schema }
-        return schema.filter { !$0.isReadOnly && $0.propertyType != "multiselect" }
+        return schema.filter { prop in
+            guard !prop.isReadOnly else { return false }
+            guard prop.propertyType == "multiselect" else { return true }
+            return !(gitHubMultiSelectOptions[prop.propertyKey] ?? []).isEmpty
+        }
+    }
+
+    /// Repo-backed options for the GitHub schema's two multiselect columns.
+    private var gitHubMultiSelectOptions: [String: [String]] {
+        guard list.isGitHubBacked else { return [:] }
+        var options: [String: [String]] = [:]
+        if !gitHubLabels.isEmpty { options["labels"] = gitHubLabels }
+        if !gitHubAssignees.isEmpty { options["assignees"] = gitHubAssignees }
+        return options
     }
 
     /// Rows to render. Local lists show everything; GitHub-backed lists filter by
@@ -487,6 +553,19 @@ struct ListDetailView: View {
                         } description: {
                             Text(emptyStateMessage)
                         }
+                    } else if isSelectingRows {
+                        ForEach(displayedItems) { item in
+                            SelectableSummaryRow(
+                                title: rowSummary(item),
+                                isSelected: selectedRowIds.contains(item.id)
+                            ) {
+                                if selectedRowIds.contains(item.id) {
+                                    selectedRowIds.remove(item.id)
+                                } else {
+                                    selectedRowIds.insert(item.id)
+                                }
+                            }
+                        }
                     } else {
                         ForEach(displayedItems) { item in
                             DynamicItemRow(
@@ -508,6 +587,17 @@ struct ListDetailView: View {
                                     Task { await setGitHubState(item: item, to: newState) }
                                 } : nil
                             )
+                            .contextMenu {
+                                if canCreateFrom {
+                                    Button {
+                                        createFromSource = CreateFromSourceBox(source: .rows(
+                                            listId: list.id, listTitle: list.name, fields: schema, rows: [item]
+                                        ))
+                                    } label: {
+                                        Label("Create from this row…", systemImage: "plus.square.on.square")
+                                    }
+                                }
+                            }
                         }
                     }
                     Section {
@@ -608,13 +698,42 @@ struct ListDetailView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                if let url = ILWebURL.list(list.id) {
-                    SwiftUI.ShareLink(item: url) {
-                        Image(systemName: "square.and.arrow.up")
+                Menu {
+                    if let url = ILWebURL.list(list.id) {
+                        SwiftUI.ShareLink(item: url) {
+                            Label("Share link", systemImage: "square.and.arrow.up")
+                        }
                     }
-                    .accessibilityLabel("Share link")
+                    if canCreateFrom {
+                        Button {
+                            createFromSource = CreateFromSourceBox(source: .lists([listSourceSummary]))
+                        } label: {
+                            Label("Create from list…", systemImage: "plus.square.on.square")
+                        }
+                        if !displayedItems.isEmpty {
+                            Button {
+                                selectedRowIds = []
+                                isSelectingRows = true
+                            } label: {
+                                Label("Select rows…", systemImage: "checklist")
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
                 }
+                .accessibilityLabel("List actions")
             }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if isSelectingRows { rowSelectionBar }
+        }
+        .sheet(item: $createFromSource) { box in
+            CreateFromSheet(source: box.source) { _ in
+                isSelectingRows = false
+                selectedRowIds = []
+            }
+            .environmentObject(authState)
         }
         .task {
             await loadData()
@@ -667,12 +786,14 @@ struct ListDetailView: View {
             }
         }
         .sheet(isPresented: $showAddItem) {
-            ListItemFormView(schema: formSchema, existingItem: nil) { rowData in
+            ListItemFormView(schema: formSchema, existingItem: nil,
+                             multiSelectOptions: gitHubMultiSelectOptions) { rowData in
                 Task { await addItem(rowData: rowData) }
             }
         }
         .sheet(item: $editingItem) { item in
-            ListItemFormView(schema: formSchema, existingItem: item) { rowData in
+            ListItemFormView(schema: formSchema, existingItem: item,
+                             multiSelectOptions: gitHubMultiSelectOptions) { rowData in
                 Task { await saveEdit(item: item, rowData: rowData) }
             }
         }
@@ -731,6 +852,12 @@ struct ListDetailView: View {
                     Text(gitHubStatusText)
                         .font(.ilBody(13))
                         .foregroundStyle(.secondary)
+                    if let next = gitHubNextIssueNumber {
+                        Text("Next issue: #\(next)")
+                            .font(.ilMono(11))
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("The next issue created here will be number \(next)")
+                    }
                 }
                 Spacer()
                 if isRefreshingGitHub {
@@ -880,6 +1007,31 @@ struct ListDetailView: View {
         }
     }
 
+    /// Fetches the repo's labels and assignable users so the add/edit form can
+    /// offer real pickers instead of free-text. Best-effort: these routes 400
+    /// (not 401) when no GitHub account is linked, and can fail for a repo whose
+    /// org hasn't approved the OAuth App — in either case the columns simply
+    /// stay hidden rather than degrading to comma-separated text entry.
+    private func loadGitHubRepoMetadata() async {
+        guard list.isGitHubBacked,
+              let repo = list.githubRepo,
+              let slash = repo.firstIndex(of: "/") else {
+            gitHubLabels = []
+            gitHubAssignees = []
+            return
+        }
+        let owner = String(repo[repo.startIndex..<slash])
+        let name = String(repo[repo.index(after: slash)...])
+        guard !owner.isEmpty, !name.isEmpty else { return }
+
+        async let labelsTask = APIClient.shared.githubLabels(owner: owner, repo: name)
+        async let assigneesTask = APIClient.shared.githubAssignees(owner: owner, repo: name)
+        async let nextNumberTask = APIClient.shared.githubNextIssueNumber(owner: owner, repo: name)
+        gitHubLabels = ((try? await labelsTask) ?? []).map(\.name)
+        gitHubAssignees = ((try? await assigneesTask) ?? []).map(\.login)
+        gitHubNextIssueNumber = try? await nextNumberTask
+    }
+
     private func loadData() async {
         isLoading = true
         errorMessage = nil
@@ -905,6 +1057,7 @@ struct ListDetailView: View {
                 .filter { $0.fromListId == listId || $0.toListId == listId } ?? []
             allLists = (try? await allListsTask) ?? []
             contributors = await contributorsTask
+            await loadGitHubRepoMetadata()
         } catch APIError.status(401) {
             authState.handleUnauthorized()
             errorMessage = "Session expired or not authorized."
