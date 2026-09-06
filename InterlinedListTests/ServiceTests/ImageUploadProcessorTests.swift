@@ -6,28 +6,81 @@ import XCTest
 
 final class ImageUploadProcessorTests: XCTestCase {
 
+    /// Every `process` call under test pins its own caps rather than reading
+    /// `ServerLimitsStore.shared`, so results don't depend on whether
+    /// `GET /api/limits` happened to answer.
+    private let limits = ImageUploadLimits.fallback
+
     // MARK: - Ladder constants regression guard
 
     func test_ladderConstants_matchSpecifiedValues() {
-        XCTAssertEqual(ImageUploadProcessor.maxUploadBytes, 1_400_000)
-        XCTAssertEqual(ImageUploadProcessor.maxDimension, 2048)
         XCTAssertEqual(ImageUploadProcessor.opaqueDimensionLadder, [2048, 1600, 1200, 1000, 800])
         XCTAssertEqual(ImageUploadProcessor.opaqueQualityLadder, [0.85, 0.7, 0.55, 0.4])
         XCTAssertEqual(ImageUploadProcessor.alphaDimensionLadder, [1600, 1200, 1000, 800, 600, 400])
+    }
+
+    // MARK: - Ladder derived from the server cap (P3)
+
+    /// The deployed backend resizes to 1200px per side, so the ladder must start
+    /// there rather than at the old hardcoded 2048 — sending 2048px cost every
+    /// upload ~2.9x the pixels the server keeps.
+    func test_dimensionLadder_startsAtServerCap_andDropsLargerRungs() {
+        let ladder = ImageUploadProcessor.dimensionLadder(ImageUploadProcessor.opaqueDimensionLadder, maxPixels: 1200)
+        XCTAssertEqual(ladder, [1200, 1000, 800])
+    }
+
+    func test_dimensionLadder_capAboveEveryRung_keepsFullLadder() {
+        let ladder = ImageUploadProcessor.dimensionLadder(ImageUploadProcessor.opaqueDimensionLadder, maxPixels: 4096)
+        XCTAssertEqual(ladder, [4096, 2048, 1600, 1200, 1000, 800])
+    }
+
+    /// A cap that lands between rungs still leads the ladder, so the first
+    /// attempt is always exactly what the server accepts.
+    func test_dimensionLadder_capBetweenRungs_leadsTheLadder() {
+        let ladder = ImageUploadProcessor.dimensionLadder(ImageUploadProcessor.opaqueDimensionLadder, maxPixels: 900)
+        XCTAssertEqual(ladder, [900, 800])
+    }
+
+    func test_dimensionLadder_appliesToTheAlphaLadderToo() {
+        let ladder = ImageUploadProcessor.dimensionLadder(ImageUploadProcessor.alphaDimensionLadder, maxPixels: 1200)
+        XCTAssertEqual(ladder, [1200, 1000, 800, 600, 400])
+    }
+
+    func test_defaultLimits_matchTheDeployedServerCaps() {
+        XCTAssertEqual(ImageUploadLimits.fallback.maxPixels, 1200)
+        XCTAssertEqual(ImageUploadLimits.fallback.maxUploadBytes, 1_400_000)
+    }
+
+    /// The point of P3: a 4000px photo comes out at the server's cap, not above.
+    func test_process_largeImage_isSizedToTheServerCap_notTheOldClientMax() throws {
+        let large = try XCTUnwrap(Self.makeImageData(width: 4000, height: 3000, format: .png, opaque: true))
+        let result = try XCTUnwrap(ImageUploadProcessor.process(large, limits: limits))
+        let (width, height) = try XCTUnwrap(Self.dimensions(of: result.data))
+        XCTAssertLessThanOrEqual(max(width, height), 1200)
+    }
+
+    /// A raised server cap is honoured without a client release.
+    func test_process_respectsARaisedServerCap() throws {
+        let large = try XCTUnwrap(Self.makeImageData(width: 4000, height: 3000, format: .png, opaque: true))
+        let raised = ImageUploadLimits(maxUploadBytes: 1_400_000, maxPixels: 2048)
+        let result = try XCTUnwrap(ImageUploadProcessor.process(large, limits: raised))
+        let (width, height) = try XCTUnwrap(Self.dimensions(of: result.data))
+        XCTAssertLessThanOrEqual(max(width, height), 2048)
+        XCTAssertGreaterThan(max(width, height), 1200, "A raised cap should produce a larger image than the default")
     }
 
     // MARK: - Passthrough fast path
 
     func test_process_smallJPEGUnderBudget_passesThroughUnchanged() throws {
         let jpeg = try XCTUnwrap(Self.makeImageData(width: 100, height: 100, format: .jpeg, opaque: true))
-        let result = try XCTUnwrap(ImageUploadProcessor.process(jpeg))
+        let result = try XCTUnwrap(ImageUploadProcessor.process(jpeg, limits: limits))
         XCTAssertEqual(result.data, jpeg)
         XCTAssertEqual(result.mimeType, "image/jpeg")
     }
 
     func test_process_smallPNGUnderBudget_passesThroughUnchanged() throws {
         let png = try XCTUnwrap(Self.makeImageData(width: 100, height: 100, format: .png, opaque: true))
-        let result = try XCTUnwrap(ImageUploadProcessor.process(png))
+        let result = try XCTUnwrap(ImageUploadProcessor.process(png, limits: limits))
         XCTAssertEqual(result.data, png)
         XCTAssertEqual(result.mimeType, "image/png")
     }
@@ -36,7 +89,7 @@ final class ImageUploadProcessorTests: XCTestCase {
 
     func test_process_heicInput_neverPassesThrough_alwaysConvertsToJPEG() throws {
         let heic = try XCTUnwrap(Self.makeImageData(width: 100, height: 100, format: .heic, opaque: true))
-        let result = try XCTUnwrap(ImageUploadProcessor.process(heic))
+        let result = try XCTUnwrap(ImageUploadProcessor.process(heic, limits: limits))
         XCTAssertNotEqual(result.data, heic)
         XCTAssertEqual(result.mimeType, "image/jpeg")
 
@@ -49,21 +102,21 @@ final class ImageUploadProcessorTests: XCTestCase {
 
     func test_process_largeOpaqueImage_downsamplesUnderBudgetAsJPEG() throws {
         let large = try XCTUnwrap(Self.makeImageData(width: 4000, height: 3000, format: .png, opaque: true))
-        let result = try XCTUnwrap(ImageUploadProcessor.process(large))
+        let result = try XCTUnwrap(ImageUploadProcessor.process(large, limits: limits))
         XCTAssertEqual(result.mimeType, "image/jpeg")
-        XCTAssertLessThanOrEqual(result.data.count, ImageUploadProcessor.maxUploadBytes)
+        XCTAssertLessThanOrEqual(result.data.count, limits.maxUploadBytes)
 
         let (width, height) = try XCTUnwrap(Self.dimensions(of: result.data))
-        XCTAssertLessThanOrEqual(max(width, height), ImageUploadProcessor.maxDimension)
+        XCTAssertLessThanOrEqual(max(width, height), limits.maxPixels)
     }
 
     // MARK: - Large alpha image preserved as PNG
 
     func test_process_largeAlphaImage_preservesPNGWithAlpha() throws {
         let large = try XCTUnwrap(Self.makeImageData(width: 3000, height: 2000, format: .png, opaque: false))
-        let result = try XCTUnwrap(ImageUploadProcessor.process(large))
+        let result = try XCTUnwrap(ImageUploadProcessor.process(large, limits: limits))
         XCTAssertEqual(result.mimeType, "image/png")
-        XCTAssertLessThanOrEqual(result.data.count, ImageUploadProcessor.maxUploadBytes)
+        XCTAssertLessThanOrEqual(result.data.count, limits.maxUploadBytes)
 
         let outputSource = try XCTUnwrap(CGImageSourceCreateWithData(result.data as CFData, nil))
         let outputImage = try XCTUnwrap(CGImageSourceCreateImageAtIndex(outputSource, 0, nil))
@@ -86,20 +139,20 @@ final class ImageUploadProcessorTests: XCTestCase {
     // proving the ladder correctly walks down to a fitting rung rather than stopping early.
     func test_process_denseNoiseAlphaImage_stillResolvesToPNGUnderBudget() throws {
         let noisy = try XCTUnwrap(Self.makeNoiseImageData(width: 2200, height: 2200))
-        let result = try XCTUnwrap(ImageUploadProcessor.process(noisy))
+        let result = try XCTUnwrap(ImageUploadProcessor.process(noisy, limits: limits))
         XCTAssertEqual(result.mimeType, "image/png")
-        XCTAssertLessThanOrEqual(result.data.count, ImageUploadProcessor.maxUploadBytes)
+        XCTAssertLessThanOrEqual(result.data.count, limits.maxUploadBytes)
     }
 
     // MARK: - Corrupt input
 
     func test_process_corruptInput_returnsNil() {
         let garbage = Data([0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE])
-        XCTAssertNil(ImageUploadProcessor.process(garbage))
+        XCTAssertNil(ImageUploadProcessor.process(garbage, limits: limits))
     }
 
     func test_process_emptyInput_returnsNil() {
-        XCTAssertNil(ImageUploadProcessor.process(Data()))
+        XCTAssertNil(ImageUploadProcessor.process(Data(), limits: limits))
     }
 
     // MARK: - Over-budget-floor case returns smallest attempt, not nil
@@ -113,7 +166,7 @@ final class ImageUploadProcessorTests: XCTestCase {
     // that guarantee, even though the true fallback branch can't be forced to execute.
     func test_process_worstCaseOpaqueNoiseImage_returnsNonNilResult() throws {
         let noisy = try XCTUnwrap(Self.makeImageData(width: 4000, height: 4000, format: .png, opaque: true))
-        let result = ImageUploadProcessor.process(noisy)
+        let result = ImageUploadProcessor.process(noisy, limits: limits)
         XCTAssertNotNil(result, "process(_:) must never return nil for decodable input, even in a worst-case compression scenario")
     }
 

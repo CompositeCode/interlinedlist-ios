@@ -63,4 +63,52 @@ final class APIClientNotificationsTests: XCTestCase {
         XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
         XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/notifications/mark-all-read") == true)
     }
+
+    // MARK: deleteNotification() — P1
+
+    /// The route answers 204 with an empty body, so nothing may be decoded.
+    func test_deleteNotification_sendsDeleteToCorrectPath() async throws {
+        session.stub(data: Data(), statusCode: 204)
+        try await sut.deleteNotification(id: "n1")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "DELETE")
+        XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/notifications/n1") == true)
+    }
+
+    func test_deleteNotification_sendsBearerToken() async throws {
+        session.stub(data: Data(), statusCode: 204)
+        try await sut.deleteNotification(id: "n1")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+    }
+
+    func test_deleteNotification_percentEncodesId() async throws {
+        session.stub(data: Data(), statusCode: 204)
+        try await sut.deleteNotification(id: "n 1")
+        XCTAssertEqual(session.lastRequest?.url?.absoluteString.hasSuffix("/api/notifications/n%201"), true)
+    }
+
+    /// Someone else's notification — the view keeps the row removed rather than
+    /// restoring it, so the error still has to surface as a 404.
+    func test_deleteNotification_404_throws() async {
+        session.stub(json: #"{"error":"Not found"}"#, statusCode: 404)
+        do {
+            try await sut.deleteNotification(id: "n1")
+            XCTFail("Expected throw")
+        } catch APIError.server(let message) {
+            XCTAssertEqual(message, "Not found")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func test_deleteNotification_401_throws() async {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            try await sut.deleteNotification(id: "n1")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
 }
