@@ -40,6 +40,25 @@ enum ILWebURL {
         make("/documents/shared", token)
     }
 
+    /// The canonical **public** URL for a resource, scoped to its owner's profile
+    /// (`/user/<owner>/lists|documents/<id>`) — the link shown when a list/document
+    /// is made public. Falls back to `nil` if owner/id are missing.
+    static func publicResource(kind: ShareResourceKind, ownerUsername: String, id: String) -> URL? {
+        guard !ownerUsername.isEmpty, !id.isEmpty,
+              let owner = ownerUsername.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let ident = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            return nil
+        }
+        return URL(string: "\(base)/user/\(owner)/\(kind.pathSegment)/\(ident)")
+    }
+
+    /// The authed (non-public) permalink for a resource (`/lists|documents/<id>`) —
+    /// the "Get link" copy for a per-person grant; works for private resources
+    /// because the grantee already has access.
+    static func resource(kind: ShareResourceKind, id: String) -> URL? {
+        kind == .documents ? document(id) : list(id)
+    }
+
     private static func make(_ prefix: String, _ segment: String) -> URL? {
         guard !segment.isEmpty,
               let encoded = segment.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {

@@ -21,6 +21,41 @@ enum ShareResourceKind: String {
     }
 }
 
+/// Expiry presets for share links and email invites, matching the web
+/// (Never / 7 days / 30 days). The client resolves a preset to an ISO-8601
+/// `expiresAt` the API accepts (`nil` for Never).
+enum ShareExpiryPreset: String, CaseIterable, Identifiable {
+    case never
+    case week
+    case month
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .never: return "Never"
+        case .week: return "7 days"
+        case .month: return "30 days"
+        }
+    }
+
+    private var days: Int? {
+        switch self {
+        case .never: return nil
+        case .week: return 7
+        case .month: return 30
+        }
+    }
+
+    /// The ISO-8601 `expiresAt` this preset maps to, or `nil` for "Never".
+    func expiresAt(from now: Date = Date()) -> String? {
+        guard let days, let date = Calendar.current.date(byAdding: .day, value: days, to: now) else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime]
+        return iso.string(from: date)
+    }
+}
+
 /// A tokenized share-link for a list or document. Only the resource owner can
 /// create, list, or revoke these. `role` maps to `WatcherRole`.
 struct ShareLink: Identifiable, Codable {

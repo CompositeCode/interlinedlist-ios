@@ -81,11 +81,20 @@ final class APIClientGapPhasesTests: XCTestCase {
         XCTAssertTrue(result)
     }
 
+    func test_addWatcher_sendsNotifyFlag() async throws {
+        session.stub(json: #"{"watching":true}"#, statusCode: 201)
+        _ = try await sut.addWatcher(listId: "l1", userId: "u9", role: .watcher, notify: true)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: session.lastRequest?.httpBody ?? Data()) as? [String: Any])
+        XCTAssertEqual(json["notify"] as? Bool, true)
+    }
+
     func test_setWatcherRole_putsRole() async throws {
         session.stub(json: #"{"role":"manager"}"#)
         let role = try await sut.setWatcherRole(listId: "l1", userId: "u9", role: .manager)
         XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
         XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/lists/l1/watchers/u9") == true)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: session.lastRequest?.httpBody ?? Data()) as? [String: Any])
+        XCTAssertEqual(json["notify"] as? Bool, true, "role changes notify by default, matching web")
         XCTAssertEqual(role, "manager")
     }
 

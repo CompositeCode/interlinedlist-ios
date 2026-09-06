@@ -35,4 +35,31 @@ final class ILWebURLTests: XCTestCase {
     func test_message_emptyId_returnsNil() {
         XCTAssertNil(ILWebURL.message(""))
     }
+
+    // MARK: shared-token + public/authed resource links (SharingView)
+
+    func test_sharedList_and_sharedDocument_buildTokenPaths() {
+        XCTAssertEqual(ILWebURL.sharedList(token: "tok1")?.absoluteString,
+                       "https://interlinedlist.com/lists/shared/tok1")
+        XCTAssertEqual(ILWebURL.sharedDocument(token: "tok2")?.absoluteString,
+                       "https://interlinedlist.com/documents/shared/tok2")
+    }
+
+    func test_publicResource_buildsOwnerScopedCanonicalPath() {
+        XCTAssertEqual(ILWebURL.publicResource(kind: .documents, ownerUsername: "adron", id: "d1")?.absoluteString,
+                       "https://interlinedlist.com/user/adron/documents/d1")
+        XCTAssertEqual(ILWebURL.publicResource(kind: .lists, ownerUsername: "adron", id: "l1")?.absoluteString,
+                       "https://interlinedlist.com/user/adron/lists/l1")
+    }
+
+    func test_publicResource_emptyOwner_returnsNil() {
+        XCTAssertNil(ILWebURL.publicResource(kind: .lists, ownerUsername: "", id: "l1"))
+    }
+
+    func test_resource_buildsAuthedPermalink() {
+        XCTAssertEqual(ILWebURL.resource(kind: .documents, id: "d1")?.absoluteString,
+                       "https://interlinedlist.com/documents/d1")
+        XCTAssertEqual(ILWebURL.resource(kind: .lists, id: "l1")?.absoluteString,
+                       "https://interlinedlist.com/lists/l1")
+    }
 }
