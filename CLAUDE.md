@@ -17,6 +17,12 @@ Guidance for Claude Code in this repo. Follow it exactly — it overrides defaul
   - `decoder` — `convertFromSnakeCase`, all responses.
   - `encoder` (`convertToSnakeCase`) via `post`/`put`/`patch` — snake_case bodies.
   - `camelCaseEncoder` (plain) via `postCamel`/`putCamel`/`patchCamel` — the **many** camelCase endpoints (messages, lists, orgs, watchers, identities, change-email, …). Check the existing method before adding one.
+- **New endpoints go in `APIClient+<Feature>.swift`, not in `APIClient.swift`.** The HTTP seam
+  (`get`/`post…`/`delete…`/`postMultipartRawData`/`checkResponse` + `baseURL`, `session`, the three
+  coders) lives in `APIClientTransport.swift` and is deliberately **`internal`, not `private`** —
+  Swift's `private` is file-scoped, so a private helper would be invisible to an extension in
+  another file. That's what makes per-feature extension files possible; keep it that way, and don't
+  append to the `APIClient.swift` class body when a feature file will do.
 - **401 ≠ logged out.** Some endpoints only accept session cookies and reject a valid Bearer. `APIClient` throws `APIError.status(401)`; views call `authState.handleUnauthorized()`, which re-validates `GET /api/user` and only logs out if *that* 401s. Never `logout()` on a feature-endpoint 401.
 - **Token storage: Keychain only** (`KeychainService`), never `UserDefaults`. Deep-link token query items are secrets — never log them.
 - **Adding a `.swift` file:** no synced groups — register it in `project.pbxproj` (the `xcodeproj` Ruby gem) or it won't compile into the target.
