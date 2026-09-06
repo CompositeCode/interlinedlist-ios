@@ -84,9 +84,26 @@ found exactly one mismatch across all 104 iOS call sites, and the suite is green
 
 ## 3 · The gap list (prioritized)
 
+> ### ✅ Thread A is complete (2026-09-06) — PRs #37–#41
+>
+> | | Item | PR | State |
+> |---|---|---|---|
+> | 🔧 | **Bottleneck fix** — `APIClient` HTTP seam extracted to `APIClientTransport.swift` at `internal` access | [#38](https://github.com/CompositeCode/interlinedlist-ios/pull/38) | ✅ |
+> | **D4** | Avatar 405 — `applyAvatarUrl` deleted | [#39](https://github.com/CompositeCode/interlinedlist-ios/pull/39) | ✅ |
+> | **G17** | Lists shared with me | [#40](https://github.com/CompositeCode/interlinedlist-ios/pull/40) | ✅ |
+> | **P1 + P3** | Delete a notification · adopt `GET /api/limits` | [#41](https://github.com/CompositeCode/interlinedlist-ios/pull/41) | ✅ |
+>
+> Stacked in that order; merge #38 → #39 → #40 → #41. Suite: **823 → 861 tests, 0 failures.**
+>
+> **§4's parallel-work rule could not be followed as written.** Every transport helper in
+> `APIClient` was `private`, and Swift's `private` is *file-scoped* — an `extension APIClient`
+> in another file would not compile, so "each thread adds its endpoints in its own
+> `APIClient+<Feature>.swift`" was impossible. #38 fixes that first; `APIClient+SharedLists.swift`
+> and `APIClient+Limits.swift` are the proof it works.
+
 ### Tier 0 — broken shipped code
 
-#### D4 — Avatar changes fail with 405 (Tier 0)
+#### D4 — ✅ FIXED ([#39](https://github.com/CompositeCode/interlinedlist-ios/pull/39)) — Avatar changes fail with 405 (Tier 0)
 
 | | |
 |---|---|
@@ -94,7 +111,7 @@ found exactly one mismatch across all 104 iOS call sites, and the suite is green
 | **Root cause** | `APIClient.applyAvatarUrl` (`InterlinedList/Services/APIClient.swift:246-251`) sends **`POST /api/user/update`**; the route exports **`PATCH` only** → **405** (live-confirmed). Both `uploadAvatar` (`:234`) and `setAvatarFromURL` (`:243`) funnel through it. |
 | **Why it survived D1** | The D1 pass fixed `updateProfile` (`:1044`) and `updateUserSettings` (`:1059`) to `patchCamel` and missed this third call site. |
 | **Correct fix** | **Delete `applyAvatarUrl`.** Both `/api/user/avatar/upload` and `/api/user/avatar/from-url` already `prisma.user.update({ data: { avatar } })` and return `{ url, user }` — decode `user` from that response (fall back to `currentUser()`), no second write needed. |
-| **Also worth fixing in the same hunk** | `uploadAvatar` uses `.data(using: .utf8)!` force-unwraps ×5 (`:224-229`) — a `CLAUDE.md` "no force-unwrap in production paths" violation. |
+| **Also worth fixing in the same hunk** | `uploadAvatar` uses `.data(using: .utf8)!` force-unwraps ×5 (`:224-229`) — a `CLAUDE.md` "no force-unwrap in production paths" violation. **Done in [#38](https://github.com/CompositeCode/interlinedlist-ios/pull/38)** instead, along with the other 16: all five multipart builders collapsed onto `postMultipartRawData`. |
 | **Tests** | `InterlinedListTests/APIClientTests/APIClientAvatarTests.swift` currently asserts the *old* two-call shape; update it to assert a single request and a decoded `user`. |
 | **Effort** | **XS** |
 
@@ -102,7 +119,7 @@ found exactly one mismatch across all 104 iOS call sites, and the suite is green
 
 | ID | Gap | Backend | Effort |
 |----|-----|---------|--------|
-| **G17** ❌ | **Lists shared with me** — surface `GET /api/lists/watching` in the Lists tab (web parity: *"Lists you're watching"*). Today these lists are invisible on iOS. | 🟢 Bearer, free | **S** |
+| **G17** ✅ | **Lists shared with me** — [#40](https://github.com/CompositeCode/interlinedlist-ios/pull/40). `listsWatching()` in `APIClient+SharedLists.swift`; `AppDataStore.watchedLists` (kept out of `userLists` — `buildTree` nests within the *owner's* hierarchy); a *"Shared with me"* section in `ListsView` with no owner-only row actions. `UserList.role` decodes the viewer's access level; `isOwned(by:)` already gates `ListDetailView`. | 🟢 Bearer, free | **S** |
 | **G15** ❌ | **AI writing assistance** — 5 features: composer *Writing Assistant* (rewrite/tighten/expand/grammar/thread/suggest-tags), *Message Series*, *Article Series*, *Powered Templates* (list create), *Powered Document* (4 modes). | 🟢 `/api/ai/{status,suggest,generate}` · 💲 **subscriber-included** (app's server-side key — no user key, no provider picker) · 50/day quota | **L** |
 | **G16** ✅ | **"Create from…" (Materialize)** — message / list / rows / document → new List, Document, or both, with a preview-and-edit confirm step. **SHIPPED** — Thread C, `feat/create-from-and-github-depth`. | 🟢 `POST /api/materialize` · 💲 subscriber | **M** |
 
@@ -119,9 +136,9 @@ found exactly one mismatch across all 104 iOS call sites, and the suite is green
 
 | ID | Item | Detail |
 |----|------|--------|
-| **P1** | **Delete a notification** | `DELETE /api/notifications/:id` exists and is documented; iOS only has read + mark-all-read. Add a swipe action in `NotificationsView`. |
+| **P1** ✅ | **Delete a notification** | [#41](https://github.com/CompositeCode/interlinedlist-ios/pull/41). `deleteNotification(id:)` + optimistic swipe-to-delete in `NotificationsView`, with its own alert channel (`errorMessage` drives the full-screen empty state and would have swallowed it). |
 | **P2** | **Grouped DM inbox** | `GET /api/dm/conversations` returns one row per conversation (keyset cursor) — the messenger-style inbox the web uses. iOS builds its inbox from the flat `/api/dm`. Swap for correctness on high-volume threads. |
-| **P3** | **Adopt `GET /api/limits`** | iOS hardcodes an image ladder starting at 2048 px; the server resizes to 1200 px / 1.4 MB regardless, so every upload wastes bytes. Read the caps at launch, cache them. (Public, no auth.) |
+| **P3** ✅ | **Adopt `GET /api/limits`** | [#41](https://github.com/CompositeCode/interlinedlist-ios/pull/41). `ServerLimits` + `ServerLimitsStore`, refreshed once at launch from `RootView`. `ImageUploadProcessor` derives its ladder from the caps (1200 → `[1200, 1000, 800]`), so a raised server cap needs no client release. Confirmed the waste: messages, avatars *and* document images all route through the backend's `resizeAvatarToLimit`. |
 | **P4** | **`GET /api/users/lookup`** | Unconsumed; note the param is **`handle`**, not `username` (a `username=` query returns `400 missing_handle`). |
 | **P5** | **Bluesky / Mastodon / GitHub identity status** | iOS checks only `/api/auth/{linkedin,twitter}/status`; the other three status routes exist and are unread, so `LinkedIdentitiesView` can show a stale "connected" state. |
 | **P6** | **`POST /api/messages/:id/reply-counts`** | Batch reply counts — a perf win for the feed vs. per-message calls. |
@@ -152,17 +169,24 @@ Sized so three threads can run concurrently. **One rule makes this safe:**
 > groups), and works in its **own git worktree**. Only Thread A edits the body of
 > `APIClient.swift`; B and C treat it as read-only.
 
-### Thread A — Defects + shared-lists parity *(this thread)*
+### Thread A — Defects + shared-lists parity — ✅ **COMPLETE** (2026-09-06)
 
-**Deliverables**
+**Deliverables** — all landed; see the banner in [§3](#3--the-gap-list-prioritized) for PR links.
 1. **D4** — kill `applyAvatarUrl`; decode `user` from the avatar upload / from-url response; drop the five force-unwraps; rewrite `APIClientAvatarTests`.
 2. **G17** — `listsWatching()` → a *"Shared with me"* section in `ListsView`, owner-vs-watcher aware (reuse the existing `list.isOwned(by:)` seam at `ListsView.swift:378`, which already anticipates shared-in lists reaching the view).
 3. **P1** — `deleteNotification(id:)` + swipe-to-delete in `NotificationsView`.
 4. **P3** — `serverLimits()` + cache; drive `ImageUploadProcessor` from it.
-5. Owns the docs: keeps this file and `the-gaps.md` truthful as B and C land.
+5. Owns the docs: keeps this file and `the-gaps.md` truthful as B and C land. *(Ongoing.)*
 
 **Files** `APIClient.swift` (body — exclusive), `ListsView.swift`, `NotificationsView.swift`, `ImageUploadProcessor.swift`, avatar tests.
-**Size** S–M · **Ship as** 3 small PRs (D4 first — it's a shipped-feature regression).
+**Size** S–M · **Shipped as** 4 PRs: the transport seam first (#38 — the §4 rule did not compile without it), then D4 (#39), G17 (#40), P1+P3 (#41).
+
+> ⚠️ **Two hazards found while running this thread, both now in `CLAUDE.md`:**
+> 1. **Parallel worktrees must not share a simulator or DerivedData.** Threads testing at once on
+>    the same UDID kill each other's runner mid-suite; the survivor reports a bogus failure and can
+>    even execute the *other* worktree's test bundle (Thread B's `AIArtifactTests` appeared in
+>    Thread A's log). Give each worktree its own `-destination id=` **and** `-derivedDataPath`.
+> 2. **New endpoints belong in `APIClient+<Feature>.swift`**, which only works because of #38.
 
 ### Thread B — AI writing assistance (G15)
 
@@ -232,7 +256,9 @@ clean in the simulator with no runtime errors.
 **G19** org LinkedIn (verify the backend flag first) · **G21** app-settings sync · **G11** document presence · **P2/P4–P8**.
 
 ### Suggested merge order
-`D4` → `G17` → (B and C land independently, rebasing on `dev`) → papercuts batch.
+**Thread A (open, stacked):** #37 docs → #38 transport seam → #39 D4 → #40 G17 → #41 P1+P3.
+Then B and C land independently, rebasing on `dev`. **B and C should rebase onto #38** — it is
+what lets their `APIClient+AI.swift` / `APIClient+Materialize.swift` compile at all.
 
 ---
 
