@@ -61,6 +61,25 @@ final class E2EReadOnlyTests: XCTestCase {
         }
     }
 
+    // MARK: - AI (read-only)
+
+    /// `GET /api/ai/status` is free, Bearer-ready, and the single gate for every
+    /// AI affordance — this pins the live payload to the client model. Read-only:
+    /// `/suggest` and `/generate` are never called here, since both spend the
+    /// account's daily AI quota and `/generate` writes.
+    func test_e2e_aiStatus_decodesLivePayload() async throws {
+        let status = try await client.aiStatus()
+        let user = try XCTUnwrap(Self.sharedUser)
+        // The server computes `subscriber` from the same customerStatus the app
+        // reads locally; the composer gates on the local flag before /status
+        // lands, so a mismatch would flash an affordance the API then refuses.
+        XCTAssertEqual(status.subscriber, user.isSubscriber)
+        let quota = try XCTUnwrap(status.quota, "status should report a quota")
+        XCTAssertGreaterThan(quota.dailyLimit, 0)
+        XCTAssertGreaterThanOrEqual(quota.usedToday, 0)
+        XCTAssertEqual(quota.remaining, max(0, quota.dailyLimit - quota.usedToday))
+    }
+
     // MARK: - Auth
 
     func test_e2e_login_succeedsAndReturnsToken() async throws {

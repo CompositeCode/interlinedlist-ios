@@ -15,6 +15,7 @@ private let defaultMaxMessageLength = 666
 struct ComposeView: View {
     @EnvironmentObject var authState: AuthState
     @EnvironmentObject var store: AppDataStore
+    @ObservedObject private var ai = AIService.shared
     @Environment(\.dismiss) private var dismiss
     /// When set, this view posts a reply to the given message.
     var replyTo: Message? = nil
@@ -64,6 +65,46 @@ struct ComposeView: View {
     /// simply does not surface them.
     private var canUseSubscriberFeatures: Bool {
         authState.user?.isSubscriber == true
+    }
+
+    /// AI writing assistance is a subscriber entitlement served from the app's
+    /// own provider key. One flag decides visibility; a free user sees no control
+    /// at all, and no price or upgrade copy ever appears in-app.
+    private var canUseAI: Bool {
+        ai.isAvailable(for: authState.user)
+    }
+
+    /// The composer's live cross-post selection in the shape `/api/ai/generate`
+    /// expects. Message Series reads this rather than offering its own picker:
+    /// it sizes the generated posts to the tightest selected service and, when
+    /// scheduling directly, cross-posts to exactly these accounts.
+    private var aiCrossPostSelection: AIComposerCrossPost {
+        guard canUseSubscriberFeatures, !isReply else { return AIComposerCrossPost() }
+        let linkedInOn = crossPostLinkedIn && hasLinkedIn
+        return AIComposerCrossPost(
+            crossPostToBluesky: crossPostBluesky && hasBluesky ? true : nil,
+            selectedMastodonIds: selectedMastodonIds.isEmpty ? nil : Array(selectedMastodonIds),
+            crossPostToTwitter: crossPostTwitter && hasTwitter ? true : nil,
+            crossPostToLinkedIn: linkedInOn ? true : nil,
+            selectedLinkedInTargets: linkedInOn ? resolvedLinkedInTargets : nil,
+            linkedInLinkAsFirstComment: linkedInOn && linkedInLinkAsFirstComment ? true : nil
+        )
+    }
+
+    /// Merges suggested tags into the tags field, case-insensitively de-duped
+    /// against what's already there. Only reachable from the full composer — the
+    /// assistant lives in `advancedToolbar`, which replies don't render.
+    private func applySuggestedTags(_ suggested: [String]) {
+        guard !suggested.isEmpty else { return }
+        let existing = tags
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        var merged = existing
+        for tag in suggested where !merged.contains(where: { $0.caseInsensitiveCompare(tag) == .orderedSame }) {
+            merged.append(tag)
+        }
+        tags = merged.joined(separator: ", ")
     }
 
     /// Free users with unverified email cannot post (matches site behavior).
@@ -147,6 +188,15 @@ struct ComposeView: View {
                     crossPostSection
                 }
 
+                if canUseAI && !isReply && !isRepost {
+                    AISeriesGeneratorSection(
+                        content: content,
+                        crossPost: aiCrossPostSelection,
+                        maxMessageLength: maxMessageLength,
+                        onCreated: handleAICreated
+                    )
+                }
+
                 if let error = errorMessage {
                     Section {
                         Text(error)
@@ -186,6 +236,7 @@ struct ComposeView: View {
             .task {
                 await loadIdentitiesIfNeeded()
                 await loadPostableOrgs()
+                if canUseAI { await ai.loadStatusIfNeeded() }
             }
             .alert(successTitle, isPresented: $showSuccess) {
                 Button("OK") {
@@ -340,6 +391,9 @@ struct ComposeView: View {
             Text("\(remainingCharacters) characters remaining")
                 .font(.ilMono())
                 .foregroundStyle(.secondary)
+            if canUseAI {
+                AIWritingAssistantButton(content: $content, onAddTags: applySuggestedTags)
+            }
             if canUseSubscriberFeatures {
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -676,6 +730,18 @@ struct ComposeView: View {
             composeLog.error("uploadVideo failed: \(error)")
             errorMessage = "Failed to upload video: \(error.localizedDescription)"
             selectedVideo = nil
+        }
+    }
+
+    /// A generated series lands server-side; pull the affected store back into
+    /// sync so the new list, folder, or scheduled posts show up without a manual
+    /// refresh. Scheduled messages live in their own view and need no prefetch.
+    private func handleAICreated(_ created: AICreated) {
+        if created.listId != nil {
+            Task { await store.refreshLists() }
+        }
+        if created.folderId != nil || created.documentId != nil {
+            Task { await store.refreshDocuments() }
         }
     }
 
