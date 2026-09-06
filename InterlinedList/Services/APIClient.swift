@@ -206,31 +206,37 @@ final class APIClient {
 
     // MARK: - Avatar upload (Phase 3 — sister agent dependency)
 
+    /// Both avatar routes persist the new avatar themselves
+    /// (`prisma.user.update`) and answer with `{ url, user }`, so the saved user
+    /// comes straight off the upload response — there is no follow-up write. An
+    /// earlier version POSTed `/api/user/update` to apply the URL, which the
+    /// route rejects with **405** (it exports `PATCH` only): the avatar landed on
+    /// the server but the app surfaced an error and never refreshed the local
+    /// `User`, so the change only appeared after a relaunch.
     func uploadAvatar(data: Data, mimeType: String) async throws -> User {
         let ext = mimeType == "image/png" ? "png" : "jpg"
         let responseData = try await postMultipartRawData(
             "/api/user/avatar/upload", fileName: "avatar.\(ext)", mimeType: mimeType, fileData: data
         )
-        struct UploadResp: Decodable { let url: String? }
-        if let avatarUrl = (try? decoder.decode(UploadResp.self, from: responseData))?.url {
-            return try await applyAvatarUrl(avatarUrl)
+        if let user = (try? decoder.decode(AvatarResponse.self, from: responseData))?.user {
+            return user
         }
         return try await currentUser()
     }
 
     func setAvatarFromURL(_ avatarUrl: String) async throws -> User {
         struct Body: Encodable { let url: String }
-        struct Response: Decodable { let url: String? }
-        let resp: Response = try await post("/api/user/avatar/from-url", body: Body(url: avatarUrl))
-        return try await applyAvatarUrl(resp.url ?? avatarUrl)
+        let response: AvatarResponse = try await post("/api/user/avatar/from-url", body: Body(url: avatarUrl))
+        if let user = response.user { return user }
+        return try await currentUser()
     }
 
-    private func applyAvatarUrl(_ url: String) async throws -> User {
-        struct Body: Encodable { let avatar: String }
-        struct Resp: Decodable { let user: User? }
-        let wrapped: Resp = try await post("/api/user/update", body: Body(avatar: url))
-        if let user = wrapped.user { return user }
-        return try await currentUser()
+    /// The shape both avatar routes answer with. `user` is optional only to
+    /// tolerate an older deployment that sent the bare `{ url }`; the fallback
+    /// re-reads the profile rather than leaving the caller a stale avatar.
+    private struct AvatarResponse: Decodable {
+        let url: String?
+        let user: User?
     }
 
     // MARK: - Organizations (Phase 3 — sister agent dependency)
