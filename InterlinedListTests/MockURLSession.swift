@@ -7,44 +7,45 @@ import Foundation
 final class MockURLSession: URLSessionProtocol {
     private var stubbedData: Data = Data()
     private var stubbedStatusCode: Int = 200
-    private var stubQueue: [(Data, Int)] = []
+    private var stubbedHeaders: [String: String]?
+    private var stubQueue: [(Data, Int, [String: String]?)] = []
 
     private(set) var lastRequest: URLRequest?
     private(set) var requestHistory: [URLRequest] = []
 
-    func stub(data: Data, statusCode: Int = 200) {
+    func stub(data: Data, statusCode: Int = 200, headers: [String: String]? = nil) {
         stubbedData = data
         stubbedStatusCode = statusCode
+        stubbedHeaders = headers
     }
 
-    func stub(json: String, statusCode: Int = 200) {
-        stubbedData = Data(json.utf8)
-        stubbedStatusCode = statusCode
+    func stub(json: String, statusCode: Int = 200, headers: [String: String]? = nil) {
+        stub(data: Data(json.utf8), statusCode: statusCode, headers: headers)
     }
 
-    func enqueue(json: String, statusCode: Int = 200) {
-        stubQueue.append((Data(json.utf8), statusCode))
+    func enqueue(json: String, statusCode: Int = 200, headers: [String: String]? = nil) {
+        stubQueue.append((Data(json.utf8), statusCode, headers))
     }
 
-    func enqueue(data: Data, statusCode: Int = 200) {
-        stubQueue.append((data, statusCode))
+    func enqueue(data: Data, statusCode: Int = 200, headers: [String: String]? = nil) {
+        stubQueue.append((data, statusCode, headers))
     }
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         lastRequest = request
         requestHistory.append(request)
         let url = request.url ?? URL(string: "https://interlinedlist.com")!
-        let (body, status): (Data, Int)
+        let (body, status, headers): (Data, Int, [String: String]?)
         if !stubQueue.isEmpty {
-            (body, status) = stubQueue.removeFirst()
+            (body, status, headers) = stubQueue.removeFirst()
         } else {
-            (body, status) = (stubbedData, stubbedStatusCode)
+            (body, status, headers) = (stubbedData, stubbedStatusCode, stubbedHeaders)
         }
         let response = HTTPURLResponse(
             url: url,
             statusCode: status,
             httpVersion: nil,
-            headerFields: nil
+            headerFields: headers
         )!
         return (body, response)
     }

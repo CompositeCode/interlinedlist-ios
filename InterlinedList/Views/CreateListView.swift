@@ -5,11 +5,32 @@
 
 import SwiftUI
 
+/// Which builder the New List sheet is showing. Powered Templates appear only
+/// for accounts with the AI entitlement — for everyone else the picker is absent
+/// and the sheet is the blank builder it has always been.
+private enum CreateListMode: String, CaseIterable, Identifiable {
+    case blank
+    case powered
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .blank: return "Blank"
+        case .powered: return "AI Template"
+        }
+    }
+}
+
 struct CreateListView: View {
-    let onCreate: (UserList) -> Void
+    /// Receives the new list, or `nil` when it was created server-side from an AI
+    /// artifact and could not be re-fetched — either way the list exists.
+    let onCreate: (UserList?) -> Void
 
     @EnvironmentObject private var authState: AuthState
+    @ObservedObject private var ai = AIService.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var mode: CreateListMode = .blank
     @State private var name = ""
     @State private var description = ""
     @State private var isPublic = true
@@ -27,6 +48,7 @@ struct CreateListView: View {
     private var isSubscriber: Bool { authState.user?.isSubscriber == true }
     private var hasGitHubIdentity: Bool { authState.hasGitHubIdentity }
     private var canOfferGitHub: Bool { isSubscriber && hasGitHubIdentity }
+    private var canUseAI: Bool { ai.isAvailable(for: authState.user) }
 
     private var trimmedName: String {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -42,41 +64,11 @@ struct CreateListView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("Name", text: $name)
-                    TextField("Description (optional)", text: $description)
-                    Toggle("Public", isOn: $isPublic)
-                }
-
-                githubSection
-
-                if !githubBacked {
-                    columnsSection
-                }
-
-                if let error = errorMessage {
-                    Section {
-                        Text(error)
-                            .foregroundStyle(.red)
-                            .font(.ilMono())
-                    }
-                }
-
-                Section {
-                    Button {
-                        Task { await create() }
-                    } label: {
-                        HStack {
-                            if isLoading {
-                                ProgressView()
-                                    .frame(width: 20, height: 20)
-                            }
-                            Text("Create")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .disabled(!canCreate)
+            Group {
+                if mode == .powered {
+                    AIPoweredTemplateView(onCreate: onCreate)
+                } else {
+                    blankListForm
                 }
             }
             .navigationTitle("New List")
@@ -85,9 +77,61 @@ struct CreateListView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                if canUseAI {
+                    ToolbarItem(placement: .principal) {
+                        Picker("Builder", selection: $mode) {
+                            ForEach(CreateListMode.allCases) { option in
+                                Text(option.label).tag(option)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("List builder")
+                    }
+                }
             }
             .task {
                 if isSubscriber { await authState.loadLinkedProvidersIfNeeded() }
+                if canUseAI { await ai.loadStatusIfNeeded() }
+            }
+        }
+    }
+
+    private var blankListForm: some View {
+        Form {
+            Section {
+                TextField("Name", text: $name)
+                TextField("Description (optional)", text: $description)
+                Toggle("Public", isOn: $isPublic)
+            }
+
+            githubSection
+
+            if !githubBacked {
+                columnsSection
+            }
+
+            if let error = errorMessage {
+                Section {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .font(.ilMono())
+                }
+            }
+
+            Section {
+                Button {
+                    Task { await create() }
+                } label: {
+                    HStack {
+                        if isLoading {
+                            ProgressView()
+                                .frame(width: 20, height: 20)
+                        }
+                        Text("Create")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .disabled(!canCreate)
             }
         }
     }

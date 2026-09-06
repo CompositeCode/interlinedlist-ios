@@ -8,10 +8,13 @@ import SwiftUI
 struct DocumentsView: View {
     @EnvironmentObject var authState: AuthState
     @EnvironmentObject var store: AppDataStore
+    @ObservedObject private var ai = AIService.shared
     @State private var showCreate = false
     @State private var showCreateFolder = false
     @State private var showTemplatePicker = false
-    @State private var createdFromTemplate: Document?
+    @State private var showPoweredDocument = false
+    /// The document just created from a template or by the AI, opened on arrival.
+    @State private var createdDocument: Document?
     @State private var folderToDelete: DocumentFolder?
     @State private var showDeleteFolderConfirm = false
     @State private var searchText = ""
@@ -25,6 +28,10 @@ struct DocumentsView: View {
     private var canCreateFolders: Bool {
         authState.user?.isSubscriber == true
     }
+
+    /// AI drafts documents at the root, so this entry point lives here and not
+    /// inside `DocumentFolderView`.
+    private var canUseAI: Bool { ai.isAvailable(for: authState.user) }
 
     // Folders are a subscriber-only feature. For free users we surface no
     // folder UI and treat every document as root-level (regardless of its
@@ -87,6 +94,9 @@ struct DocumentsView: View {
                 }
             }
             .navigationTitle("Documents")
+            .task {
+                if canUseAI { await ai.loadStatusIfNeeded() }
+            }
             .searchable(text: $searchText, prompt: "Search documents")
             .onSubmit(of: .search) {
                 Task { await runSearch(reset: true) }
@@ -127,6 +137,13 @@ struct DocumentsView: View {
                                 Label("New Folder", systemImage: "folder.badge.plus")
                             }
                         }
+                        if canUseAI {
+                            Button {
+                                showPoweredDocument = true
+                            } label: {
+                                Label("Powered Document", systemImage: "sparkles")
+                            }
+                        }
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 15, weight: .semibold))
@@ -148,10 +165,22 @@ struct DocumentsView: View {
             .sheet(isPresented: $showTemplatePicker) {
                 TemplatePickerView(targetFolderId: nil) { newDoc in
                     store.insertDocument(newDoc)
-                    createdFromTemplate = newDoc
+                    createdDocument = newDoc
                 }
             }
-            .navigationDestination(item: $createdFromTemplate) { doc in
+            .sheet(isPresented: $showPoweredDocument) {
+                AIPoweredDocumentSheet { newDoc in
+                    if let newDoc {
+                        store.insertDocument(newDoc)
+                        createdDocument = newDoc
+                    } else {
+                        Task { await store.refreshDocuments() }
+                    }
+                }
+                .environmentObject(authState)
+                .environmentObject(store)
+            }
+            .navigationDestination(item: $createdDocument) { doc in
                 DocumentDetailView(document: doc, onUpdate: { updated in
                     store.updateDocument(updated)
                 }, onDelete: { id in
