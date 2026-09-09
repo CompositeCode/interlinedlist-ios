@@ -506,6 +506,20 @@ final class AppDataStore: ObservableObject {
     }
     func removeDocumentFolder(id: String) { documentFolders.removeAll { $0.id == id }; persistDocs() }
 
+    /// Mirrors a renamed/moved folder into the local tree and persists it, so the
+    /// change survives a cold start the way a create or delete does.
+    ///
+    /// Unlike `createDocumentFolderOffline` / `deleteDocumentFolderOffline` this
+    /// deliberately enqueues **no** sync operation: `POST /api/documents/sync`
+    /// answers a folder update with `unsupported_operation` ("Folders support only
+    /// `create` and `delete`"), so the change reaches the server through
+    /// `PUT /api/documents/folders/{id}` and this only mirrors the result.
+    func updateDocumentFolder(_ folder: DocumentFolder) {
+        guard let idx = documentFolders.firstIndex(where: { $0.id == folder.id }) else { return }
+        documentFolders[idx] = folder
+        persistDocs()
+    }
+
     private func persistDocs() {
         if offlineDocSyncEnabled {
             saveDocsSyncCache()
