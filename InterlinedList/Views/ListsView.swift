@@ -399,6 +399,8 @@ struct ListDetailView: View {
     @State private var isRefreshingGitHub = false
     @State private var gitHubRefreshError: String?
     @State private var gitHubStateFilter: GitHubStateFilter = .open
+    @State private var contributors = ListContributorsResult.empty
+    @State private var showContributors = false
 
     /// Open/closed filter for GitHub-backed lists. GitHub issues carry a `state`
     /// of `open`/`closed`; the list defaults to showing open issues only.
@@ -445,6 +447,13 @@ struct ListDetailView: View {
             : "No closed issues. Switch to Open to see open issues."
     }
 
+    /// GitHub-backed lists have no contributor set — the route returns empty by
+    /// design — and a single-owner list with nobody else on it is noise, so the
+    /// stack only appears from two distinct contributors up (matching the web).
+    private var showsContributors: Bool {
+        !list.isGitHubBacked && contributors.totalContributors >= 2
+    }
+
     var body: some View {
         Group {
             if isLoading && items.isEmpty {
@@ -463,6 +472,9 @@ struct ListDetailView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
+                    if showsContributors {
+                        contributorsSection
+                    }
                     if list.isGitHubBacked {
                         gitHubStatusSection
                         if !items.isEmpty {
@@ -664,11 +676,44 @@ struct ListDetailView: View {
                 Task { await saveEdit(item: item, rowData: rowData) }
             }
         }
+        .sheet(isPresented: $showContributors) {
+            ListContributorsSheet(
+                contributors: contributors.contributors,
+                total: contributors.totalContributors
+            )
+        }
         .confirmationDialog("Delete this item?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 if let item = deletingItem { Task { await deleteItem(item) } }
             }
             Button("Cancel", role: .cancel) { deletingItem = nil }
+        }
+    }
+
+    @ViewBuilder
+    private var contributorsSection: some View {
+        Section {
+            Button {
+                showContributors = true
+            } label: {
+                HStack(spacing: 10) {
+                    ContributorAvatarStack(
+                        contributors: contributors.contributors,
+                        total: contributors.totalContributors
+                    )
+                    Text(ContributorAvatarStack.label(for: contributors.totalContributors))
+                        .font(.ilBody(15))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.ilBody(12))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ContributorAvatarStack.label(for: contributors.totalContributors))
+            .accessibilityHint("Opens the full list of contributors")
         }
     }
 
@@ -844,6 +889,7 @@ struct ListDetailView: View {
             async let itemsTask = APIClient.shared.listItems(listId: list.id)
             async let connectionsTask = APIClient.shared.listConnections()
             async let allListsTask = APIClient.shared.lists()
+            async let contributorsTask = fetchContributors()
             let (fetchedSchema, fetchedItems) = try await (schemaTask, itemsTask)
             // The server returns the synthetic issue schema for GitHub-backed
             // lists (backend fix). The client fallback is a safety net for an
@@ -858,6 +904,7 @@ struct ListDetailView: View {
             connections = (try? await connectionsTask)?
                 .filter { $0.fromListId == listId || $0.toListId == listId } ?? []
             allLists = (try? await allListsTask) ?? []
+            contributors = await contributorsTask
         } catch APIError.status(401) {
             authState.handleUnauthorized()
             errorMessage = "Session expired or not authorized."
@@ -866,6 +913,14 @@ struct ListDetailView: View {
         } catch {
             errorMessage = "Failed to load list."
         }
+    }
+
+    /// Non-fatal: a failed or forbidden contributor fetch simply leaves the stack
+    /// hidden rather than failing the whole list. Skipped entirely for
+    /// GitHub-backed lists, whose contributor set is empty by design.
+    private func fetchContributors() async -> ListContributorsResult {
+        guard !list.isGitHubBacked else { return .empty }
+        return (try? await APIClient.shared.listContributors(listId: list.id)) ?? .empty
     }
 }
 
