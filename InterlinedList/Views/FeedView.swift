@@ -32,9 +32,19 @@ struct FeedView: View {
     @State private var searchPerformed = false
     @State private var reportTarget: ReportTarget? = nil
     @State private var blockedUserIds: Set<String> = []
+    @ObservedObject private var muteStore = MuteStore.shared
+    @State private var muteTarget: MuteTarget?
+    @State private var muteError: String?
     @State private var detailMessage: Message?
     @State private var trendingTags: [TrendingTag] = []
     @State private var tagSuggestions: [TagSuggestion] = []
+
+    /// Blocked and muted authors are both hidden from the feed; mute is the softer
+    /// control but the row has to disappear either way for the action to read as
+    /// having worked.
+    private func isVisibleAuthor(_ userId: String) -> Bool {
+        !blockedUserIds.contains(userId) && !muteStore.isMuted(userId)
+    }
 
     private var distinctTags: [String] {
         var seen = Set<String>()
@@ -93,7 +103,7 @@ struct FeedView: View {
             ContentUnavailableView.search(text: searchText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            List(searchResults.filter { !blockedUserIds.contains($0.userId) }) { message in
+            List(searchResults.filter { isVisibleAuthor($0.userId) }) { message in
                 MessageRow(
                     message: message,
                     currentUserId: authState.user?.id,
@@ -107,6 +117,7 @@ struct FeedView: View {
                     onTapAuthor: { username in profileUsername = username },
                     onReport: { reportTarget = .message(id: message.id) },
                     onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } },
+                    onMute: { muteTarget = MuteTarget(message: message) },
                     onOpenDetail: { detailMessage = message }
                 )
             }
@@ -180,7 +191,7 @@ struct FeedView: View {
                     }
                 }
             }
-            ForEach(messages.filter { !blockedUserIds.contains($0.userId) }) { message in
+            ForEach(messages.filter { isVisibleAuthor($0.userId) }) { message in
                 MessageRow(
                     message: message,
                     currentUserId: authState.user?.id,
@@ -200,6 +211,7 @@ struct FeedView: View {
                     onTapAuthor: { username in profileUsername = username },
                     onReport: { reportTarget = .message(id: message.id) },
                     onBlock: { Task { await blockUser(userId: message.userId, username: message.user?.username ?? "") } },
+                    onMute: { muteTarget = MuteTarget(message: message) },
                     onOpenDetail: {
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         detailMessage = message
@@ -306,6 +318,9 @@ struct FeedView: View {
                 .environmentObject(authState)
                 .environmentObject(store)
         }
+        .muteConfirmation(target: $muteTarget, errorMessage: $muteError) { target in
+            Task { await mute(target) }
+        }
         .task { await applyInitialState() }
         .onChange(of: authState.user?.id) { _, _ in
             if authState.isLoggedIn { Task { await loadMessages() } }
@@ -388,7 +403,9 @@ struct FeedView: View {
         } else {
             isLoading = store.feedLoading
         }
-        await loadTrendingTags()
+        async let muted: Void = loadMutedUsers()
+        async let trending: Void = loadTrendingTags()
+        _ = await (muted, trending)
     }
 
     /// Server-wide trending tags for the discovery strip (G13). Non-critical: on any
@@ -489,6 +506,29 @@ struct FeedView: View {
         }
     }
 
+    private func mute(_ target: MuteTarget) async {
+        muteError = nil
+        do {
+            try await muteStore.mute(userId: target.id, username: target.username, displayName: target.displayName)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            muteError = "Could not mute @\(target.username)."
+        }
+    }
+
+    /// Non-critical: a failure just leaves the filter empty, so the feed shows
+    /// everything rather than silently hiding the wrong people.
+    private func loadMutedUsers() async {
+        do {
+            try await muteStore.loadIfNeeded()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            // Ignore — the feed still works unfiltered.
+        }
+    }
+
     private func loadMessages() async {
         errorMessage = nil
         isLoading = true
@@ -543,6 +583,7 @@ struct MessageRow: View {
     var onTapAuthor: ((String) -> Void)? = nil
     var onReport: (() -> Void)? = nil
     var onBlock: (() -> Void)? = nil
+    var onMute: (() -> Void)? = nil
     var onOpenDetail: (() -> Void)? = nil
     var truncateContent: Bool = false
 
@@ -666,7 +707,7 @@ struct MessageRow: View {
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Delete")
-                } else if onReport != nil || onBlock != nil {
+                } else if onReport != nil || onBlock != nil || onMute != nil {
                     Menu {
                         if let onReport {
                             Button(role: .destructive) {
@@ -675,12 +716,21 @@ struct MessageRow: View {
                                 Label("Report…", systemImage: "flag")
                             }
                         }
+                        if let onMute {
+                            Button {
+                                onMute()
+                            } label: {
+                                Label("Mute user", systemImage: "speaker.slash")
+                            }
+                            .accessibilityLabel("Mute user")
+                        }
                         if let onBlock {
                             Button(role: .destructive) {
                                 onBlock()
                             } label: {
                                 Label("Block user", systemImage: "person.slash")
                             }
+                            .accessibilityLabel("Block user")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
