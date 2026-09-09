@@ -69,6 +69,22 @@ struct InterlinedListApp: App {
         case .document(let id):
             DocumentLinkView(documentId: id)
                 .environmentObject(authState)
+        case .list(let id):
+            ListLinkView(listId: id)
+                .environmentObject(authState)
+                .environmentObject(store)
+        case .publicList(let owner, let id):
+            NavigationStack {
+                PublicListDetailView(username: owner, listId: id)
+                    .toolbar { deepLinkDoneButton }
+            }
+            .environmentObject(authState)
+        case .publicDocument(_, let id):
+            NavigationStack {
+                PublicDocumentReader(documentId: id, title: "Document")
+                    .toolbar { deepLinkDoneButton }
+            }
+            .environmentObject(authState)
         case .sharedDocument(let token):
             SharedDocumentView(token: token)
                 .environmentObject(authState)
@@ -79,6 +95,15 @@ struct InterlinedListApp: App {
             // These never present a sheet — they run an async side effect in
             // handleDeepLink and are never assigned to pendingDeepLink.
             EmptyView()
+        }
+    }
+
+    /// The public list/document readers are built to be *pushed*, so presenting one
+    /// from a deep link has to supply its own way back out.
+    @ToolbarContentBuilder
+    private var deepLinkDoneButton: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Done") { router.pendingDeepLink = nil }
         }
     }
 
@@ -101,7 +126,8 @@ struct InterlinedListApp: App {
             Task { await verifyEmail(token: token) }
         case .verifyEmailChange(let token):
             Task { await verifyEmailChange(token: token) }
-        case .resetPassword, .userProfile, .message, .document, .sharedDocument, .sharedList:
+        case .resetPassword, .userProfile, .message, .document, .list,
+             .publicList, .publicDocument, .sharedDocument, .sharedList:
             router.pendingDeepLink = link
         }
     }
@@ -154,6 +180,11 @@ enum AppDeepLink: Identifiable, Hashable {
     case userProfile(username: String)
     case message(id: String)
     case document(id: String)
+    case list(id: String)
+    /// Owner-scoped public permalinks (`/user/<owner>/lists|documents/<id>`) —
+    /// the links the web shows when a list or document is made public.
+    case publicList(owner: String, id: String)
+    case publicDocument(owner: String, id: String)
     case sharedDocument(token: String)
     case sharedList(token: String)
 
@@ -165,6 +196,9 @@ enum AppDeepLink: Identifiable, Hashable {
         case .userProfile(let username): return "profile:" + username
         case .message(let id): return "message:" + id
         case .document(let id): return "document:" + id
+        case .list(let id): return "list:" + id
+        case .publicList(let owner, let id): return "public-list:" + owner + "/" + id
+        case .publicDocument(let owner, let id): return "public-document:" + owner + "/" + id
         case .sharedDocument(let token): return "shared-document:" + token
         case .sharedList(let token): return "shared-list:" + token
         }
@@ -172,9 +206,10 @@ enum AppDeepLink: Identifiable, Hashable {
 
     /// Parses both the custom scheme (`interlinedlist://…`, where the target is the
     /// URL host or first path segment) and canonical web permalinks
-    /// (`https://interlinedlist.com/…` / `https://www.interlinedlist.com/…`). Content
-    /// links map to `.userProfile` / `.message`; auth links preserve their `?token`.
-    /// Returns nil for unknown targets or web hosts other than interlinedlist.com.
+    /// (`https://interlinedlist.com/…` / `https://www.interlinedlist.com/…`), including
+    /// the owner-scoped shapes the web hands out (`/user/<u>/status/<id>` is the
+    /// canonical *message* permalink, not a profile link); auth links preserve their
+    /// `?token`. Returns nil for unknown targets or hosts other than interlinedlist.com.
     static func parse(_ url: URL) -> AppDeepLink? {
         let scheme = url.scheme?.lowercased()
         let host = url.host?.lowercased() ?? ""
@@ -207,6 +242,16 @@ enum AppDeepLink: Identifiable, Hashable {
         switch target {
         case "user":
             guard let username = segments.first, !username.isEmpty else { return nil }
+            // The web scopes its canonical permalinks to the author's profile, so the
+            // second segment — not the first — decides what a /user/… link opens.
+            if segments.count >= 3, !segments[2].isEmpty {
+                switch segments[1] {
+                case "status": return .message(id: segments[2])
+                case "lists": return .publicList(owner: username, id: segments[2])
+                case "documents": return .publicDocument(owner: username, id: segments[2])
+                default: break
+                }
+            }
             return .userProfile(username: username)
         case "message":
             guard let id = segments.first, !id.isEmpty else { return nil }
@@ -222,11 +267,14 @@ enum AppDeepLink: Identifiable, Hashable {
             return .document(id: id)
         case "lists":
             // `/lists/shared/<token>` resolves a self-contained share-link token
-            // (read-only viewer). A bare `/lists/<id>` permalink is NOT routed — it
-            // carries no owner username, which the list-detail endpoint requires
-            // (see the-gaps.md); only the shared-token form is handled here.
-            guard segments.first == "shared", segments.count >= 2, !segments[1].isEmpty else { return nil }
-            return .sharedList(token: segments[1])
+            // (read-only viewer); a bare `/lists/<id>` is the authed permalink the
+            // app itself hands out (`ILWebURL.list(_:)`), routed to the list detail.
+            if segments.first == "shared" {
+                guard segments.count >= 2, !segments[1].isEmpty else { return nil }
+                return .sharedList(token: segments[1])
+            }
+            guard let id = segments.first, !id.isEmpty else { return nil }
+            return .list(id: id)
         case "reset-password":
             guard let token, !token.isEmpty else { return nil }
             return .resetPassword(token: token)
