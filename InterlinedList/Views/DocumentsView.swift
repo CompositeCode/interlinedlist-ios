@@ -17,6 +17,10 @@ struct DocumentsView: View {
     @State private var createdDocument: Document?
     @State private var folderToDelete: DocumentFolder?
     @State private var showDeleteFolderConfirm = false
+    /// The folder whose row is currently an inline rename field, if any.
+    @State private var renamingFolderID: String?
+    @State private var renameText = ""
+    @State private var renameError: String?
     @State private var searchText = ""
     @State private var searchResults: [Document] = []
     @State private var isSearching = false
@@ -204,7 +208,33 @@ struct DocumentsView: View {
             } message: { _ in
                 Text("This also deletes any documents and subfolders inside it.")
             }
+            .alert("Couldn't rename folder", isPresented: Binding(
+                get: { renameError != nil },
+                set: { if !$0 { renameError = nil } }
+            ), presenting: renameError) { _ in
+                Button("OK", role: .cancel) { renameError = nil }
+            } message: { message in
+                Text(message)
+            }
         }
+    }
+
+    private func beginRename(of folder: DocumentFolder) {
+        renameText = folder.name
+        renamingFolderID = folder.id
+    }
+
+    /// Shows the new name immediately, then writes it back with whatever the
+    /// server saved — or with the untouched original if the write was refused.
+    private func commitRename(of folder: DocumentFolder) async {
+        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        renamingFolderID = nil
+        guard !trimmed.isEmpty, trimmed != folder.name else { return }
+        store.updateDocumentFolder(folder.renamed(to: trimmed))
+        let result = await confirmFolderRename(folder, to: trimmed)
+        store.updateDocumentFolder(result.folder)
+        if result.wasUnauthorized { authState.handleUnauthorized() }
+        renameError = result.errorMessage
     }
 
     private func deleteFolder(_ folder: DocumentFolder) async {
@@ -347,23 +377,40 @@ struct DocumentsView: View {
             if !rootFolders.isEmpty {
                 Section("Folders") {
                     ForEach(rootFolders) { folder in
-                        NavigationLink(destination: DocumentFolderView(folder: folder)) {
-                            Label(folder.name, systemImage: "folder")
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                folderToDelete = folder
-                                showDeleteFolderConfirm = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                        if renamingFolderID == folder.id {
+                            FolderRenameField(originalName: folder.name, text: $renameText,
+                                              onCommit: { Task { await commitRename(of: folder) } },
+                                              onCancel: { renamingFolderID = nil })
+                        } else {
+                            NavigationLink(destination: DocumentFolderView(folder: folder)) {
+                                Label(folder.name, systemImage: "folder")
                             }
-                        }
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                folderToDelete = folder
-                                showDeleteFolderConfirm = true
-                            } label: {
-                                Label("Delete Folder", systemImage: "trash")
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    folderToDelete = folder
+                                    showDeleteFolderConfirm = true
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                Button {
+                                    beginRename(of: folder)
+                                } label: {
+                                    Label("Rename", systemImage: "pencil")
+                                }
+                                .tint(Color(ILColor.primary))
+                            }
+                            .contextMenu {
+                                Button {
+                                    beginRename(of: folder)
+                                } label: {
+                                    Label("Rename", systemImage: "pencil")
+                                }
+                                Button(role: .destructive) {
+                                    folderToDelete = folder
+                                    showDeleteFolderConfirm = true
+                                } label: {
+                                    Label("Delete Folder", systemImage: "trash")
+                                }
                             }
                         }
                     }
@@ -415,6 +462,10 @@ private struct DocumentFolderView: View {
     @State private var createdFromTemplate: Document?
     @State private var folderToDelete: DocumentFolder?
     @State private var showDeleteFolderConfirm = false
+    /// The subfolder whose row is currently an inline rename field, if any.
+    @State private var renamingFolderID: String?
+    @State private var renameText = ""
+    @State private var renameError: String?
 
     var body: some View {
         Group {
@@ -497,6 +548,14 @@ private struct DocumentFolderView: View {
         } message: { _ in
             Text("This also deletes any documents and subfolders inside it.")
         }
+        .alert("Couldn't rename folder", isPresented: Binding(
+            get: { renameError != nil },
+            set: { if !$0 { renameError = nil } }
+        ), presenting: renameError) { _ in
+            Button("OK", role: .cancel) { renameError = nil }
+        } message: { message in
+            Text(message)
+        }
     }
 
     private var folderList: some View {
@@ -504,23 +563,40 @@ private struct DocumentFolderView: View {
             if !subfolders.isEmpty {
                 Section("Folders") {
                     ForEach(subfolders) { sub in
-                        NavigationLink(destination: DocumentFolderView(folder: sub)) {
-                            Label(sub.name, systemImage: "folder")
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                folderToDelete = sub
-                                showDeleteFolderConfirm = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                        if renamingFolderID == sub.id {
+                            FolderRenameField(originalName: sub.name, text: $renameText,
+                                              onCommit: { Task { await commitRename(of: sub) } },
+                                              onCancel: { renamingFolderID = nil })
+                        } else {
+                            NavigationLink(destination: DocumentFolderView(folder: sub)) {
+                                Label(sub.name, systemImage: "folder")
                             }
-                        }
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                folderToDelete = sub
-                                showDeleteFolderConfirm = true
-                            } label: {
-                                Label("Delete Folder", systemImage: "trash")
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    folderToDelete = sub
+                                    showDeleteFolderConfirm = true
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                                Button {
+                                    beginRename(of: sub)
+                                } label: {
+                                    Label("Rename", systemImage: "pencil")
+                                }
+                                .tint(Color(ILColor.primary))
+                            }
+                            .contextMenu {
+                                Button {
+                                    beginRename(of: sub)
+                                } label: {
+                                    Label("Rename", systemImage: "pencil")
+                                }
+                                Button(role: .destructive) {
+                                    folderToDelete = sub
+                                    showDeleteFolderConfirm = true
+                                } label: {
+                                    Label("Delete Folder", systemImage: "trash")
+                                }
                             }
                         }
                     }
@@ -580,6 +656,31 @@ private struct DocumentFolderView: View {
         }
         for doc in toDelete {
             try? await APIClient.shared.deleteDocument(id: doc.id)
+        }
+    }
+
+    private func beginRename(of sub: DocumentFolder) {
+        renameText = sub.name
+        renamingFolderID = sub.id
+    }
+
+    /// Mirrors `DocumentsView.commitRename`, and additionally keeps this view's
+    /// locally-held `subfolders` in step with the store.
+    private func commitRename(of sub: DocumentFolder) async {
+        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        renamingFolderID = nil
+        guard !trimmed.isEmpty, trimmed != sub.name else { return }
+        applyRenamed(sub.renamed(to: trimmed))
+        let result = await confirmFolderRename(sub, to: trimmed)
+        applyRenamed(result.folder)
+        if result.wasUnauthorized { authState.handleUnauthorized() }
+        renameError = result.errorMessage
+    }
+
+    private func applyRenamed(_ updated: DocumentFolder) {
+        store.updateDocumentFolder(updated)
+        if let idx = subfolders.firstIndex(where: { $0.id == updated.id }) {
+            subfolders[idx] = updated
         }
     }
 
@@ -1176,6 +1277,75 @@ private struct TemplatePickerView: View {
         } catch {
             createError = "Failed to create document from template."
         }
+    }
+}
+
+/// Inline editor swapped in for a folder row while that folder is being renamed.
+private struct FolderRenameField: View {
+    let originalName: String
+    @Binding var text: String
+    let onCommit: () -> Void
+    let onCancel: () -> Void
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "folder")
+                .foregroundStyle(.secondary)
+            TextField("Folder name", text: $text)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .focused($focused)
+                .onSubmit(onCommit)
+                .accessibilityLabel("New name for folder \(originalName)")
+            Button(action: onCancel) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cancel renaming \(originalName)")
+        }
+        .onAppear { focused = true }
+    }
+}
+
+/// Outcome of confirming an optimistic folder rename with the server.
+private struct FolderRenameResult {
+    /// What the row should show now: the saved folder, or `original` as a rollback.
+    let folder: DocumentFolder
+    /// Readable text when the server refused the write, `nil` when it succeeded.
+    let errorMessage: String?
+    /// A 401 is re-validated by the caller rather than shown as an alert.
+    let wasUnauthorized: Bool
+}
+
+/// Confirms an already-applied optimistic rename. Never throws — the caller
+/// always gets a folder value to write back, so the row can't be left showing a
+/// name the server never accepted.
+@MainActor
+private func confirmFolderRename(_ original: DocumentFolder,
+                                 to newName: String) async -> FolderRenameResult {
+    do {
+        let saved = try await APIClient.shared.updateDocumentFolder(id: original.id, name: newName)
+        return FolderRenameResult(folder: saved, errorMessage: nil, wasUnauthorized: false)
+    } catch APIError.status(401) {
+        return FolderRenameResult(folder: original, errorMessage: nil, wasUnauthorized: true)
+    } catch {
+        return FolderRenameResult(folder: original,
+                                  errorMessage: folderWriteMessage(for: error),
+                                  wasUnauthorized: false)
+    }
+}
+
+/// Prefers the server's own copy for a refused folder write: the `400` that
+/// rejects a circular move and the `409` duplicate-name conflict both arrive as
+/// `APIError.server(_:)` carrying text that reads well as-is.
+private func folderWriteMessage(for error: Error) -> String {
+    switch error {
+    case APIError.server(let message), APIError.conflict(let message), APIError.forbidden(let message):
+        return message
+    default:
+        return "Couldn't update the folder. Please try again."
     }
 }
 
