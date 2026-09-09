@@ -33,10 +33,109 @@ final class AppDeepLinkParseTests: XCTestCase {
         XCTAssertEqual(parse("https://www.interlinedlist.com/message/abc"), .message(id: "abc"))
     }
 
-    func test_parse_httpsCanonicalList_isNotRouted_returnsNil() {
-        // List permalinks are deliberately not routed: a bare `/lists/<id>` has no
-        // owner username, which the list-detail endpoint requires (G10 follow-on).
-        XCTAssertNil(parse("https://interlinedlist.com/lists/xyz"))
+    // MARK: - W7: every link shape the web can hand a user
+    //
+    // One test per row of issue #61's table, in both the custom-scheme and the
+    // https (bare and www) forms. The rows that already worked are pinned here
+    // too so the routing table as a whole is regression-locked.
+
+    // /user/<u>/status/<id> — the web's canonical *message* permalink. Parsing
+    // only the first segment used to open the author's profile instead.
+    func test_parse_httpsUserStatus_returnsMessage() {
+        XCTAssertEqual(parse("https://interlinedlist.com/user/bob/status/msg-1"),
+                       .message(id: "msg-1"))
+    }
+
+    func test_parse_httpsWwwUserStatus_returnsMessage() {
+        XCTAssertEqual(parse("https://www.interlinedlist.com/user/bob/status/msg-1"),
+                       .message(id: "msg-1"))
+    }
+
+    func test_parse_customSchemeUserStatus_returnsMessage() {
+        XCTAssertEqual(parse("interlinedlist://user/bob/status/msg-1"),
+                       .message(id: "msg-1"))
+    }
+
+    // /user/<u>/lists/<id> — public list permalink.
+    func test_parse_httpsUserPublicList_returnsPublicList() {
+        XCTAssertEqual(parse("https://interlinedlist.com/user/bob/lists/l-1"),
+                       .publicList(owner: "bob", id: "l-1"))
+    }
+
+    func test_parse_httpsWwwUserPublicList_returnsPublicList() {
+        XCTAssertEqual(parse("https://www.interlinedlist.com/user/bob/lists/l-1"),
+                       .publicList(owner: "bob", id: "l-1"))
+    }
+
+    func test_parse_customSchemeUserPublicList_returnsPublicList() {
+        XCTAssertEqual(parse("interlinedlist://user/bob/lists/l-1"),
+                       .publicList(owner: "bob", id: "l-1"))
+    }
+
+    // /user/<u>/documents/<id> — public document permalink.
+    func test_parse_httpsUserPublicDocument_returnsPublicDocument() {
+        XCTAssertEqual(parse("https://interlinedlist.com/user/bob/documents/d-1"),
+                       .publicDocument(owner: "bob", id: "d-1"))
+    }
+
+    func test_parse_httpsWwwUserPublicDocument_returnsPublicDocument() {
+        XCTAssertEqual(parse("https://www.interlinedlist.com/user/bob/documents/d-1"),
+                       .publicDocument(owner: "bob", id: "d-1"))
+    }
+
+    func test_parse_customSchemeUserPublicDocument_returnsPublicDocument() {
+        XCTAssertEqual(parse("interlinedlist://user/bob/documents/d-1"),
+                       .publicDocument(owner: "bob", id: "d-1"))
+    }
+
+    // A profile link is still a profile link, and so is anything under a profile
+    // that is not one of the three known sub-shapes.
+    func test_parse_httpsUserUnknownSubsection_fallsBackToUserProfile() {
+        XCTAssertEqual(parse("https://interlinedlist.com/user/bob/followers/x"),
+                       .userProfile(username: "bob"))
+    }
+
+    func test_parse_httpsUserStatusWithoutId_fallsBackToUserProfile() {
+        XCTAssertEqual(parse("https://interlinedlist.com/user/bob/status"),
+                       .userProfile(username: "bob"))
+    }
+
+    // /lists/<id> — the permalink iOS itself generates (`ILWebURL.list(_:)`).
+    // `GET /api/lists/:id` authorizes by role, so no owner username is needed.
+    func test_parse_httpsCanonicalList_returnsList() {
+        XCTAssertEqual(parse("https://interlinedlist.com/lists/xyz"), .list(id: "xyz"))
+    }
+
+    func test_parse_httpsWwwList_returnsList() {
+        XCTAssertEqual(parse("https://www.interlinedlist.com/lists/xyz"), .list(id: "xyz"))
+    }
+
+    func test_parse_customSchemeList_returnsList() {
+        XCTAssertEqual(parse("interlinedlist://lists/xyz"), .list(id: "xyz"))
+    }
+
+    func test_parse_ilWebURLListRoundTrips_toListDeepLink() {
+        // The exact URL the share sheet copies must open the list it names.
+        guard let url = ILWebURL.list("xyz") else { return XCTFail("no URL") }
+        XCTAssertEqual(AppDeepLink.parse(url), .list(id: "xyz"))
+    }
+
+    func test_parse_listsWithNoId_returnsNil() {
+        XCTAssertNil(parse("https://interlinedlist.com/lists"))
+    }
+
+    // The rows that already worked.
+    func test_parse_httpsCanonicalMessage_returnsMessage() {
+        XCTAssertEqual(parse("https://interlinedlist.com/message/abc"), .message(id: "abc"))
+    }
+
+    // Foreign hosts stay unroutable even on the newly-accepted shapes.
+    func test_parse_foreignHostUserStatus_returnsNil() {
+        XCTAssertNil(parse("https://example.com/user/bob/status/msg-1"))
+    }
+
+    func test_parse_foreignHostList_returnsNil() {
+        XCTAssertNil(parse("https://example.com/lists/xyz"))
     }
 
     // MARK: Documents (G10)
@@ -83,10 +182,10 @@ final class AppDeepLinkParseTests: XCTestCase {
         XCTAssertNil(parse("https://interlinedlist.com/lists/shared"))
     }
 
-    func test_parse_bareListPermalink_isNotRouted_returnsNil() {
-        // A bare `/lists/<id>` carries no owner username the list-detail endpoint
-        // needs, so it stays deferred; only the self-contained shared-token form routes.
-        XCTAssertNil(parse("https://interlinedlist.com/lists/list-1"))
+    func test_parse_bareListPermalink_returnsList() {
+        // Routed as of W7: `GET /api/lists/:id` authorizes by role, so the owner
+        // username the old comment claimed was required is not needed at all.
+        XCTAssertEqual(parse("https://interlinedlist.com/lists/list-1"), .list(id: "list-1"))
     }
 
     // MARK: Rejections
