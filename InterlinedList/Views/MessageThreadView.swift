@@ -14,6 +14,9 @@ struct MessageThreadView: View {
     @State private var errorMessage: String?
     @State private var showReplyCompose = false
     @State private var reportTarget: ReportTarget? = nil
+    @ObservedObject private var muteStore = MuteStore.shared
+    @State private var muteTarget: MuteTarget?
+    @State private var muteError: String?
     @EnvironmentObject var authState: AuthState
 
     var body: some View {
@@ -64,7 +67,9 @@ struct MessageThreadView: View {
                 }
             }
             .task {
-                await loadReplies()
+                async let replies: Void = loadReplies()
+                async let mutes: Void = seedMutes()
+                _ = await (replies, mutes)
             }
             .refreshable {
                 await loadReplies()
@@ -77,6 +82,35 @@ struct MessageThreadView: View {
                 ReportSheet(target: target, onDismiss: { reportTarget = nil })
                     .environmentObject(authState)
             }
+            .muteConfirmation(target: $muteTarget, errorMessage: $muteError) { target in
+                Task { await mute(target) }
+            }
+        }
+    }
+
+    private func seedMutes() async {
+        try? await muteStore.loadIfNeeded()
+    }
+
+    private func mute(_ target: MuteTarget) async {
+        muteError = nil
+        do {
+            try await muteStore.mute(userId: target.id, username: target.username, displayName: target.displayName)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            muteError = "Could not mute @\(target.username)."
+        }
+    }
+
+    private func unmute(_ reply: Message) async {
+        muteError = nil
+        do {
+            try await muteStore.unmute(userId: reply.userId)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            muteError = "Could not unmute @\(reply.user?.username ?? "user")."
         }
     }
 
@@ -137,6 +171,21 @@ struct MessageThreadView: View {
                             reportTarget = .message(id: reply.id)
                         } label: {
                             Label("Report…", systemImage: "flag")
+                        }
+                        if muteStore.isMuted(reply.userId) {
+                            Button {
+                                Task { await unmute(reply) }
+                            } label: {
+                                Label("Unmute user", systemImage: "speaker.wave.2")
+                            }
+                            .accessibilityLabel("Unmute user")
+                        } else {
+                            Button {
+                                muteTarget = MuteTarget(message: reply)
+                            } label: {
+                                Label("Mute user", systemImage: "speaker.slash")
+                            }
+                            .accessibilityLabel("Mute user")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
