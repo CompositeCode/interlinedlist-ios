@@ -5,6 +5,21 @@
 
 import SwiftUI
 
+/// Refreshes the DM unread badge after a trash/restore. An environment value rather
+/// than the `AppDataStore` itself because the DM views are also reached from entry
+/// points (a profile sheet, a deep link, previews) that never inject the store — an
+/// absent hook no-ops instead of trapping.
+private struct DMUnreadRefreshKey: EnvironmentKey {
+    static let defaultValue: () async -> Void = {}
+}
+
+extension EnvironmentValues {
+    var dmUnreadRefresh: () async -> Void {
+        get { self[DMUnreadRefreshKey.self] }
+        set { self[DMUnreadRefreshKey.self] = newValue }
+    }
+}
+
 struct MessagesInboxView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authState: AuthState
@@ -14,6 +29,9 @@ struct MessagesInboxView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var showRecipientPicker = false
+    @State private var actionError: String?
+
+    @Environment(\.dmUnreadRefresh) private var refreshUnreadBadge
 
     var body: some View {
         NavigationStack {
@@ -50,6 +68,14 @@ struct MessagesInboxView: View {
                     selectedThreadUser = user
                 }
                 .environmentObject(authState)
+            }
+            .alert("Could not update message", isPresented: Binding(
+                get: { actionError != nil },
+                set: { if !$0 { actionError = nil } }
+            )) {
+                Button("OK", role: .cancel) { actionError = nil }
+            } message: {
+                Text(actionError ?? "")
             }
             .navigationDestination(item: $selectedThreadUser) { user in
                 DMThreadView(username: user.username, initialUser: user)
@@ -90,6 +116,24 @@ struct MessagesInboxView: View {
                         DMInboxRow(message: message, folder: folder, selfId: authState.user?.id)
                     }
                     .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if folder == .deleted {
+                            Button {
+                                Task { await restore(message) }
+                            } label: {
+                                Label("Restore", systemImage: "arrow.uturn.backward")
+                            }
+                            .tint(ILColor.primary)
+                            .accessibilityLabel("Restore message")
+                        } else {
+                            Button(role: .destructive) {
+                                Task { await trash(message) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            .accessibilityLabel("Delete message")
+                        }
+                    }
                 }
             }
             .listStyle(.plain)
@@ -130,6 +174,45 @@ struct MessagesInboxView: View {
             error = msg
         } catch {
             self.error = "Could not load messages."
+        }
+    }
+
+    // MARK: - Trash / restore
+
+    private func trash(_ message: DMMessage) async {
+        await mutate(message, failureCopy: "Could not delete that message.") {
+            try await APIClient.shared.trashDM(id: message.id)
+        }
+    }
+
+    private func restore(_ message: DMMessage) async {
+        await mutate(message, failureCopy: "Could not restore that message.") {
+            try await APIClient.shared.restoreDM(id: message.id)
+        }
+    }
+
+    /// Drops the row before the request goes out and puts it back at its old index if
+    /// the request fails. The unread badge is refreshed on success because trashing an
+    /// unread inbox message (and restoring one) changes the server-side count.
+    private func mutate(_ message: DMMessage,
+                        failureCopy: String,
+                        perform: () async throws -> Void) async {
+        let removal = DMFolderMutation.removing(id: message.id, from: messages)
+        guard let removed = removal.removed, let index = removal.index else { return }
+        messages = removal.messages
+        do {
+            try await perform()
+            await refreshUnreadBadge()
+        } catch {
+            messages = DMFolderMutation.reinserting(removed, at: index, into: messages)
+            switch error {
+            case APIError.status(401):
+                authState.handleUnauthorized()
+            case APIError.server(let msg):
+                actionError = msg
+            default:
+                actionError = failureCopy
+            }
         }
     }
 }

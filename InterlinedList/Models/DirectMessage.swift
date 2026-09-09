@@ -192,3 +192,33 @@ struct DMUnreadCountResponse: Codable {
 struct DMUpdatedResponse: Codable {
     let updated: Int
 }
+
+/// Optimistic list edits for the DM folders, extracted so the rollback path can be
+/// unit-tested without SwiftUI. `removing` reports the index the row came from so a
+/// failed trash/restore can put it back exactly where the user last saw it.
+enum DMFolderMutation {
+    struct Removal: Equatable {
+        let messages: [DMMessage]
+        let removed: DMMessage?
+        let index: Int?
+    }
+
+    static func removing(id: String, from messages: [DMMessage]) -> Removal {
+        guard let index = messages.firstIndex(where: { $0.id == id }) else {
+            return Removal(messages: messages, removed: nil, index: nil)
+        }
+        var remaining = messages
+        let removed = remaining.remove(at: index)
+        return Removal(messages: remaining, removed: removed, index: index)
+    }
+
+    /// Puts `message` back at `index`, clamped to the list's current bounds (the
+    /// list may have shrunk under a concurrent refresh). A row that is already
+    /// present is left alone so a rollback can't duplicate it.
+    static func reinserting(_ message: DMMessage, at index: Int, into messages: [DMMessage]) -> [DMMessage] {
+        guard !messages.contains(where: { $0.id == message.id }) else { return messages }
+        var restored = messages
+        restored.insert(message, at: min(max(index, 0), restored.count))
+        return restored
+    }
+}

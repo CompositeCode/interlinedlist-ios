@@ -159,6 +159,51 @@ final class APIClientDirectMessagesTests: XCTestCase {
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/dm/m1/restore")
     }
 
+    func test_trashDM_sendsEmptyJSONBodyAndBearer() async throws {
+        session.stub(json: #"{"ok":true}"#)
+        try await sut.trashDM(id: "m1")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        XCTAssertEqual(String(data: body, encoding: .utf8), "{}")
+    }
+
+    func test_restoreDM_sendsEmptyJSONBodyAndBearer() async throws {
+        session.stub(json: #"{"ok":true}"#)
+        try await sut.restoreDM(id: "m1")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        XCTAssertEqual(String(data: body, encoding: .utf8), "{}")
+    }
+
+    func test_trashDM_percentEncodesId() async throws {
+        session.stub(json: #"{"ok":true}"#)
+        try await sut.trashDM(id: "m 1/x")
+        XCTAssertEqual(session.lastRequest?.url?.absoluteString.hasSuffix("/api/dm/m%201/x/trash"), true,
+                       "url was \(session.lastRequest?.url?.absoluteString ?? "nil")")
+    }
+
+    func test_trashDM_401_throwsStatusRatherThanServer() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            try await sut.trashDM(id: "m1")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
+
+    func test_restoreDM_404_throwsServerMessage() async throws {
+        session.stub(json: #"{"error":"Message not found."}"#, statusCode: 404)
+        do {
+            try await sut.restoreDM(id: "m1")
+            XCTFail("Expected throw")
+        } catch APIError.server(let message) {
+            XCTAssertEqual(message, "Message not found.")
+        }
+    }
+
     // MARK: dmRecipients()
 
     func test_dmRecipients_decodesUsers() async throws {

@@ -172,4 +172,57 @@ final class DirectMessageModelTests: XCTestCase {
         let people = [user("alice"), user("bob")]
         XCTAssertTrue(DMRecipientFilter.matches(people, query: "zzz").isEmpty)
     }
+
+    // MARK: DMFolderMutation (optimistic trash/restore + rollback)
+
+    private func message(_ id: String) -> DMMessage {
+        DMMessage(id: id, senderId: "s1", recipientId: "r1", body: id, createdAt: "2026-07-31T12:00:00.000Z")
+    }
+
+    func test_removing_dropsRowAndReportsItsIndex() {
+        let messages = [message("a"), message("b"), message("c")]
+        let removal = DMFolderMutation.removing(id: "b", from: messages)
+        XCTAssertEqual(removal.messages.map(\.id), ["a", "c"])
+        XCTAssertEqual(removal.removed?.id, "b")
+        XCTAssertEqual(removal.index, 1)
+    }
+
+    func test_removing_unknownId_leavesListUntouched() {
+        let messages = [message("a"), message("b")]
+        let removal = DMFolderMutation.removing(id: "zzz", from: messages)
+        XCTAssertEqual(removal.messages.map(\.id), ["a", "b"])
+        XCTAssertNil(removal.removed)
+        XCTAssertNil(removal.index)
+    }
+
+    func test_rollback_restoresRowAtItsOriginalIndex() throws {
+        let messages = [message("a"), message("b"), message("c")]
+        let removal = DMFolderMutation.removing(id: "b", from: messages)
+        let removed = try XCTUnwrap(removal.removed)
+        let index = try XCTUnwrap(removal.index)
+        let rolledBack = DMFolderMutation.reinserting(removed, at: index, into: removal.messages)
+        XCTAssertEqual(rolledBack.map(\.id), ["a", "b", "c"])
+    }
+
+    func test_rollback_ofFirstAndLastRowsKeepsOrder() throws {
+        let messages = [message("a"), message("b"), message("c")]
+        for id in ["a", "c"] {
+            let removal = DMFolderMutation.removing(id: id, from: messages)
+            let removed = try XCTUnwrap(removal.removed)
+            let index = try XCTUnwrap(removal.index)
+            let rolledBack = DMFolderMutation.reinserting(removed, at: index, into: removal.messages)
+            XCTAssertEqual(rolledBack.map(\.id), ["a", "b", "c"], "rolling back \(id)")
+        }
+    }
+
+    func test_rollback_doesNotDuplicateARowARefreshAlreadyPutBack() {
+        let messages = [message("a"), message("b")]
+        let rolledBack = DMFolderMutation.reinserting(message("b"), at: 1, into: messages)
+        XCTAssertEqual(rolledBack.map(\.id), ["a", "b"])
+    }
+
+    func test_rollback_clampsIndexWhenListShrankUnderneath() {
+        let rolledBack = DMFolderMutation.reinserting(message("b"), at: 7, into: [message("a")])
+        XCTAssertEqual(rolledBack.map(\.id), ["a", "b"])
+    }
 }
