@@ -40,6 +40,10 @@
 		4C5C8544DD7D81FA5C83A967 /* APIClientTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 256FE9818A171E11DDE43140 /* APIClientTransport.swift */; };
 		54CB167C520E0D951820214F /* AIWritingAssistantButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A017C8D6CDA816772A8D4424 /* AIWritingAssistantButton.swift */; };
 		55457DA5473AFDA9C7764EBF /* DocumentSyncConflict.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF02BD0C21F45BB2CFF34D67 /* DocumentSyncConflict.swift */; };
+		13BB05CD901E0E4960D6CDD2 /* APIClientListContributorsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2935CF30CE3CCA8210774CE5 /* APIClientListContributorsTests.swift */; };
+		46DB96578FB6794A1BEE36F0 /* APIClient+ListContributors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 966A4B3A93B371DF62CDE9B4 /* APIClient+ListContributors.swift */; };
+		7FE95983BF8B17122E22BCEC /* ListContributor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A977FEABD137038AA221BC7 /* ListContributor.swift */; };
+		FC8FE4C9D951A4C0081C2793 /* ListContributorsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7FD22FBB140088C4C19A054 /* ListContributorsView.swift */; };
 		56CC87DAB10F3920C4CB2939 /* APIClientSharedResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C7C7EF2962D974A135EE534 /* APIClientSharedResolverTests.swift */; };
 		5703F883D4E6186DB66E5833 /* NotificationPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECA57E5D72AA1429A40660BA /* NotificationPreference.swift */; };
 		58151C239F0FDD01BD1BAEBB /* LinkedInPostingTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29DE4C26BE3C61875D921615 /* LinkedInPostingTarget.swift */; };
@@ -254,6 +258,10 @@
 		468BAE51289ECDF42B84CE8B /* APIClientDocumentSyncTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientDocumentSyncTests.swift; sourceTree = "<group>"; };
 		47F77792CB1F50F6A8AC6111 /* AIStatus.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AIStatus.swift; sourceTree = "<group>"; };
 		489C4E80A2217A0B4D20B08A /* ILWebURLTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ILWebURLTests.swift; sourceTree = "<group>"; };
+		2935CF30CE3CCA8210774CE5 /* APIClientListContributorsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientListContributorsTests.swift; sourceTree = "<group>"; };
+		4A977FEABD137038AA221BC7 /* ListContributor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListContributor.swift; sourceTree = "<group>"; };
+		966A4B3A93B371DF62CDE9B4 /* APIClient+ListContributors.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "APIClient+ListContributors.swift"; sourceTree = "<group>"; };
+		F7FD22FBB140088C4C19A054 /* ListContributorsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListContributorsView.swift; sourceTree = "<group>"; };
 		4B06F2D2448FDFA3D1FCDC4A /* ILWebURL.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ILWebURL.swift; sourceTree = "<group>"; };
 		4C7C7EF2962D974A135EE534 /* APIClientSharedResolverTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientSharedResolverTests.swift; sourceTree = "<group>"; };
 		4D4EA609D090D3BB9AB12228 /* MessageLinkView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageLinkView.swift; sourceTree = "<group>"; };
@@ -497,6 +505,7 @@
 				A1B1C1D1E1F1002E /* List.swift */,
 				A1B1C1D1E1F100A4 /* ListSchemaDraft.swift */,
 				A2B2C2D2E2F20042 /* AppNotification.swift */,
+				4A977FEABD137038AA221BC7 /* ListContributor.swift */,
 				A2B2C2D2E2F20044 /* FollowState.swift */,
 				A3C3D3E3F3A30052 /* Document.swift */,
 				C1D1E1F1A1B10002 /* Organization.swift */,
@@ -532,6 +541,7 @@
 				A1B1C1D1E1F1000A /* KeychainService.swift */,
 				A1B1C1D1E1F1000C /* APIClient.swift */,
 				A1B1C1D1E1F1000E /* AuthState.swift */,
+				966A4B3A93B371DF62CDE9B4 /* APIClient+ListContributors.swift */,
 				A3C3D3E3F3A30056 /* URLSessionProtocol.swift */,
 				B1C1D1E1F1A10002 /* DataCache.swift */,
 				B1C1D1E1F1A10004 /* AppDataStore.swift */,
@@ -570,6 +580,7 @@
 				A1B1C1D1E1F10032 /* EditMessageView.swift */,
 				A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */,
 				A1B1C1D1E1F10034 /* MessageThreadView.swift */,
+				F7FD22FBB140088C4C19A054 /* ListContributorsView.swift */,
 				A1B1C1D1E1F10036 /* CreateListView.swift */,
 				A1B1C1D1E1F10038 /* UserProfileView.swift */,
 				A1B1C1D1E1F1003A /* ScheduledMessagesView.swift */,
@@ -647,6 +658,7 @@
 				T1E5T1E5T1E5N002 /* APIClientMessagesTests.swift */,
 				T1E5T1E5T1E5N004 /* APIClientListsTests.swift */,
 				T1E5T1E5T1E5N006 /* APIClientDocumentsTests.swift */,
+				2935CF30CE3CCA8210774CE5 /* APIClientListContributorsTests.swift */,
 				T1E5T1E5T1E5N008 /* APIClientNotificationsTests.swift */,
 				T1E5T1E5T1E5N010 /* APIClientFollowTests.swift */,
 				T1E5T1E5T1E5N012 /* APIClientProfileTests.swift */,
@@ -854,6 +866,9 @@
 				A1B1C1D1E1F100A3 /* ListSchemaDraft.swift in Sources */,
 				A1B1C1D1E1F10033 /* MessageThreadView.swift in Sources */,
 				A1B1C1D1E1F10035 /* CreateListView.swift in Sources */,
+				7FE95983BF8B17122E22BCEC /* ListContributor.swift in Sources */,
+				46DB96578FB6794A1BEE36F0 /* APIClient+ListContributors.swift in Sources */,
+				FC8FE4C9D951A4C0081C2793 /* ListContributorsView.swift in Sources */,
 				A1B1C1D1E1F10037 /* UserProfileView.swift in Sources */,
 				A1B1C1D1E1F10039 /* ScheduledMessagesView.swift in Sources */,
 				A2B2C2D2E2F20041 /* AppNotification.swift in Sources */,
@@ -970,6 +985,7 @@
 				T1E5T1E5T1E5M003 /* AppNotificationModelTests.swift in Sources */,
 				T1E5T1E5T1E5M005 /* FollowStateModelTests.swift in Sources */,
 				T1E5T1E5T1E5M007 /* DocumentModelTests.swift in Sources */,
+				13BB05CD901E0E4960D6CDD2 /* APIClientListContributorsTests.swift in Sources */,
 				T1E5T1E5T1E5N001 /* APIClientMessagesTests.swift in Sources */,
 				T1E5T1E5T1E5N003 /* APIClientListsTests.swift in Sources */,
 				T1E5T1E5T1E5N005 /* APIClientDocumentsTests.swift in Sources */,
