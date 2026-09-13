@@ -147,6 +147,9 @@
 		D0A1D0A1D0A1000B /* LinkedIdentitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A1000C /* LinkedIdentitiesView.swift */; };
 		D0A1D0A1D0A1000D /* OAuthSignInButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0A1D0A1D0A1000E /* OAuthSignInButton.swift */; };
 		D0F35ACF98DDE854A8437C7D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DD102A0D8ECD7CFC11DBD4A /* SettingsView.swift */; };
+		4CE14BC5E23958D0C0C275D6 /* APIClientSingleListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0E633AE3DAB1E526CCB0EB /* APIClientSingleListTests.swift */; };
+		BCA5EFBE30EB9AB46C884724 /* APIClient+Lists.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B8C417F18CC7C89053F3D7E /* APIClient+Lists.swift */; };
+		D3560D56DEA6AA150B284A14 /* ListLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10F00D95CBB550904B2C5298 /* ListLinkView.swift */; };
 		D51B991E570C29EC9D0FD3A4 /* AIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2A39A4CB7CD21E155C1AD77 /* AIService.swift */; };
 		D63C6301A24D618B74B1FAC6 /* SharedListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38E7411CA219F3E8EB351BAB /* SharedListView.swift */; };
 		D6AA238FF5D318D9C03FA6B5 /* PublicListDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A70E64AE3EB1E11EB9B7F83 /* PublicListDetailView.swift */; };
@@ -371,6 +374,9 @@
 		C8BE2B897589E1AEA55ACA75 /* APIClientSharingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientSharingTests.swift; sourceTree = "<group>"; };
 		D0A1D0A1D0A10002 /* OAuthCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthCoordinator.swift; sourceTree = "<group>"; };
 		D0A1D0A1D0A10004 /* ChangeEmailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeEmailView.swift; sourceTree = "<group>"; };
+		0B0E633AE3DAB1E526CCB0EB /* APIClientSingleListTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientSingleListTests.swift; sourceTree = "<group>"; };
+		10F00D95CBB550904B2C5298 /* ListLinkView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListLinkView.swift; sourceTree = "<group>"; };
+		7B8C417F18CC7C89053F3D7E /* APIClient+Lists.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "APIClient+Lists.swift"; sourceTree = "<group>"; };
 		D0A1D0A1D0A10006 /* ForgotPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgotPasswordView.swift; sourceTree = "<group>"; };
 		D0A1D0A1D0A10008 /* ResetPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResetPasswordView.swift; sourceTree = "<group>"; };
 		D0A1D0A1D0A1000A /* EmailVerificationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationBanner.swift; sourceTree = "<group>"; };
@@ -562,6 +568,7 @@
 				4B06F2D2448FDFA3D1FCDC4A /* ILWebURL.swift */,
 				5CF8FDEBF56E4CAB421FD811 /* DocumentSyncOutbox.swift */,
 				3F99C1D56FFD08CBD36F2273 /* NetworkReachability.swift */,
+				7B8C417F18CC7C89053F3D7E /* APIClient+Lists.swift */,
 				BF02BD0C21F45BB2CFF34D67 /* DocumentSyncConflict.swift */,
 				256FE9818A171E11DDE43140 /* APIClientTransport.swift */,
 				D664CCA80BB084AF101113F8 /* APIClient+SharedLists.swift */,
@@ -619,6 +626,7 @@
 				A3DF89EFAF63A9287656938C /* MarkdownView.swift */,
 				83DB813EA089E4807AF07110 /* MarkdownEditor.swift */,
 				164718CC67967AC147E30465 /* CrossPostLinksView.swift */,
+				10F00D95CBB550904B2C5298 /* ListLinkView.swift */,
 				544F68F263670763D5E23C59 /* MessageDetailView.swift */,
 				1D4AE47FA0D5B0B2F713F5AA /* MutedUsersView.swift */,
 				8471B0516327616EC36DE917 /* MessagesInboxView.swift */,
@@ -688,6 +696,7 @@
 				09470364B5A0A559FDE3215F /* APIClientPushTests.swift */,
 				E6A3F2C860C6B16F84CFFE12 /* APIClientDirectMessagesTests.swift */,
 				7EE93E83AA6CBE672E89C719 /* APIClientDocumentTemplatesTests.swift */,
+				0B0E633AE3DAB1E526CCB0EB /* APIClientSingleListTests.swift */,
 				93B62D89758287A728A56C9B /* APIClientSearchUsersTests.swift */,
 				0CC17A8A26D35CC755EE5988 /* APIClientLinkedInTargetsTests.swift */,
 				C8BE2B897589E1AEA55ACA75 /* APIClientSharingTests.swift */,
@@ -938,6 +947,8 @@
 				A057072E1611947A2415D4D9 /* DocumentCollaboratorsView.swift in Sources */,
 				2BD179B7617ABFD7271B9FB8 /* GitHub.swift in Sources */,
 				C68E4AC129D6026DF9FF5A5B /* UserSession.swift in Sources */,
+				BCA5EFBE30EB9AB46C884724 /* APIClient+Lists.swift in Sources */,
+				D3560D56DEA6AA150B284A14 /* ListLinkView.swift in Sources */,
 				EC636FE56A7CC64D7D01F64B /* SessionsView.swift in Sources */,
 				C818B9571C62180579743014 /* DocumentSync.swift in Sources */,
 				DD652FF47D5509B976706914 /* DocumentSyncMerge.swift in Sources */,
@@ -1039,6 +1050,7 @@
 				ADE33267E8D212F2863B1ABB /* APIClientSearchUsersTests.swift in Sources */,
 				F211AD1D4EB93B9258F88CAC /* APIClientLinkedInTargetsTests.swift in Sources */,
 				E1642E8329DC145DA96584D4 /* LinkedInTargetModelTests.swift in Sources */,
+				4CE14BC5E23958D0C0C275D6 /* APIClientSingleListTests.swift in Sources */,
 				5B19E1BF3FA99B70C1F0153A /* APIClientSharingTests.swift in Sources */,
 				73777B938FC2AF9D06CE5AD4 /* APIClientGitHubTests.swift in Sources */,
 				6A89622E299B0D172D5B5556 /* GitHubModelTests.swift in Sources */,

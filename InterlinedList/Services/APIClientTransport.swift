@@ -50,6 +50,25 @@ extension APIClient {
         return data
     }
 
+    /// GET that maps selected non-2xx statuses to caller-supplied errors *before*
+    /// the generic body-driven mapping runs. A route answering 403/404 with an
+    /// `{"error": …}` body otherwise arrives as `.forbidden`/`.server`, which
+    /// loses the distinction a permalink opener needs: "you have no access here"
+    /// reads very differently from "the server had a problem".
+    func get<T: Decodable>(_ path: String, mappingStatuses statusErrors: [Int: Error]) async throws -> T {
+        guard let url = URL(string: baseURL + path) else { throw APIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        authorize(&request)
+        let (data, response) = try await session.data(for: request)
+        if let status = (response as? HTTPURLResponse)?.statusCode, let mapped = statusErrors[status] {
+            throw mapped
+        }
+        try checkResponse(data: data, response: response)
+        return try decoder.decode(T.self, from: data)
+    }
+
     // MARK: - Writes (snake_case bodies)
 
     func post<T: Decodable, B: Encodable>(_ path: String, body: B, authenticated: Bool = true) async throws -> T {

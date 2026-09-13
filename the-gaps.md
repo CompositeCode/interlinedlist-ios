@@ -154,7 +154,7 @@ Live implementation status — updated as work lands on `dev` (uncommitted unles
 | **17 — GitHub OAuth + Universal Links entitlement (A1/A2 iOS tail)** | `feat/github-oauth-universal-links` merged: GitHub `supportsNativeAuth → true` (in-app linking via the backend's mobile OAuth branch) + `com.apple.developer.associated-domains = applinks:interlinedlist.com` in `InterlinedList.entitlements` | ✅ **Done** 2026-08 — code side complete. **Residual is non-code:** enable Associated Domains on the App ID in the Apple portal & regen the provisioning profile (tracked in `App-Store-Deployment-Checklist.md`) |
 | **18 — sharing parity + GitHub-list fixes** | Unified document + list sharing screen (web parity) · inbound shared-list viewer + web-accept for edit links · GitHub issue list refresh after close/reopen · multi-image compose | ✅ **Done** 2026-09-02/05 (PRs #30–#32, restored to `main` in #35) |
 | **19 — offline-sync `relativePath` workaround** | Send `relativePath` on every sync create/update/conflict-copy op so the backend stops silently dropping them (see ask **A7**) | ✅ **Done** 2026-09-02 (`a7d0976`, PR #34) |
-| — | **G10 list follow-on** — bare `/lists/:id` permalink inbound *(share-token inbound already ships: `/lists/shared/:token` → read-only `SharedListView` via `resolveSharedList()`/`sharedListData()`)* | ⛔ **backend-limited** — the permalink carries no owner username |
+| — | **G10 list follow-on** — bare `/lists/:id` permalink inbound *(share-token inbound already ships: `/lists/shared/:token` → read-only `SharedListView` via `resolveSharedList()`/`sharedListData()`)* | ✅ **Done** (W7, issue #61) — `.list(id:)` → `ListLinkView` → `ListDetailView`. The earlier "backend-limited, carries no owner username" claim was wrong: `GET /api/lists/:id` is Bearer-ready and authorizes by role (owner/manager/collaborator/watcher), so no owner is needed in the URL |
 | — | **G11 document presence** — `/api/documents/:id/presence` heartbeat + poll | ⏳ **remaining, optional** — the only unbuilt parity item |
 
 **Whole-tree gate (2026-07-31, after the fix pass):** full unit suite **694 tests,
@@ -332,7 +332,7 @@ directly from source:
 | **GitHub-backed lists / issues** | ❌ | **G4** — now Bearer-ready |
 | **LinkedIn org/target picker** | ◑ | **G5** — `linkedInTargets` posts; can't fetch targets yet |
 | **Offline document sync** | ❌ | **G9** |
-| **Content deep / universal links** | ◑ | **G10** — profile/message/**document**/**doc-share-token**/**list-share-token** routed; bare list permalinks backend-limited (no owner in URL); Universal Links pending A2 iOS merge |
+| **Content deep / universal links** | ◑ | **G10** — profile/message/**document**/**doc-share-token**/**list-share-token** routed; **W7 (#61)** adds the web's canonical shapes: `/user/:u/status/:id` → message, `/user/:u/lists|documents/:id` → public list/document, bare `/lists/:id` → list detail (authorized by role, no owner needed). AASA already wildcards `/user/*`, `/message/*`, `/lists/*`, `/documents/*`; Universal Links pending A2 iOS merge |
 | **Live doc presence (cursors)** | ❌ | **G11** |
 | **Active-sessions management** | ❌ | **G12** |
 | Multi-account switching | ⛔ | **X1** — session-only backend |
