@@ -29,6 +29,9 @@ struct MainTabView: View {
             sectionContent
         }
         .background(ILColor.background)
+        // Lets the DM views refresh the envelope badge after a trash/restore without
+        // taking a dependency on the store; propagates into their sheets too.
+        .environment(\.dmUnreadRefresh) { await store.refreshDMUnread() }
         .task {
             await store.prefetchAll(userId: authState.user?.id)
         }

@@ -30,6 +30,9 @@ struct DMThreadView: View {
     @State private var isUploadingImage = false
 
     @State private var pollTask: Task<Void, Never>?
+    @State private var deleteError: String?
+
+    @Environment(\.dmUnreadRefresh) private var refreshUnreadBadge
 
     private var selfId: String? { authState.user?.id }
     private var recipientId: String? { otherUser?.id ?? initialUser?.id }
@@ -45,6 +48,14 @@ struct DMThreadView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await initialLoad() }
         .onDisappear { pollTask?.cancel() }
+        .alert("Could not delete message", isPresented: Binding(
+            get: { deleteError != nil },
+            set: { if !$0 { deleteError = nil } }
+        )) {
+            Button("OK", role: .cancel) { deleteError = nil }
+        } message: {
+            Text(deleteError ?? "")
+        }
     }
 
     private var headerTitle: String {
@@ -70,6 +81,16 @@ struct DMThreadView: View {
                         ForEach(messages) { message in
                             DMBubble(message: message, isOutgoing: message.senderId == selfId)
                                 .id(message.id)
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        Task { await trash(message) }
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .accessibilityAction(named: "Delete") {
+                                    Task { await trash(message) }
+                                }
                         }
                     }
                     .padding()
@@ -257,6 +278,31 @@ struct DMThreadView: View {
             sendError = mappedSendError(code)
         } catch {
             sendError = "Message failed to send."
+        }
+    }
+
+    // MARK: - Trash
+
+    /// Deletes only the caller's side of the message (`POST /api/dm/:id/trash`), matching
+    /// the web thread view. Optimistic: the bubble goes before the request and comes back
+    /// at its old index if it fails.
+    private func trash(_ message: DMMessage) async {
+        let removal = DMFolderMutation.removing(id: message.id, from: messages)
+        guard let removed = removal.removed, let index = removal.index else { return }
+        messages = removal.messages
+        do {
+            try await APIClient.shared.trashDM(id: message.id)
+            await refreshUnreadBadge()
+        } catch {
+            messages = DMFolderMutation.reinserting(removed, at: index, into: messages)
+            switch error {
+            case APIError.status(401):
+                authState.handleUnauthorized()
+            case APIError.server(let msg):
+                deleteError = msg
+            default:
+                deleteError = "Could not delete that message."
+            }
         }
     }
 
