@@ -73,6 +73,7 @@
 		A057072E1611947A2415D4D9 /* DocumentCollaboratorsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5110757D7694EC9FBF4366F7 /* DocumentCollaboratorsView.swift */; };
 		A1B1C1D1E1F10001 /* InterlinedListApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10002 /* InterlinedListApp.swift */; };
 		A1B1C1D1E1F10003 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10004 /* RootView.swift */; };
+		90B9BB00F26A98E19FEAE318 /* APIClient+Documents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F84433332486544DA15C7BA /* APIClient+Documents.swift */; };
 		A1B1C1D1E1F10005 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10006 /* User.swift */; };
 		A1B1C1D1E1F10007 /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10008 /* Message.swift */; };
 		A1B1C1D1E1F10009 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F1000A /* KeychainService.swift */; };
@@ -287,6 +288,7 @@
 		8E384ED04860E87973898F89 /* DocumentSyncMergeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DocumentSyncMergeTests.swift; sourceTree = "<group>"; };
 		907AC4BA9A6A5DF132AEF075 /* APIClientLinkMetadataTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientLinkMetadataTests.swift; sourceTree = "<group>"; };
 		90E55EFCB42C25CBC10B3942 /* DMThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMThreadView.swift; sourceTree = "<group>"; };
+		1F84433332486544DA15C7BA /* APIClient+Documents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "APIClient+Documents.swift"; sourceTree = "<group>"; };
 		93642F79C3049C4A2ECC8AFF /* GapModelsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GapModelsTests.swift; sourceTree = "<group>"; };
 		93B62D89758287A728A56C9B /* APIClientSearchUsersTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientSearchUsersTests.swift; sourceTree = "<group>"; };
 		956BD8A48B0F2C66C2C6362A /* AppDeepLinkParseTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDeepLinkParseTests.swift; sourceTree = "<group>"; };
@@ -534,6 +536,7 @@
 				B1C1D1E1F1A10002 /* DataCache.swift */,
 				B1C1D1E1F1A10004 /* AppDataStore.swift */,
 				D0A1D0A1D0A10002 /* OAuthCoordinator.swift */,
+				1F84433332486544DA15C7BA /* APIClient+Documents.swift */,
 				FC5914D730B4355F02E89D81 /* ILColor.swift */,
 				8B79D26B822DCA1188DF37E9 /* PushService.swift */,
 				5A04FF25F89FC0E5253896FD /* ImageUploadProcessor.swift */,
@@ -870,6 +873,7 @@
 				B1C1D1E1F1A1000D /* ListItemFormView.swift in Sources */,
 				D0A1D0A1D0A10001 /* OAuthCoordinator.swift in Sources */,
 				D0A1D0A1D0A10003 /* ChangeEmailView.swift in Sources */,
+				90B9BB00F26A98E19FEAE318 /* APIClient+Documents.swift in Sources */,
 				D0A1D0A1D0A10005 /* ForgotPasswordView.swift in Sources */,
 				D0A1D0A1D0A10007 /* ResetPasswordView.swift in Sources */,
 				D0A1D0A1D0A10009 /* EmailVerificationBanner.swift in Sources */,

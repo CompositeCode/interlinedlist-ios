@@ -55,6 +55,14 @@ struct DocumentFolder: Codable, Identifiable {
     }
 }
 
+extension DocumentFolder {
+    /// A copy under a new name, for showing a rename before the server confirms it.
+    func renamed(to newName: String) -> DocumentFolder {
+        DocumentFolder(id: id, name: newName, parentId: parentId,
+                       updatedAt: updatedAt, deletedAt: deletedAt)
+    }
+}
+
 /// A starter document a subscriber can copy into a new document. `id` is the
 /// source document's id (`templateDocumentId` for `POST /api/documents/from-template`).
 struct DocumentTemplate: Codable, Identifiable {

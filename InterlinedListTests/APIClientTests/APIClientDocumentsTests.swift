@@ -7,6 +7,7 @@ final class APIClientDocumentsTests: XCTestCase {
 
     private let docJSON = #"{"id":"d1","title":"My Doc"}"#
     private let folderJSON = #"{"id":"f1","name":"Folder"}"#
+    private let renamedFolderJSON = #"{"id":"f1","name":"Renamed","parentId":"f2"}"#
 
     override func setUp() {
         super.setUp()
@@ -159,6 +160,122 @@ final class APIClientDocumentsTests: XCTestCase {
             XCTFail("Expected throw")
         } catch APIError.status(let code) {
             XCTAssertEqual(code, 401)
+        }
+    }
+
+    // MARK: updateDocumentFolder()
+
+    func test_updateDocumentFolder_sendsPutToFolderPath() async throws {
+        session.stub(json: #"{"folder":\#(renamedFolderJSON)}"#)
+        let folder = try await sut.updateDocumentFolder(id: "f1", name: "Renamed")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "PUT")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents/folders/f1")
+        XCTAssertEqual(folder.name, "Renamed")
+    }
+
+    func test_updateDocumentFolder_pathScoped_noFolderIdQuery() async throws {
+        session.stub(json: #"{"folder":\#(renamedFolderJSON)}"#)
+        _ = try await sut.updateDocumentFolder(id: "f1", name: "Renamed")
+        let url = session.lastRequest?.url?.absoluteString ?? ""
+        XCTAssertFalse(url.contains("folderId="), "folder routes are path-scoped, got: \(url)")
+        XCTAssertFalse(url.contains("?"), "expected no query, got: \(url)")
+    }
+
+    func test_updateDocumentFolder_encodesIdIntoPath() async throws {
+        session.stub(json: #"{"folder":\#(renamedFolderJSON)}"#)
+        _ = try await sut.updateDocumentFolder(id: "f 1", name: "Renamed")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents/folders/f 1")
+    }
+
+    func test_updateDocumentFolder_bodyUsesCamelCaseName() async throws {
+        session.stub(json: #"{"folder":\#(renamedFolderJSON)}"#)
+        _ = try await sut.updateDocumentFolder(id: "f1", name: "Renamed")
+        let body = bodyString()
+        XCTAssertEqual(body, #"{"name":"Renamed"}"#)
+    }
+
+    /// A rename must not carry `parentId` at all: the route validates (and moves)
+    /// whenever the key is present, so a stray `null` would silently move the
+    /// folder to the root.
+    func test_updateDocumentFolder_rename_omitsParentId() async throws {
+        session.stub(json: #"{"folder":\#(renamedFolderJSON)}"#)
+        _ = try await sut.updateDocumentFolder(id: "f1", name: "Renamed")
+        XCTAssertFalse(bodyString().contains("parentId"))
+        XCTAssertFalse(bodyString().contains("parent_id"))
+    }
+
+    func test_updateDocumentFolder_moveToFolder_sendsCamelCaseParentId() async throws {
+        session.stub(json: #"{"folder":\#(renamedFolderJSON)}"#)
+        _ = try await sut.updateDocumentFolder(id: "f1", parentId: .folder("f2"))
+        let body = bodyString()
+        XCTAssertEqual(body, #"{"parentId":"f2"}"#)
+        XCTAssertFalse(body.contains("parent_id"))
+    }
+
+    /// Moving to the root needs an explicit `null` — Swift's synthesized
+    /// `Encodable` would drop a `nil` optional and the move would never happen.
+    func test_updateDocumentFolder_moveToRoot_sendsExplicitNull() async throws {
+        session.stub(json: #"{"folder":\#(renamedFolderJSON)}"#)
+        _ = try await sut.updateDocumentFolder(id: "f1", parentId: .root)
+        XCTAssertEqual(bodyString(), #"{"parentId":null}"#)
+    }
+
+    func test_updateDocumentFolder_renameAndMove_sendsBothKeys() async throws {
+        session.stub(json: #"{"folder":\#(renamedFolderJSON)}"#)
+        _ = try await sut.updateDocumentFolder(id: "f1", name: "Renamed", parentId: .folder("f2"))
+        let body = bodyString()
+        XCTAssertTrue(body.contains(#""name":"Renamed""#), body)
+        XCTAssertTrue(body.contains(#""parentId":"f2""#), body)
+    }
+
+    func test_updateDocumentFolder_decodesSavedFolder() async throws {
+        session.stub(json: #"{"message":"Folder updated successfully","folder":\#(renamedFolderJSON)}"#)
+        let folder = try await sut.updateDocumentFolder(id: "f1", name: "Renamed")
+        XCTAssertEqual(folder.id, "f1")
+        XCTAssertEqual(folder.name, "Renamed")
+        XCTAssertEqual(folder.parentId, "f2")
+    }
+
+    /// The server rejects a circular move with a 400 whose body carries readable
+    /// text; `checkResponse` surfaces it as `.server` so the view can show it.
+    func test_updateDocumentFolder_cycle400_throwsServerMessage() async throws {
+        session.stub(json: #"{"error":"Setting this parent would create a circular reference","code":"bad_request"}"#,
+                     statusCode: 400)
+        do {
+            _ = try await sut.updateDocumentFolder(id: "f1", parentId: .folder("f1child"))
+            XCTFail("Expected throw")
+        } catch APIError.server(let message) {
+            XCTAssertEqual(message, "Setting this parent would create a circular reference")
+        }
+    }
+
+    func test_updateDocumentFolder_duplicateName409_throwsServerMessage() async throws {
+        session.stub(json: #"{"error":"A folder with that name already exists here","code":"conflict"}"#,
+                     statusCode: 409)
+        do {
+            _ = try await sut.updateDocumentFolder(id: "f1", name: "Taken")
+            XCTFail("Expected throw")
+        } catch APIError.server(let message) {
+            XCTAssertEqual(message, "A folder with that name already exists here")
+        }
+    }
+
+    func test_updateDocumentFolder_401_throws() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            _ = try await sut.updateDocumentFolder(id: "f1", name: "Renamed")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
+
+    func test_updateDocumentFolder_missingFolderInResponse_throwsNoData() async throws {
+        session.stub(json: #"{"message":"Folder updated successfully"}"#)
+        do {
+            _ = try await sut.updateDocumentFolder(id: "f1", name: "Renamed")
+            XCTFail("Expected throw")
+        } catch APIError.noData {
         }
     }
 }
