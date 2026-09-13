@@ -175,6 +175,28 @@ final class APIClientModerationTests: XCTestCase {
         }
     }
 
+    /// W2 (#47). Mute is a POST with no fields — an empty JSON object, not an empty
+    /// body — because the backend parses the body before it looks at the route.
+    func test_muteUser_sendsEmptyJSONObjectBody() async throws {
+        session.stub(json: #"{"muted":true}"#)
+        try await sut.muteUser(id: "user-id")
+        let bodyData = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
+        XCTAssertEqual(json?.count, 0)
+    }
+
+    func test_muteUser_sendsJSONContentType() async throws {
+        session.stub(json: #"{"muted":true}"#)
+        try await sut.muteUser(id: "user-id")
+        XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Content-Type"), "application/json")
+    }
+
+    func test_muteUser_percentEncodesTheUserId() async throws {
+        session.stub(json: #"{"muted":true}"#)
+        try await sut.muteUser(id: "user id/42")
+        XCTAssertEqual(session.lastRequest?.url?.absoluteString.hasSuffix("/api/users/user%20id/42/mute"), true)
+    }
+
     // MARK: unmuteUser()
 
     func test_unmuteUser_sendsDeleteRequest() async throws {
@@ -198,6 +220,18 @@ final class APIClientModerationTests: XCTestCase {
         } catch APIError.status(let code) {
             XCTAssertEqual(code, 401)
         }
+    }
+
+    func test_unmuteUser_sendsNoBody() async throws {
+        session.stub(data: Data(), statusCode: 200)
+        try await sut.unmuteUser(id: "user-id")
+        XCTAssertNil(session.lastRequest?.httpBody)
+    }
+
+    func test_unmuteUser_percentEncodesTheUserId() async throws {
+        session.stub(data: Data(), statusCode: 200)
+        try await sut.unmuteUser(id: "user id/42")
+        XCTAssertEqual(session.lastRequest?.url?.absoluteString.hasSuffix("/api/users/user%20id/42/mute"), true)
     }
 
     // MARK: mutedUsers()

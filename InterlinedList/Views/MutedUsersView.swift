@@ -7,10 +7,12 @@ import SwiftUI
 
 struct MutedUsersView: View {
     @EnvironmentObject private var authState: AuthState
-    @State private var mutedUsers: [MutedUser] = []
+    @ObservedObject private var muteStore = MuteStore.shared
     @State private var isLoading = true
     @State private var error: String?
     @State private var actionError: String?
+
+    private var mutedUsers: [MutedUser] { muteStore.mutedUsers }
 
     var body: some View {
         Group {
@@ -71,8 +73,7 @@ struct MutedUsersView: View {
         error = nil
         defer { isLoading = false }
         do {
-            let response = try await APIClient.shared.mutedUsers()
-            mutedUsers = response.mutedUsers
+            try await muteStore.refresh()
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch {
@@ -83,8 +84,7 @@ struct MutedUsersView: View {
     private func unmute(_ user: MutedUser) async {
         actionError = nil
         do {
-            try await APIClient.shared.unmuteUser(id: user.id)
-            mutedUsers.removeAll { $0.id == user.id }
+            try await muteStore.unmute(userId: user.id)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
         } catch {

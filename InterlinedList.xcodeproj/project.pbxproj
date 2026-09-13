@@ -111,6 +111,9 @@
 		ADE33267E8D212F2863B1ABB /* APIClientSearchUsersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B62D89758287A728A56C9B /* APIClientSearchUsersTests.swift */; };
 		B1C1D1E1F1A10001 /* DataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10002 /* DataCache.swift */; };
 		B1C1D1E1F1A10003 /* AppDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10004 /* AppDataStore.swift */; };
+		0A87E63E7459CCDD35BFCFC9 /* MuteConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 137B3E2137C83882B8434673 /* MuteConfirmation.swift */; };
+		1F2D51E9719CC8F468BF5107 /* MuteStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA27DCE269D834AE6F1C569D /* MuteStoreTests.swift */; };
+		9243867C3794133F8962AEAB /* MuteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324E543C7571CE2C42D600C8 /* MuteStore.swift */; };
 		B1C1D1E1F1A10005 /* SkeletonBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10006 /* SkeletonBlock.swift */; };
 		B1C1D1E1F1A10007 /* FeedSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10008 /* FeedSkeletonView.swift */; };
 		B1C1D1E1F1A10009 /* ListSkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A1000A /* ListSkeletonView.swift */; };
@@ -331,6 +334,9 @@
 		A1B1C1D1E1F100A2 /* ListSchemaEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaEditorView.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F100A4 /* ListSchemaDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaDraft.swift; sourceTree = "<group>"; };
 		A2B2C2D2E2F20042 /* AppNotification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppNotification.swift; sourceTree = "<group>"; };
+		137B3E2137C83882B8434673 /* MuteConfirmation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MuteConfirmation.swift; sourceTree = "<group>"; };
+		324E543C7571CE2C42D600C8 /* MuteStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MuteStore.swift; sourceTree = "<group>"; };
+		BA27DCE269D834AE6F1C569D /* MuteStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MuteStoreTests.swift; sourceTree = "<group>"; };
 		A2B2C2D2E2F20044 /* FollowState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowState.swift; sourceTree = "<group>"; };
 		A2B2C2D2E2F20046 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
 		A2B2C2D2E2F20048 /* FollowRequestsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowRequestsView.swift; sourceTree = "<group>"; };
@@ -551,6 +557,7 @@
 				8B79D26B822DCA1188DF37E9 /* PushService.swift */,
 				5A04FF25F89FC0E5253896FD /* ImageUploadProcessor.swift */,
 				7F7063C59228E7D97A16B17D /* ComposeImageUploader.swift */,
+				324E543C7571CE2C42D600C8 /* MuteStore.swift */,
 				3CD5DCAF4C97D6B577F52527 /* DocumentSyncMerge.swift */,
 				4B06F2D2448FDFA3D1FCDC4A /* ILWebURL.swift */,
 				5CF8FDEBF56E4CAB421FD811 /* DocumentSyncOutbox.swift */,
@@ -601,6 +608,7 @@
 				D0A1D0A1D0A1000E /* OAuthSignInButton.swift */,
 				0EF29F5DC946D80A63000209 /* FollowListView.swift */,
 				2A70E64AE3EB1E11EB9B7F83 /* PublicListDetailView.swift */,
+				137B3E2137C83882B8434673 /* MuteConfirmation.swift */,
 				98DB21A23AF902D811F28C38 /* PublicDocumentsView.swift */,
 				E5828367E38948582EF1DF2A /* WatchersListView.swift */,
 				C0041BEAB46F9186FB5BF907 /* OrganizationsView.swift */,
@@ -738,6 +746,7 @@
 				4EE76647702E9C83B941FA2C /* AppDataStoreTests.swift */,
 				78BDFABB1D991EB98BFEC2AA /* ImageUploadProcessorTests.swift */,
 				D4C3953B4568AA7A2EA19EED /* ComposeImageUploaderTests.swift */,
+				BA27DCE269D834AE6F1C569D /* MuteStoreTests.swift */,
 				8E384ED04860E87973898F89 /* DocumentSyncMergeTests.swift */,
 				D42A88BDF9EB795F41CF2F64 /* DocumentSyncOutboxTests.swift */,
 				126B48E798CB7064F46382CC /* DocumentSyncConflictTests.swift */,
@@ -908,6 +917,8 @@
 				47FBAC21F771B2813EAD8D37 /* Moderation.swift in Sources */,
 				C478109CF3BB06C22E121904 /* ReportSheet.swift in Sources */,
 				1102DD971BF4AC03027058B9 /* BlockedUsersView.swift in Sources */,
+				9243867C3794133F8962AEAB /* MuteStore.swift in Sources */,
+				0A87E63E7459CCDD35BFCFC9 /* MuteConfirmation.swift in Sources */,
 				17CD6CF35900DC95AA284E3C /* PushService.swift in Sources */,
 				C18C73C8A93572993F29D559 /* ImageUploadProcessor.swift in Sources */,
 				99E688DB379BD4A824487604 /* ComposeImageUploader.swift in Sources */,
@@ -1013,6 +1024,7 @@
 				T1E5T1E5T1E5P027 /* LinkedIdentityModelTests.swift in Sources */,
 				T1E5T1E5T1E5P029 /* ModerationModelTests.swift in Sources */,
 				23E11F4CE0298A685F13AA21 /* APIClientGapPhasesTests.swift in Sources */,
+				1F2D51E9719CC8F468BF5107 /* MuteStoreTests.swift in Sources */,
 				6C10CC420377B0E8AE5C82DB /* GapModelsTests.swift in Sources */,
 				E1F7D081DC89245C81E2047C /* AppDataStoreTests.swift in Sources */,
 				64F5804ECC25725FD1E58E84 /* APIClientModerationTests.swift in Sources */,

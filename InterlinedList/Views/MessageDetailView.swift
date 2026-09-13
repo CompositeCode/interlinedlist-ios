@@ -19,6 +19,9 @@ struct MessageDetailView: View {
     @State private var showThread = false
     @State private var profileUsername: String?
     @State private var reportTarget: ReportTarget?
+    @ObservedObject private var muteStore = MuteStore.shared
+    @State private var muteTarget: MuteTarget?
+    @State private var muteError: String?
     @EnvironmentObject var authState: AuthState
     @EnvironmentObject var store: AppDataStore
 
@@ -35,6 +38,8 @@ struct MessageDetailView: View {
         guard let uid = currentUserId else { return false }
         return message.userId != uid
     }
+
+    private var isMuted: Bool { muteStore.isMuted(message.userId) }
 
     var body: some View {
         List {
@@ -85,6 +90,32 @@ struct MessageDetailView: View {
         .sheet(item: $reportTarget) { target in
             ReportSheet(target: target, onDismiss: { reportTarget = nil })
                 .environmentObject(authState)
+        }
+        .muteConfirmation(target: $muteTarget, errorMessage: $muteError) { target in
+            Task { await mute(target) }
+        }
+        .task { try? await muteStore.loadIfNeeded() }
+    }
+
+    private func mute(_ target: MuteTarget) async {
+        muteError = nil
+        do {
+            try await muteStore.mute(userId: target.id, username: target.username, displayName: target.displayName)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            muteError = "Could not mute @\(target.username)."
+        }
+    }
+
+    private func unmute() async {
+        muteError = nil
+        do {
+            try await muteStore.unmute(userId: message.userId)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            muteError = "Could not unmute @\(message.user?.username ?? "user")."
         }
     }
 
@@ -217,6 +248,21 @@ struct MessageDetailView: View {
                             reportTarget = .message(id: message.id)
                         } label: {
                             Label("Report…", systemImage: "flag")
+                        }
+                        if isMuted {
+                            Button {
+                                Task { await unmute() }
+                            } label: {
+                                Label("Unmute user", systemImage: "speaker.wave.2")
+                            }
+                            .accessibilityLabel("Unmute user")
+                        } else {
+                            Button {
+                                muteTarget = MuteTarget(message: message)
+                            } label: {
+                                Label("Mute user", systemImage: "speaker.slash")
+                            }
+                            .accessibilityLabel("Mute user")
                         }
                     } label: {
                         Image(systemName: "ellipsis")

@@ -39,7 +39,16 @@ struct UserProfileView: View {
     @State private var showReportSheet = false
     @State private var isBlocked = false
     @State private var blockError: String?
+    @ObservedObject private var muteStore = MuteStore.shared
+    @State private var muteTarget: MuteTarget?
+    @State private var muteError: String?
+    @State private var showUnmuteConfirm = false
     @State private var showMessageThread = false
+
+    private var isMuted: Bool {
+        guard let uid = targetUserId else { return false }
+        return muteStore.isMuted(uid)
+    }
 
     var body: some View {
         NavigationStack {
@@ -90,11 +99,28 @@ struct UserProfileView: View {
                             } label: {
                                 Label("Report @\(username)…", systemImage: "flag")
                             }
+                            if isMuted {
+                                Button {
+                                    showUnmuteConfirm = true
+                                } label: {
+                                    Label("Unmute @\(username)", systemImage: "speaker.wave.2")
+                                }
+                                .accessibilityLabel("Unmute @\(username)")
+                            } else {
+                                Button {
+                                    guard let uid = targetUserId else { return }
+                                    muteTarget = MuteTarget(id: uid, username: username)
+                                } label: {
+                                    Label("Mute @\(username)", systemImage: "speaker.slash")
+                                }
+                                .accessibilityLabel("Mute @\(username)")
+                            }
                             Button(role: .destructive) {
                                 Task { await toggleBlock() }
                             } label: {
                                 Label(isBlocked ? "Unblock @\(username)" : "Block @\(username)", systemImage: "person.slash")
                             }
+                            .accessibilityLabel(isBlocked ? "Unblock @\(username)" : "Block @\(username)")
                         } label: {
                             Image(systemName: "ellipsis.circle")
                                 .font(.system(size: 15, weight: .semibold))
@@ -113,6 +139,19 @@ struct UserProfileView: View {
                     ReportSheet(target: .user(id: uid, username: username), onDismiss: { showReportSheet = false })
                         .environmentObject(authState)
                 }
+            }
+            .muteConfirmation(target: $muteTarget, errorMessage: $muteError) { target in
+                Task { await mute(target) }
+            }
+            .confirmationDialog(
+                MuteCopy.unmuteTitle(username),
+                isPresented: $showUnmuteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Unmute") { Task { await unmute() } }
+                Button("Cancel", role: .cancel) { showUnmuteConfirm = false }
+            } message: {
+                Text(MuteCopy.unmuteMessage)
             }
             .task {
                 let shouldLoadOrgs = authState.user?.username == username && !organizationsLoaded
@@ -380,6 +419,7 @@ struct UserProfileView: View {
                 targetUserId = messages.first?.userId
                 if let userId = targetUserId, userId != authState.user?.id {
                     Task { await loadFollowInfo(userId: userId) }
+                    Task { await loadMuteState() }
                 }
             }
         } catch {
@@ -569,6 +609,43 @@ struct UserProfileView: View {
             followError = msg
         } catch {
             followError = "Action failed. Please try again."
+        }
+    }
+
+    /// Seeds `isMuted` from `GET /api/user/mutes`, so reopening a profile shows the
+    /// right menu item. Non-critical: on failure the menu offers Mute, and muting an
+    /// already-muted user is a no-op in the store.
+    private func loadMuteState() async {
+        do {
+            try await muteStore.loadIfNeeded()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            // Ignore — the profile still works without the seeded state.
+        }
+    }
+
+    private func mute(_ target: MuteTarget) async {
+        muteError = nil
+        do {
+            try await muteStore.mute(userId: target.id, username: target.username)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            muteError = "Could not mute @\(username)."
+        }
+    }
+
+    private func unmute() async {
+        muteError = nil
+        showUnmuteConfirm = false
+        guard let uid = targetUserId else { return }
+        do {
+            try await muteStore.unmute(userId: uid)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            muteError = "Could not unmute @\(username)."
         }
     }
 
