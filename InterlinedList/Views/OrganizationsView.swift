@@ -5,43 +5,44 @@
 
 import SwiftUI
 
-/// The organizations the current user belongs to, with create / open actions.
+/// The organizations the current user belongs to, plus a directory of public
+/// organizations they can join.
 struct OrganizationsListView: View {
+    private enum Scope: String, CaseIterable, Identifiable {
+        case mine, discover
+        var id: String { rawValue }
+        var label: String { self == .mine ? "Mine" : "Discover" }
+    }
+
     @EnvironmentObject private var authState: AuthState
+    @State private var scope: Scope = .mine
     @State private var organizations: [Organization] = []
     @State private var isLoading = true
     @State private var error: String?
     @State private var showCreate = false
 
+    @State private var directory: [Organization] = []
+    @State private var directoryPagination: Pagination?
+    @State private var isLoadingDirectory = false
+    @State private var directoryError: String?
+    @State private var joiningId: String?
+    @State private var joinError: String?
+
+    private let pageSize = 20
+
     var body: some View {
-        Group {
-            if isLoading && organizations.isEmpty {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let error, organizations.isEmpty {
-                ContentUnavailableView {
-                    Label("Unable to load", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error)
-                } actions: {
-                    Button("Retry") { Task { await load() } }
-                }
-            } else if organizations.isEmpty {
-                ContentUnavailableView {
-                    Label("No Organizations", systemImage: "building.2")
-                } description: {
-                    Text("Create an organization to collaborate with others.")
-                } actions: {
-                    Button("Create Organization") { showCreate = true }
-                }
-            } else {
-                List(organizations) { org in
-                    NavigationLink {
-                        OrganizationDetailView(orgId: org.id, initialName: org.name)
-                            .environmentObject(authState)
-                    } label: {
-                        OrganizationRow(org: org)
-                    }
-                }
+        VStack(spacing: 0) {
+            Picker("Scope", selection: $scope) {
+                ForEach(Scope.allCases) { option in Text(option.label).tag(option) }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+            .accessibilityLabel("Organizations to show")
+
+            switch scope {
+            case .mine: mineContent
+            case .discover: discoverContent
             }
         }
         .navigationTitle("Organizations")
@@ -53,10 +54,92 @@ struct OrganizationsListView: View {
             }
         }
         .task { await load() }
+        .task(id: scope) {
+            if scope == .discover && directory.isEmpty { await loadDirectory(reset: true) }
+        }
         .sheet(isPresented: $showCreate, onDismiss: { Task { await load() } }) {
             CreateOrganizationView()
                 .environmentObject(authState)
         }
+    }
+
+    @ViewBuilder
+    private var mineContent: some View {
+        if isLoading && organizations.isEmpty {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error, organizations.isEmpty {
+            ContentUnavailableView {
+                Label("Unable to load", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Retry") { Task { await load() } }
+            }
+        } else if organizations.isEmpty {
+            ContentUnavailableView {
+                Label("No Organizations", systemImage: "building.2")
+            } description: {
+                Text("Create an organization, or join a public one from Discover.")
+            } actions: {
+                Button("Create Organization") { showCreate = true }
+                Button("Browse public organizations") { scope = .discover }
+            }
+        } else {
+            List(organizations) { org in
+                NavigationLink {
+                    OrganizationDetailView(orgId: org.id, initialName: org.name)
+                        .environmentObject(authState)
+                } label: {
+                    OrganizationRow(org: org)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var discoverContent: some View {
+        if isLoadingDirectory && directory.isEmpty {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let directoryError, directory.isEmpty {
+            ContentUnavailableView {
+                Label("Unable to load", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(directoryError)
+            } actions: {
+                Button("Retry") { Task { await loadDirectory(reset: true) } }
+            }
+        } else if directory.isEmpty {
+            ContentUnavailableView {
+                Label("No Public Organizations", systemImage: "building.2")
+            } description: {
+                Text("There are no public organizations to join yet.")
+            }
+        } else {
+            List {
+                if let joinError {
+                    Section { Text(joinError).font(.ilMono()).foregroundStyle(.red) }
+                }
+                ForEach(directory) { org in
+                    DirectoryRow(
+                        org: org,
+                        isJoining: joiningId == org.id,
+                        canJoin: canJoin(org),
+                        onJoin: { Task { await join(org) } }
+                    )
+                }
+                if let pagination = directoryPagination, pagination.hasMore, !isLoadingDirectory {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                        .onAppear { Task { await loadDirectory(reset: false) } }
+                }
+            }
+            .listStyle(.plain)
+        }
+    }
+
+    /// Only public orgs the viewer isn't already in. `POST /api/user/organizations`
+    /// rejects private orgs outright and conflicts on an existing membership.
+    private func canJoin(_ org: Organization) -> Bool {
+        org.isPublic == true && org.role == nil
     }
 
     private func load() async {
@@ -70,6 +153,96 @@ struct OrganizationsListView: View {
         } catch {
             self.error = "Could not load organizations."
         }
+    }
+
+    private func loadDirectory(reset: Bool) async {
+        if reset { directoryPagination = nil }
+        guard !isLoadingDirectory else { return }
+        isLoadingDirectory = true
+        directoryError = nil
+        defer { isLoadingDirectory = false }
+        let offset = reset ? 0 : directory.count
+        do {
+            let result = try await APIClient.shared.publicOrganizations(limit: pageSize, offset: offset)
+            if reset {
+                directory = result.orgs
+            } else {
+                directory.append(contentsOf: result.orgs)
+            }
+            directoryPagination = result.pagination
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            self.directoryError = "Could not load public organizations."
+        }
+    }
+
+    private func join(_ org: Organization) async {
+        joiningId = org.id
+        joinError = nil
+        defer { joiningId = nil }
+        do {
+            try await APIClient.shared.joinOrganization(organizationId: org.id)
+            await load()
+            await loadDirectory(reset: true)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.forbidden(_) {
+            joinError = "You can't join this organization."
+        } catch APIError.conflict(let message) {
+            joinError = message
+        } catch APIError.server(let message) {
+            joinError = message
+        } catch {
+            joinError = "Could not join this organization."
+        }
+    }
+}
+
+/// A directory row: the org, its size, and either a Join action or the viewer's
+/// existing role.
+private struct DirectoryRow: View {
+    let org: Organization
+    let isJoining: Bool
+    let canJoin: Bool
+    let onJoin: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "building.2.fill")
+                .foregroundStyle(.secondary)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(org.name).font(.ilBody())
+                if let description = org.description, !description.isEmpty {
+                    Text(description)
+                        .font(.ilBody(13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                if let count = org.memberCount {
+                    Text("\(count) member\(count == 1 ? "" : "s")")
+                        .font(.ilMono())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if isJoining {
+                ProgressView()
+            } else if canJoin {
+                Button("Join", action: onJoin)
+                    .buttonStyle(.bordered)
+                    .accessibilityLabel("Join \(org.name)")
+            } else if let role = org.role {
+                Text(role.label)
+                    .font(.ilMono())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(ILColor.surface2)
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 
@@ -222,13 +395,26 @@ struct OrganizationMembersView: View {
     @State private var isLoading = true
     @State private var error: String?
     @State private var actionError: String?
+    @State private var showAdd = false
+    /// Cleared when the candidate search answers 403. That route is owner-only
+    /// while `canManageMembers` also admits admins, so an admin only learns of
+    /// the gate by hitting it — at which point the affordance disappears rather
+    /// than reporting a failure they can do nothing about.
+    @State private var searchAllowed = true
 
     private var ownerCount: Int { members.filter { $0.orgRole == .owner }.count }
 
-    /// Owners and admins can manage. The last remaining owner can't be changed,
-    /// and admins can't manage owners.
+    /// Owners and admins can manage members at all.
+    private var canManageMembers: Bool {
+        guard let myRole else { return false }
+        return myRole >= .admin
+    }
+
+    private var canAddMembers: Bool { canManageMembers && searchAllowed }
+
+    /// The last remaining owner can't be changed, and admins can't manage owners.
     private func canManage(_ member: OrganizationMember) -> Bool {
-        guard let myRole, myRole >= .admin else { return false }
+        guard canManageMembers, let myRole else { return false }
         if member.orgRole == .owner && ownerCount <= 1 { return false }
         if member.orgRole == .owner && myRole != .owner { return false }
         return true
@@ -272,7 +458,24 @@ struct OrganizationMembersView: View {
         }
         .navigationTitle("Members")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if canAddMembers {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showAdd = true } label: { Image(systemName: "person.badge.plus") }
+                        .accessibilityLabel("Add member")
+                }
+            }
+        }
         .task { await load() }
+        .sheet(isPresented: $showAdd) {
+            AddOrganizationMemberView(
+                orgId: orgId,
+                existingMemberIds: members.map(\.id),
+                onForbidden: { searchAllowed = false },
+                onAdded: { Task { await load() } }
+            )
+            .environmentObject(authState)
+        }
     }
 
     private func load() async {
@@ -373,6 +576,140 @@ private struct MemberRow: View {
             Image(systemName: "person.circle.fill")
                 .resizable().scaledToFit().frame(width: 36, height: 36)
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Add member
+
+/// Owner-only search over users who aren't in the org yet, with the role they'll
+/// join as. The backing route is gated more tightly than this view's entry point
+/// (owners only, not admins), so a 403 retires the affordance via `onForbidden`
+/// instead of showing an error the viewer can't act on.
+private struct AddOrganizationMemberView: View {
+    let orgId: String
+    let existingMemberIds: [String]
+    let onForbidden: () -> Void
+    let onAdded: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authState: AuthState
+    @State private var role: OrgRole = .member
+    @State private var query = ""
+    @State private var candidates: [OrganizationUser] = []
+    @State private var isLoading = false
+    @State private var error: String?
+    @State private var addingId: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Role") {
+                    Picker("Role", selection: $role) {
+                        ForEach(OrgRole.allCases, id: \.self) { option in
+                            Text(option.label).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityLabel("Role for the new member")
+                }
+
+                Section("People") {
+                    TextField("Search by name or username", text: $query)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityLabel("Search people to add")
+                        .onSubmit { Task { await loadCandidates() } }
+
+                    if isLoading {
+                        ProgressView()
+                    } else if let error {
+                        Text(error).font(.ilMono()).foregroundStyle(.red)
+                    } else if candidates.isEmpty {
+                        Text(query.trimmingCharacters(in: .whitespaces).isEmpty ? "No people available to add." : "No matching people.")
+                            .font(.ilBody(15)).foregroundStyle(.secondary)
+                    } else {
+                        ForEach(candidates) { candidate in
+                            Button {
+                                Task { await add(candidate) }
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(candidate.displayNameOrUsername).foregroundStyle(.primary)
+                                        Text("@\(candidate.username)").font(.ilMono()).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if addingId == candidate.id {
+                                        ProgressView()
+                                    } else {
+                                        Image(systemName: "plus.circle").foregroundStyle(ILColor.primary)
+                                    }
+                                }
+                            }
+                            .disabled(addingId != nil)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Add Member")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .task { await loadCandidates() }
+            .onChange(of: query) { _, newValue in
+                Task { await debouncedSearch(for: newValue) }
+            }
+        }
+    }
+
+    private func debouncedSearch(for value: String) async {
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard value == query else { return }
+        await loadCandidates()
+    }
+
+    private func loadCandidates() async {
+        isLoading = true
+        error = nil
+        defer { isLoading = false }
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        do {
+            candidates = try await APIClient.shared.organizationUsers(
+                id: orgId,
+                search: trimmed.isEmpty ? nil : trimmed,
+                excludeMembers: existingMemberIds.isEmpty ? nil : existingMemberIds
+            )
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.forbidden(_) {
+            onForbidden()
+            dismiss()
+        } catch APIError.status(403) {
+            onForbidden()
+            dismiss()
+        } catch {
+            self.error = "Could not load people."
+        }
+    }
+
+    private func add(_ candidate: OrganizationUser) async {
+        addingId = candidate.id
+        defer { addingId = nil }
+        do {
+            try await APIClient.shared.addOrganizationMember(id: orgId, userId: candidate.id, role: role)
+            onAdded()
+            dismiss()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.forbidden(_) {
+            self.error = "You can't add members to this organization."
+        } catch APIError.server(let message) {
+            self.error = message
+        } catch {
+            self.error = "Could not add this person."
         }
     }
 }

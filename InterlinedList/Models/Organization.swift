@@ -90,3 +90,26 @@ struct OrganizationMembersResponse: Decodable {
     let members: [OrganizationMember]
     let pagination: Pagination?
 }
+
+/// A candidate for membership, returned by the owner-gated user search.
+/// Deliberately not `User`: the search route selects a narrow column set, and
+/// `email` is absent for callers that lack the privilege to see it.
+struct OrganizationUser: Identifiable, Codable {
+    let id: String
+    let username: String
+    let displayName: String?
+    let email: String?
+    let avatar: String?
+
+    var displayNameOrUsername: String {
+        displayName?.isEmpty == false ? (displayName ?? username) : username
+    }
+}
+
+struct OrganizationUsersResponse: Decodable {
+    let users: [OrganizationUser]
+    let total: Int?
+    // This endpoint's `pagination` block is { limit, offset, hasMore } — `total`
+    // sits at the top level instead — so it does not fit the shared `Pagination`
+    // type, whose `total` is required. Decoding it as one would throw.
+}

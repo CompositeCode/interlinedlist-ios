@@ -183,6 +183,8 @@
 		T1E5T1E5T1E50005 /* APIClientAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50006 /* APIClientAuthTests.swift */; };
 		T1E5T1E5T1E50007 /* ListModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E50008 /* ListModelTests.swift */; };
 		T1E5T1E5T1E50009 /* UserModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5000A /* UserModelTests.swift */; };
+		BFCE802A966F43D6DCD480A2 /* APIClientOrganizationDirectoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF8FBE4614D0F4D4AA70F527 /* APIClientOrganizationDirectoryTests.swift */; };
+		FFB826ADA71836051CBE85DA /* APIClient+Organizations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95FE94CC3EACD3D5AC980503 /* APIClient+Organizations.swift */; };
 		T1E5T1E5T1E5D001 /* APIClientVideoUploadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5D002 /* APIClientVideoUploadTests.swift */; };
 		T1E5T1E5T1E5G001 /* APIClientExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5G002 /* APIClientExportTests.swift */; };
 		T1E5T1E5T1E5H001 /* APIClientConnectionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5H002 /* APIClientConnectionsTests.swift */; };
@@ -411,6 +413,8 @@
 		T1E5T1E5T1E50006 /* APIClientAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientAuthTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E50008 /* ListModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListModelTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5000A /* UserModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserModelTests.swift; sourceTree = "<group>"; };
+		95FE94CC3EACD3D5AC980503 /* APIClient+Organizations.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "APIClient+Organizations.swift"; sourceTree = "<group>"; };
+		DF8FBE4614D0F4D4AA70F527 /* APIClientOrganizationDirectoryTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientOrganizationDirectoryTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5D002 /* APIClientVideoUploadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientVideoUploadTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5G002 /* APIClientExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientExportTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5H002 /* APIClientConnectionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientConnectionsTests.swift; sourceTree = "<group>"; };
@@ -573,6 +577,7 @@
 				256FE9818A171E11DDE43140 /* APIClientTransport.swift */,
 				D664CCA80BB084AF101113F8 /* APIClient+SharedLists.swift */,
 				A026223AD393B5E1A339E045 /* APIClient+Limits.swift */,
+				95FE94CC3EACD3D5AC980503 /* APIClient+Organizations.swift */,
 				68CFEE33FB38834B254E8450 /* ServerLimitsStore.swift */,
 				7318B0E3D687653B06626F64 /* APIClient+AI.swift */,
 				C2A39A4CB7CD21E155C1AD77 /* AIService.swift */,
@@ -704,6 +709,7 @@
 				4E8D880C1D849E2E67C36116 /* APIClientSessionsTests.swift */,
 				468BAE51289ECDF42B84CE8B /* APIClientDocumentSyncTests.swift */,
 				644B1B09F84332A794680ED7 /* APIClientMessageByIdTests.swift */,
+				DF8FBE4614D0F4D4AA70F527 /* APIClientOrganizationDirectoryTests.swift */,
 				44825D4863E64D2D9C026645 /* APIClientShareInvitesTests.swift */,
 				12F53DE7756042E68A3D1C33 /* APIClientTagsTests.swift */,
 				907AC4BA9A6A5DF132AEF075 /* APIClientLinkMetadataTests.swift */,
@@ -968,6 +974,7 @@
 				4C5C8544DD7D81FA5C83A967 /* APIClientTransport.swift in Sources */,
 				DDFD75240429AC8C22B4A828 /* APIClient+SharedLists.swift in Sources */,
 				E51C9FF84350C46C947AC953 /* ServerLimits.swift in Sources */,
+				FFB826ADA71836051CBE85DA /* APIClient+Organizations.swift in Sources */,
 				C184FAF9652A6EB2F4C00CEA /* APIClient+Limits.swift in Sources */,
 				745483850C410FDE3C23D44F /* ServerLimitsStore.swift in Sources */,
 				F026A514BDE07AF64725D508 /* AIJSON.swift in Sources */,
@@ -1064,6 +1071,7 @@
 				E21121B51C15922CFBF92C43 /* DocumentSyncOutboxTests.swift in Sources */,
 				05B7A32AAD6202D76C1CC975 /* DocumentSyncConflictTests.swift in Sources */,
 				DAC151BF93B6B223D43714F0 /* APIClientShareInvitesTests.swift in Sources */,
+				BFCE802A966F43D6DCD480A2 /* APIClientOrganizationDirectoryTests.swift in Sources */,
 				F4B74219CE0CB90DAE6B7516 /* ShareInviteModelTests.swift in Sources */,
 				DF75ECCB31B861F938E216A1 /* APIClientTagsTests.swift in Sources */,
 				153437B4818A068C9ADE32DE /* APIClientLinkMetadataTests.swift in Sources */,
