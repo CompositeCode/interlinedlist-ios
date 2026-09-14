@@ -10,6 +10,9 @@ see [§7 Corrections to `the-gaps.md`](#7--corrections-to-the-gapsmd).
 
 **Prepared:** 2026-09-05 · **Branch:** `dev` (= `main` = origin, clean tree)
 
+> **Superseded for open work by [epic #44](https://github.com/CompositeCode/interlinedlist-ios/issues/44)** (issues #45–#66), which also corrects three
+> claims in this file (§5 there). G15 ✅ #43 · G16 ✅ #74 · G17 ✅ #40 · G18 ✅ #74.
+
 ---
 
 ## 1 · Method & verification (what backs every claim below)
@@ -120,14 +123,14 @@ found exactly one mismatch across all 104 iOS call sites, and the suite is green
 | ID | Gap | Backend | Effort |
 |----|-----|---------|--------|
 | **G17** ✅ | **Lists shared with me** — [#40](https://github.com/CompositeCode/interlinedlist-ios/pull/40). `listsWatching()` in `APIClient+SharedLists.swift`; `AppDataStore.watchedLists` (kept out of `userLists` — `buildTree` nests within the *owner's* hierarchy); a *"Shared with me"* section in `ListsView` with no owner-only row actions. `UserList.role` decodes the viewer's access level; `isOwned(by:)` already gates `ListDetailView`. | 🟢 Bearer, free | **S** |
-| **G15** ❌ | **AI writing assistance** — 5 features: composer *Writing Assistant* (rewrite/tighten/expand/grammar/thread/suggest-tags), *Message Series*, *Article Series*, *Powered Templates* (list create), *Powered Document* (4 modes). | 🟢 `/api/ai/{status,suggest,generate}` · 💲 **subscriber-included** (app's server-side key — no user key, no provider picker) · 50/day quota | **L** |
-| **G16** ❌ | **"Create from…" (Materialize)** — message / list / rows / document → new List, Document, or both, with a preview-and-edit confirm step. | 🟢 `POST /api/materialize` · 💲 subscriber | **M** |
+| **G15** ✅ | **AI writing assistance** — [#43](https://github.com/CompositeCode/interlinedlist-ios/pull/43). 5 features: composer *Writing Assistant* (rewrite/tighten/expand/grammar/thread/suggest-tags), *Message Series*, *Article Series*, *Powered Templates* (list create), *Powered Document* (4 modes). | 🟢 `/api/ai/{status,suggest,generate}` · 💲 **subscriber-included** (app's server-side key — no user key, no provider picker) · 50/day quota | **L** |
+| **G16** ✅ | **"Create from…" (Materialize)** — [#74](https://github.com/CompositeCode/interlinedlist-ios/pull/74). message / list / rows / document → new List, Document, or both, with a preview-and-edit confirm step. | 🟢 `POST /api/materialize` · 💲 subscriber | **M** |
 
 ### Tier 2 — smaller systems / lower urgency
 
 | ID | Gap | Backend | Effort |
 |----|-----|---------|--------|
-| **G18** ◑ | **GitHub metadata depth** — iOS ships only `githubRepos()` + `githubIssues()`. Unconsumed: `/api/github/orgs`, `/repos/:owner/:repo/{labels,assignees,next-issue-number}`, `PATCH /api/github/issues/:owner/:repo/:number`, `POST …/comments`. Label/assignee pickers on GitHub-backed rows are the visible win. | 🟢 (GitHub-context auth, not the standard helper) | **M** |
+| **G18** ✅ | **GitHub metadata depth** — [#74](https://github.com/CompositeCode/interlinedlist-ios/pull/74). Previously iOS shipped only `githubRepos()` + `githubIssues()`. Unconsumed: `/api/github/orgs`, `/repos/:owner/:repo/{labels,assignees,next-issue-number}`, `PATCH /api/github/issues/:owner/:repo/:number`, `POST …/comments`. Label/assignee pickers on GitHub-backed rows are the visible win. | 🟢 (GitHub-context auth, not the standard helper) | **M** |
 | **G19** ❌ | **Organization LinkedIn management** — web has `/organizations/[slug]/linkedin`; iOS has no equivalent. `status` / `assignments` / `credential` / `sync-pages`. Behind the backend flag `LINKEDIN_ORG_SCOPES_ENABLED` — **re-verify the flag before building.** | 🟢 Bearer (owner-role gated) | **M** |
 | **G21** ❌ | **Cross-device app-settings sync** — `/api/user/app-settings/{appKey}/…` (account doc + per-device docs + `bootstrap` provenance + CAS `baseVersion`, 64 KiB cap). Explicitly built for native clients (`platform: "ios"`, deviceId "kept in Keychain"). **Not a web-parity gap** — infrastructure iOS could adopt for settings continuity. | 🟢 Bearer, free | **M** |
 | **G11** ❌ | **Live document presence** (collaborative cursors) — carried forward unchanged from `the-gaps.md`. Heartbeat + poll. | 🟢 `POST/DELETE /api/documents/:id/presence` | **M** |
