@@ -16,6 +16,7 @@ struct SettingsView: View {
     @State private var theme: String = "system"
     @State private var defaultPublic: Bool = true
     @State private var showAdvanced: Bool = false
+    @State private var isPrivateAccount: Bool = false
     @State private var settingsError: String?
     @State private var safariLink: SafariLink?
 
@@ -33,6 +34,7 @@ struct SettingsView: View {
             Form {
                 appearanceSection
                 postingSection
+                privacySection
                 accountsSection
                 notificationsSection
                 moderationSection
@@ -67,6 +69,7 @@ struct SettingsView: View {
         theme = user.theme ?? "system"
         defaultPublic = user.defaultPubliclyVisible ?? true
         showAdvanced = user.showAdvancedPostSettings ?? false
+        isPrivateAccount = user.isPrivateAccount ?? false
     }
 
     // MARK: - Sections
@@ -106,6 +109,29 @@ struct SettingsView: View {
             if let maxLen = authState.user?.maxMessageLength {
                 LabeledContent("Max message length", value: maxLen, format: .number)
             }
+        }
+    }
+
+    private var privacySection: some View {
+        Section {
+            Toggle("Private account", isOn: $isPrivateAccount)
+                .accessibilityLabel("Private account")
+                .onChange(of: isPrivateAccount) { _, newValue in
+                    let serverValue = authState.user?.isPrivateAccount ?? false
+                    guard newValue != serverValue else { return }
+                    Task { await save(isPrivateAccount: newValue) }
+                }
+            if isPrivateAccount {
+                NavigationLink {
+                    FollowRequestsView().environmentObject(authState)
+                } label: {
+                    Label("Follow requests", systemImage: "person.badge.clock")
+                }
+            }
+        } header: {
+            Text("Privacy")
+        } footer: {
+            Text("New followers must be approved. Your posts stay visible only to approved followers.")
         }
     }
 
@@ -172,13 +198,19 @@ struct SettingsView: View {
 
     // MARK: - Persistence
 
-    private func save(theme: String? = nil, defaultPubliclyVisible: Bool? = nil, showAdvancedPostSettings: Bool? = nil) async {
+    private func save(
+        theme: String? = nil,
+        defaultPubliclyVisible: Bool? = nil,
+        showAdvancedPostSettings: Bool? = nil,
+        isPrivateAccount: Bool? = nil
+    ) async {
         settingsError = nil
         do {
             let updated = try await APIClient.shared.updateUserSettings(
                 theme: theme,
                 defaultPubliclyVisible: defaultPubliclyVisible,
-                showAdvancedPostSettings: showAdvancedPostSettings
+                showAdvancedPostSettings: showAdvancedPostSettings,
+                isPrivateAccount: isPrivateAccount
             )
             authState.updateUser(updated)
         } catch APIError.status(401) {
