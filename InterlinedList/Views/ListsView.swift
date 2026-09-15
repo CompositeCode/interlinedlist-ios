@@ -407,6 +407,9 @@ struct ListDetailView: View {
     @State private var gitHubLabels: [String] = []
     @State private var gitHubAssignees: [String] = []
     @State private var gitHubNextIssueNumber: Int?
+    @State private var rowSearch = ""
+    @State private var sortOrder: ListSortOrder?
+    @State private var valueFilter: ListValueFilter?
 
     /// Open/closed filter for GitHub-backed lists. GitHub issues carry a `state`
     /// of `open`/`closed`; the list defaults to showing open issues only.
@@ -489,9 +492,10 @@ struct ListDetailView: View {
         return options
     }
 
-    /// Rows to render. Local lists show everything; GitHub-backed lists filter by
-    /// the selected open/closed state (a row is closed only if `state == "closed"`).
-    private var displayedItems: [ListItem] {
+    /// GitHub-backed lists filter by the selected open/closed state first (a row is
+    /// closed only if `state == "closed"`). The in-list search, value filter and sort
+    /// compose on top rather than replacing it.
+    private var stateFilteredItems: [ListItem] {
         guard list.isGitHubBacked else { return items }
         return items.filter { item in
             let isClosed = (item.rowData["state"]?.displayString ?? "open").lowercased() == "closed"
@@ -499,13 +503,35 @@ struct ListDetailView: View {
         }
     }
 
+    /// Rows to render. Search → value filter → sort, all client-side over rows that
+    /// are already loaded; none of it is sent to the server.
+    private var displayedItems: [ListItem] {
+        let searched = ListRowSorting.search(stateFilteredItems, query: rowSearch, schema: schema)
+        let filtered = ListRowSorting.filter(searched, by: valueFilter)
+        return ListRowSorting.sort(filtered, by: sortOrder, schema: schema)
+    }
+
+    /// True when rows exist but the user's own search/filter emptied the view — the
+    /// empty state must say "no match", not "no rows".
+    private var isEmptyBecauseOfFiltering: Bool {
+        displayedItems.isEmpty && !stateFilteredItems.isEmpty
+    }
+
+    private var hasActiveRowFilters: Bool {
+        !rowSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || valueFilter != nil
+    }
+
     private var emptyStateTitle: String {
+        if isEmptyBecauseOfFiltering { return "No Rows Match" }
         guard list.isGitHubBacked else { return "Empty List" }
         if items.isEmpty { return "No Issues" }
         return gitHubStateFilter == .open ? "No Open Issues" : "No Closed Issues"
     }
 
     private var emptyStateMessage: String {
+        if isEmptyBecauseOfFiltering {
+            return "No rows match the current search or filter. Clear them to see the rest."
+        }
         guard list.isGitHubBacked else { return "This list has no items yet." }
         if items.isEmpty { return "No issues synced from GitHub yet. Pull to refresh." }
         return gitHubStateFilter == .open
@@ -546,6 +572,9 @@ struct ListDetailView: View {
                         if !items.isEmpty {
                             gitHubStateFilterSection
                         }
+                    }
+                    if hasActiveRowFilters {
+                        activeFilterSection
                     }
                     if displayedItems.isEmpty && !isLoading {
                         ContentUnavailableView {
@@ -697,6 +726,9 @@ struct ListDetailView: View {
                     .accessibilityLabel("Share list")
                 }
             }
+            if !items.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) { sortFilterMenu }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if let url = ILWebURL.list(list.id) {
@@ -735,6 +767,7 @@ struct ListDetailView: View {
             }
             .environmentObject(authState)
         }
+        .searchable(text: $rowSearch, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search rows")
         .task {
             await loadData()
         }
@@ -878,7 +911,87 @@ struct ListDetailView: View {
         }
     }
 
+    /// Sort and filter live in one toolbar menu so the row list keeps its full width
+    /// on a phone. Both are session-only and per-list — nothing is sent to the server.
     @ViewBuilder
+    private var sortFilterMenu: some View {
+        let sortable = ListRowSorting.sortableProperties(in: schema)
+        let filterable = ListRowSorting.filterableProperties(in: schema)
+        if !sortable.isEmpty {
+            Menu {
+                Menu("Sort by") {
+                    Button {
+                        sortOrder = nil
+                    } label: {
+                        Label("List order", systemImage: sortOrder == nil ? "checkmark" : "")
+                    }
+                    ForEach(sortable) { property in
+                        Button {
+                            if sortOrder?.propertyKey == property.propertyKey {
+                                sortOrder?.direction = sortOrder?.direction == .ascending ? .descending : .ascending
+                            } else {
+                                sortOrder = ListSortOrder(propertyKey: property.propertyKey)
+                            }
+                        } label: {
+                            if sortOrder?.propertyKey == property.propertyKey {
+                                Label(property.propertyName, systemImage: sortOrder?.direction.symbol ?? "arrow.up")
+                            } else {
+                                Text(property.propertyName)
+                            }
+                        }
+                    }
+                }
+                if !filterable.isEmpty {
+                    Menu("Filter") {
+                        Button("Show all") { valueFilter = nil }
+                        ForEach(filterable) { property in
+                            let values = ListRowSorting.distinctValues(of: property.propertyKey, in: stateFilteredItems)
+                            if !values.isEmpty {
+                                Menu(property.propertyName) {
+                                    ForEach(values, id: \.self) { value in
+                                        Button {
+                                            valueFilter = ListValueFilter(propertyKey: property.propertyKey, value: value)
+                                        } label: {
+                                            if valueFilter == ListValueFilter(propertyKey: property.propertyKey, value: value) {
+                                                Label(value, systemImage: "checkmark")
+                                            } else {
+                                                Text(value)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: sortOrder != nil || valueFilter != nil
+                      ? "line.3.horizontal.decrease.circle.fill"
+                      : "line.3.horizontal.decrease.circle")
+            }
+            .accessibilityLabel("Sort and filter rows")
+        }
+    }
+
+    private var activeFilterSection: some View {
+        Section {
+            HStack {
+                if let valueFilter,
+                   let property = schema.first(where: { $0.propertyKey == valueFilter.propertyKey }) {
+                    Text("\(property.propertyName): \(valueFilter.value)")
+                        .font(.ilMono(11))
+                }
+                Spacer()
+                Button("Clear") {
+                    rowSearch = ""
+                    self.valueFilter = nil
+                }
+                .font(.ilMono(11))
+                .accessibilityLabel("Clear row search and filter")
+            }
+        }
+    }
+
     private var gitHubStateFilterSection: some View {
         Section {
             Picker("Issue state", selection: $gitHubStateFilter) {
