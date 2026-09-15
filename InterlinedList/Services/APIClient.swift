@@ -387,6 +387,15 @@ final class APIClient {
         return message
     }
 
+    /// Cross-post reply counts for one message, fetched from Bluesky/Mastodon/LinkedIn/X.
+    /// Despite the name this is **not** in-app reply counts. The route is rate-limited
+    /// (30/min) and caches for 10 minutes, so call it once per detail view and never in
+    /// a loop — and never from the feed.
+    func crossPostReplyCounts(messageId: String) async throws -> ReplyCountsResponse {
+        struct Empty: Encodable {}
+        return try await post("/api/messages/\(pathSegment(messageId))/reply-counts", body: Empty())
+    }
+
     struct DigResponse: Decodable { let digCount: Int; let dugByMe: Bool }
 
     func dig(messageId: String) async throws -> DigResponse {
