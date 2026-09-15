@@ -95,7 +95,7 @@ struct SettingsView: View {
                 .onChange(of: defaultPublic) { _, newValue in
                     let serverValue = authState.user?.defaultPubliclyVisible ?? true
                     guard newValue != serverValue else { return }
-                    Task { await save(defaultVisibility: newValue) }
+                    Task { await save(defaultPubliclyVisible: newValue) }
                 }
             Toggle("Show advanced post settings", isOn: $showAdvanced)
                 .onChange(of: showAdvanced) { _, newValue in
@@ -172,12 +172,12 @@ struct SettingsView: View {
 
     // MARK: - Persistence
 
-    private func save(theme: String? = nil, defaultVisibility: Bool? = nil, showAdvancedPostSettings: Bool? = nil) async {
+    private func save(theme: String? = nil, defaultPubliclyVisible: Bool? = nil, showAdvancedPostSettings: Bool? = nil) async {
         settingsError = nil
         do {
             let updated = try await APIClient.shared.updateUserSettings(
                 theme: theme,
-                defaultVisibility: defaultVisibility,
+                defaultPubliclyVisible: defaultPubliclyVisible,
                 showAdvancedPostSettings: showAdvancedPostSettings
             )
             authState.updateUser(updated)
