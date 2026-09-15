@@ -971,14 +971,25 @@ final class APIClient {
 
     /// Update user preferences (theme, default visibility, advanced-post toggle).
     /// Returns the refreshed user.
-    func updateUserSettings(theme: String? = nil, defaultPubliclyVisible: Bool? = nil, showAdvancedPostSettings: Bool? = nil) async throws -> User {
+    func updateUserSettings(
+        theme: String? = nil,
+        defaultPubliclyVisible: Bool? = nil,
+        showAdvancedPostSettings: Bool? = nil,
+        isPrivateAccount: Bool? = nil
+    ) async throws -> User {
         struct Body: Encodable {
             let theme: String?
             let defaultPubliclyVisible: Bool?
             let showAdvancedPostSettings: Bool?
+            let isPrivateAccount: Bool?
         }
         struct WrappedResponse: Decodable { let user: User? }
-        let body = Body(theme: theme, defaultPubliclyVisible: defaultPubliclyVisible, showAdvancedPostSettings: showAdvancedPostSettings)
+        let body = Body(
+            theme: theme,
+            defaultPubliclyVisible: defaultPubliclyVisible,
+            showAdvancedPostSettings: showAdvancedPostSettings,
+            isPrivateAccount: isPrivateAccount
+        )
         let wrapped: WrappedResponse = try await patchCamel("/api/user/update", body: body)
         if let user = wrapped.user { return user }
         return try await currentUser()

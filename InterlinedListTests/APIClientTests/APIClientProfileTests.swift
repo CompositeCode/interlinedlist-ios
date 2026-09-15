@@ -80,6 +80,25 @@ final class APIClientProfileTests: XCTestCase {
         XCTAssertNil(json["show_advanced_post_settings"], "Body must NOT use snake_case key")
     }
 
+    // MARK: isPrivateAccount (#48)
+
+    func test_updateUserSettings_sendsIsPrivateAccountKey() async throws {
+        session.stub(json: #"{"user":\#(userJSON)}"#)
+        _ = try await sut.updateUserSettings(isPrivateAccount: true)
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["isPrivateAccount"] as? Bool, true)
+        XCTAssertNil(json["is_private_account"], "Body must NOT use snake_case key")
+    }
+
+    func test_updateUserSettings_omitsIsPrivateAccountWhenNotSet() async throws {
+        session.stub(json: #"{"user":\#(userJSON)}"#)
+        _ = try await sut.updateUserSettings(theme: "dark")
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNil(json["isPrivateAccount"], "An untouched setting must not be sent")
+    }
+
     // MARK: Wire-key regression (#46)
 
     // PATCH /api/user/update destructures `defaultPubliclyVisible`. It ignores unknown keys
