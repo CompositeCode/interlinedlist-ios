@@ -27,6 +27,7 @@ struct ListsView: View {
             .navigationDestination(for: UserList.self) { list in
                 ListDetailView(list: list)
                     .environmentObject(authState)
+                    .environmentObject(store)
             }
             .searchable(text: $searchText, prompt: "Search lists")
             .onSubmit(of: .search) {
@@ -379,9 +380,16 @@ private struct ListNameWithVisibility: View {
 
 // MARK: - List detail
 
+/// Identifiable wrapper so a prefilled composer can be driven by `.sheet(item:)`.
+struct ComposeFromRow: Identifiable {
+    let id = UUID()
+    let content: String
+}
+
 struct ListDetailView: View {
     let list: UserList
     @EnvironmentObject var authState: AuthState
+    @EnvironmentObject var store: AppDataStore
     @State private var schema: [ListPropertyDef] = []
     @State private var items: [ListItem] = []
     @State private var pendingUpdates: [String: [String: JSONValue]] = [:]
@@ -398,6 +406,7 @@ struct ListDetailView: View {
     @State private var showSharing = false
     @State private var isRefreshingGitHub = false
     @State private var gitHubRefreshError: String?
+    @State private var composeFromRow: ComposeFromRow?
     @State private var gitHubStateFilter: GitHubStateFilter = .open
     @State private var contributors = ListContributorsResult.empty
     @State private var showContributors = false
@@ -597,6 +606,16 @@ struct ListDetailView: View {
                                         Label("Create from this row…", systemImage: "plus.square.on.square")
                                     }
                                 }
+                                Button {
+                                    composeFromRow = ComposeFromRow(
+                                        content: ListRowComposeText.body(
+                                            listTitle: list.name, schema: schema, row: item.rowData
+                                        )
+                                    )
+                                } label: {
+                                    Label("Schedule a post from this row…", systemImage: "calendar.badge.plus")
+                                }
+                                .accessibilityLabel("Schedule a post from this row")
                             }
                         }
                     }
@@ -734,6 +753,14 @@ struct ListDetailView: View {
                 selectedRowIds = []
             }
             .environmentObject(authState)
+        }
+        .sheet(item: $composeFromRow) { seed in
+            // Reuses the normal composer, so scheduling, visibility, cross-post
+            // targets and org posting all come free — and no new endpoint is
+            // introduced: this still posts through POST /api/messages.
+            ComposeView(prefillContent: seed.content)
+                .environmentObject(authState)
+                .environmentObject(store)
         }
         .task {
             await loadData()
