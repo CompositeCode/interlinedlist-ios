@@ -174,6 +174,13 @@ final class APIClient {
         try await deleteCamel("/api/user/identities", body: Body(provider: provider, providerId: providerId))
     }
 
+    /// Actively verifies a stored OAuth credential — the only route that reports real
+    /// token health. The five `/status` routes report whether a *provider* is
+    /// configured server-side, not whether this account's token still works, which is
+    /// why `LinkedIdentitiesView` cannot show a "reconnect needed" state today. Kept
+    /// as the primitive that closes that gap; no caller yet.
+    ///
+    /// Note: the route reads only `provider` — `providerId` is accepted and ignored.
     func verifyIdentity(provider: String, providerId: String) async throws {
         struct Body: Encodable { let provider: String; let providerId: String }
         struct Response: Decodable { let ok: Bool? }
@@ -366,6 +373,11 @@ final class APIClient {
     }
 
     /// Fetch/refresh OpenGraph link-preview metadata for a message's links.
+    ///
+    /// No caller yet, deliberately. The web fires this after publishing and after an
+    /// edit (`MessageInput.tsx:511`) so a new post's link previews populate without a
+    /// reload. Wiring it adds a request to the publish path, so it is tracked
+    /// separately rather than slipped into a hygiene sweep.
     @discardableResult
     func refreshMessageMetadata(messageId: String) async throws -> [MessageLinkPreview] {
         struct Response: Decodable {
@@ -695,16 +707,6 @@ final class APIClient {
         return list
     }
 
-    func updateListSchema(listId: String, schemaDSL: String) async throws -> [ListPropertyDef] {
-        struct Body: Encodable { let schema: String }
-        // Response shape isn't documented; tolerate missing `properties` (e.g. {"ok":true}).
-        struct Response: Decodable { let properties: [ListPropertyDef]? }
-        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
-        let response: Response = try await putCamel("/api/lists/\(encoded)/schema",
-                                                    body: Body(schema: schemaDSL))
-        return response.properties ?? []
-    }
-
     func searchLists(q: String, limit: Int = 20, offset: Int = 0) async throws -> ([UserList], Pagination?) {
         let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
         struct Response: Decodable { let lists: [UserList]; let pagination: Pagination? }
@@ -719,18 +721,6 @@ final class APIClient {
     /// Returns 400 "GitHub account not linked" when no GitHub identity is linked.
     func githubRepos() async throws -> [GitHubRepo] {
         return try await get("/api/github/repos")
-    }
-
-    /// Open (or `state`) issues for a repo (`GET /api/github/issues?repo=owner/repo`,
-    /// Bearer). Raw GitHub REST array; decode defensively.
-    func githubIssues(repo: String, state: String = "open") async throws -> [GitHubIssue] {
-        var components = URLComponents(string: baseURL + "/api/github/issues")
-        components?.queryItems = [
-            URLQueryItem(name: "repo", value: repo),
-            URLQueryItem(name: "state", value: state),
-        ]
-        let query = components?.percentEncodedQuery.map { "?" + $0 } ?? ""
-        return try await get("/api/github/issues" + query)
     }
 
     /// Re-syncs a GitHub-backed list's cached rows from GitHub issues
@@ -1243,11 +1233,6 @@ final class APIClient {
 
     // MARK: - Organizations (Phase 8)
 
-    func organizations(limit: Int = 30, offset: Int = 0) async throws -> (orgs: [Organization], pagination: Pagination?) {
-        let response: OrganizationsResponse = try await get("/api/organizations?limit=\(limit)&offset=\(offset)")
-        return (response.organizations, response.pagination)
-    }
-
     func organization(id: String) async throws -> Organization {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         let response: OrganizationResponse = try await get("/api/organizations/\(encoded)")
@@ -1418,20 +1403,6 @@ final class APIClient {
         struct Body: Encodable { let recipientId: String; let body: String; let imageUrls: [String] }
         let response: DMMessageResponse = try await postCamel("/api/dm", body: Body(recipientId: recipientId, body: body, imageUrls: imageUrls))
         return response.message
-    }
-
-    func directMessage(id: String) async throws -> DMMessage {
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: DMMessageResponse = try await get("/api/dm/\(encoded)")
-        return response.message
-    }
-
-    @discardableResult
-    func markDMRead(id: String) async throws -> Int {
-        struct Empty: Encodable {}
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: DMUpdatedResponse = try await post("/api/dm/\(encoded)/read", body: Empty())
-        return response.updated
     }
 
     func trashDM(id: String) async throws {
