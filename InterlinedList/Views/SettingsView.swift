@@ -17,6 +17,10 @@ struct SettingsView: View {
     @State private var defaultPublic: Bool = true
     @State private var showAdvanced: Bool = false
     @State private var isPrivateAccount: Bool = false
+    @State private var feedScope: FeedScope = .allMessages
+    @State private var messagesPerPage: Int = ViewPreferenceBounds.defaultMessagesPerPage
+    @State private var showPreviews: Bool = true
+    @State private var notificationTrayLimit: Int = ViewPreferenceBounds.defaultNotificationTrayLimit
     @State private var settingsError: String?
     @State private var safariLink: SafariLink?
 
@@ -34,6 +38,7 @@ struct SettingsView: View {
             Form {
                 appearanceSection
                 postingSection
+                viewPreferencesSection
                 privacySection
                 accountsSection
                 notificationsSection
@@ -70,6 +75,10 @@ struct SettingsView: View {
         defaultPublic = user.defaultPubliclyVisible ?? true
         showAdvanced = user.showAdvancedPostSettings ?? false
         isPrivateAccount = user.isPrivateAccount ?? false
+        feedScope = FeedScope.from(user.viewingPreference)
+        messagesPerPage = user.messagesPerPage ?? ViewPreferenceBounds.defaultMessagesPerPage
+        showPreviews = user.showPreviews ?? true
+        notificationTrayLimit = user.notificationTrayLimit ?? ViewPreferenceBounds.defaultNotificationTrayLimit
     }
 
     // MARK: - Sections
@@ -109,6 +118,49 @@ struct SettingsView: View {
             if let maxLen = authState.user?.maxMessageLength {
                 LabeledContent("Max message length", value: maxLen, format: .number)
             }
+        }
+    }
+
+    private var viewPreferencesSection: some View {
+        Section {
+            Picker("Show posts from", selection: $feedScope) {
+                ForEach(FeedScope.allCases) { scope in
+                    Text(scope.label).tag(scope)
+                }
+            }
+            .accessibilityLabel("Feed scope")
+            .onChange(of: feedScope) { _, newValue in
+                guard newValue != FeedScope.from(authState.user?.viewingPreference) else { return }
+                Task { await save(viewingPreference: newValue.rawValue) }
+            }
+
+            Stepper(value: $messagesPerPage, in: ViewPreferenceBounds.messagesPerPage) {
+                LabeledContent("Posts per page", value: messagesPerPage, format: .number)
+            }
+            .accessibilityLabel("Posts per page, \(messagesPerPage)")
+            .onChange(of: messagesPerPage) { _, newValue in
+                guard newValue != authState.user?.messagesPerPage else { return }
+                Task { await save(messagesPerPage: newValue) }
+            }
+
+            Toggle("Show link previews", isOn: $showPreviews)
+                .onChange(of: showPreviews) { _, newValue in
+                    guard newValue != (authState.user?.showPreviews ?? true) else { return }
+                    Task { await save(showPreviews: newValue) }
+                }
+
+            Stepper(value: $notificationTrayLimit, in: ViewPreferenceBounds.notificationTrayLimit) {
+                LabeledContent("Notifications in the tray", value: notificationTrayLimit, format: .number)
+            }
+            .accessibilityLabel("Notifications in the tray, \(notificationTrayLimit)")
+            .onChange(of: notificationTrayLimit) { _, newValue in
+                guard newValue != authState.user?.notificationTrayLimit else { return }
+                Task { await save(notificationTrayLimit: newValue) }
+            }
+        } header: {
+            Text("View preferences")
+        } footer: {
+            Text("Feed scope is applied on the server, so it changes what the feed returns everywhere you're signed in.")
         }
     }
 
@@ -202,7 +254,11 @@ struct SettingsView: View {
         theme: String? = nil,
         defaultPubliclyVisible: Bool? = nil,
         showAdvancedPostSettings: Bool? = nil,
-        isPrivateAccount: Bool? = nil
+        isPrivateAccount: Bool? = nil,
+        viewingPreference: String? = nil,
+        messagesPerPage: Int? = nil,
+        showPreviews: Bool? = nil,
+        notificationTrayLimit: Int? = nil
     ) async {
         settingsError = nil
         do {
@@ -210,11 +266,20 @@ struct SettingsView: View {
                 theme: theme,
                 defaultPubliclyVisible: defaultPubliclyVisible,
                 showAdvancedPostSettings: showAdvancedPostSettings,
-                isPrivateAccount: isPrivateAccount
+                isPrivateAccount: isPrivateAccount,
+                viewingPreference: viewingPreference,
+                messagesPerPage: messagesPerPage,
+                showPreviews: showPreviews,
+                notificationTrayLimit: notificationTrayLimit
             )
             authState.updateUser(updated)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
+        } catch APIError.server(let message) {
+            // The route 400s with a specific reason for an out-of-range value; show it
+            // rather than a generic failure that reads as a network problem.
+            settingsError = message
+            syncFromUser()
         } catch {
             settingsError = "Could not save settings."
             // Revert local controls to match server state so they don't show a value that wasn't saved.

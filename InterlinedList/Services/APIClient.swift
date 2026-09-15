@@ -975,20 +975,32 @@ final class APIClient {
         theme: String? = nil,
         defaultPubliclyVisible: Bool? = nil,
         showAdvancedPostSettings: Bool? = nil,
-        isPrivateAccount: Bool? = nil
+        isPrivateAccount: Bool? = nil,
+        viewingPreference: String? = nil,
+        messagesPerPage: Int? = nil,
+        showPreviews: Bool? = nil,
+        notificationTrayLimit: Int? = nil
     ) async throws -> User {
         struct Body: Encodable {
             let theme: String?
             let defaultPubliclyVisible: Bool?
             let showAdvancedPostSettings: Bool?
             let isPrivateAccount: Bool?
+            let viewingPreference: String?
+            let messagesPerPage: Int?
+            let showPreviews: Bool?
+            let notificationTrayLimit: Int?
         }
         struct WrappedResponse: Decodable { let user: User? }
         let body = Body(
             theme: theme,
             defaultPubliclyVisible: defaultPubliclyVisible,
             showAdvancedPostSettings: showAdvancedPostSettings,
-            isPrivateAccount: isPrivateAccount
+            isPrivateAccount: isPrivateAccount,
+            viewingPreference: viewingPreference,
+            messagesPerPage: messagesPerPage,
+            showPreviews: showPreviews,
+            notificationTrayLimit: notificationTrayLimit
         )
         let wrapped: WrappedResponse = try await patchCamel("/api/user/update", body: body)
         if let user = wrapped.user { return user }
