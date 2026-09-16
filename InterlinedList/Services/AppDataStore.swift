@@ -501,6 +501,20 @@ final class AppDataStore: ObservableObject {
         saveFeedCache()
     }
 
+    /// Drops a deleted row from the feed page and its cache. Unknown id: no-op —
+    /// the page is a window on the timeline, so deleting a message that has already
+    /// scrolled out of it is not an error.
+    ///
+    /// Removes the id and nothing else: the feed page is reply-free by construction
+    /// (`GET /api/messages` filters `parentId: null`), so a deleted parent has no
+    /// replies here to cascade to. `removeAll` rather than a single index because
+    /// `insertFeedMessage` does not deduplicate.
+    func removeFeedMessage(id: String) {
+        guard feedMessages.contains(where: { $0.id == id }) else { return }
+        feedMessages.removeAll { $0.id == id }
+        saveFeedCache()
+    }
+
     func removeList(id: String) { userLists.removeAll { $0.id == id }; saveListsCache() }
 
     /// Idempotent upsert by id — safe to call after `createDocumentOffline`

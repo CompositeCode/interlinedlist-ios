@@ -6,9 +6,21 @@ import XCTest
 final class AppDataStoreTests: XCTestCase {
     var sut: AppDataStore!
 
+    /// Ids handed out by `makeCachedUserId()`, cleared from the on-disk cache in
+    /// `tearDown` so a run leaves no feed JSON behind in the simulator.
+    private var seededUserIds: [String] = []
+
     override func setUp() {
         super.setUp()
         sut = AppDataStore()
+    }
+
+    override func tearDown() async throws {
+        let uids = seededUserIds
+        seededUserIds = []
+        let cache = DataCache()
+        for uid in uids { await cache.clearAll(prefix: uid) }
+        try await super.tearDown()
     }
 
     // MARK: - insertFeedMessage
@@ -110,6 +122,163 @@ final class AppDataStoreTests: XCTestCase {
         sut.updateFeedMessage(makeMessage(id: "ghost", content: "ignored"))
         XCTAssertEqual(sut.feedMessages.map(\.id), ["a"])
         XCTAssertEqual(sut.feedMessages.first?.content, "kept")
+    }
+
+    // MARK: - removeFeedMessage
+
+    func test_removeFeedMessage_dropsTheRow() {
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        sut.removeFeedMessage(id: "a")
+        XCTAssertTrue(sut.feedMessages.isEmpty)
+    }
+
+    func test_removeFeedMessage_keepsTheOtherRowsInOrder() {
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        sut.insertFeedMessage(makeMessage(id: "b"))
+        sut.insertFeedMessage(makeMessage(id: "c"))
+        sut.removeFeedMessage(id: "b")
+        XCTAssertEqual(sut.feedMessages.map(\.id), ["c", "a"])
+    }
+
+    func test_removeFeedMessage_unknownId_isANoOp() {
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        sut.removeFeedMessage(id: "ghost")
+        XCTAssertEqual(sut.feedMessages.map(\.id), ["a"])
+    }
+
+    func test_removeFeedMessage_unknownId_doesNotMoveTheRevision() {
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        let before = sut.feedRevision
+        sut.removeFeedMessage(id: "ghost")
+        XCTAssertEqual(sut.feedRevision, before)
+    }
+
+    func test_removeFeedMessage_movesTheRevision() {
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        let before = sut.feedRevision
+        sut.removeFeedMessage(id: "a")
+        XCTAssertGreaterThan(sut.feedRevision, before)
+    }
+
+    /// `insertFeedMessage` deliberately does not deduplicate (see
+    /// `test_insertFeedMessage_doesNotDuplicateExistingMessage`), so removing a single
+    /// index would leave a copy of the deleted post behind.
+    func test_removeFeedMessage_removesEveryCopyOfADuplicatedId() {
+        sut.insertFeedMessage(makeMessage(id: "dup"))
+        sut.insertFeedMessage(makeMessage(id: "dup"))
+        sut.removeFeedMessage(id: "dup")
+        XCTAssertTrue(sut.feedMessages.isEmpty)
+    }
+
+    // MARK: - removeFeedMessage: the persisted cache
+
+    func test_removeFeedMessage_dropsTheRowFromThePersistedCache() async {
+        let uid = makeCachedUserId()
+        sut.onUserIdAvailable(uid)
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        sut.insertFeedMessage(makeMessage(id: "b"))
+        let seeded = await cachedFeedIds(forUserId: uid, awaiting: ["b", "a"])
+        XCTAssertEqual(seeded, ["b", "a"], "cache was not seeded; the assertion below would be vacuous")
+
+        sut.removeFeedMessage(id: "a")
+
+        let after = await cachedFeedIds(forUserId: uid, awaiting: ["b"])
+        XCTAssertEqual(after, ["b"])
+    }
+
+    /// The reported bug, end to end: a deleted post must not come back on the next
+    /// launch that reads the cache. The relaunched store hydrates from disk only —
+    /// `onUserIdAvailable` touches no network.
+    func test_removedMessage_staysDeletedAcrossARelaunch() async {
+        let uid = makeCachedUserId()
+        sut.onUserIdAvailable(uid)
+        sut.insertFeedMessage(makeMessage(id: "keep"))
+        sut.insertFeedMessage(makeMessage(id: "gone"))
+        let seeded = await cachedFeedIds(forUserId: uid, awaiting: ["gone", "keep"])
+        XCTAssertEqual(seeded, ["gone", "keep"], "cache was not seeded")
+
+        sut.removeFeedMessage(id: "gone")
+        _ = await cachedFeedIds(forUserId: uid, awaiting: ["keep"])
+
+        let relaunched = AppDataStore()
+        relaunched.onUserIdAvailable(uid)
+        let ids = await feedIds(of: relaunched, awaiting: ["keep"])
+        XCTAssertEqual(ids, ["keep"])
+    }
+
+    // MARK: - removeFeedMessage: replies
+
+    /// Deliberate: no cascade. The feed page cannot hold a reply — `GET /api/messages`
+    /// filters `parentId: null`, and `ComposeView` skips `insertFeedMessage` when it is
+    /// replying — so a parent's replies are never in this cache to remove. The backend
+    /// cascades (`onDelete: Cascade`), which settles the server side. This pins the
+    /// decision: only the named id goes.
+    func test_removeFeedMessage_removesOnlyTheNamedId_leavingAReplyRow() {
+        sut.insertFeedMessage(makeMessage(id: "parent"))
+        sut.insertFeedMessage(makeMessage(id: "reply", parentId: "parent"))
+        sut.removeFeedMessage(id: "parent")
+        XCTAssertEqual(sut.feedMessages.map(\.id), ["reply"])
+    }
+
+    /// An orphaned reply is an ordinary row: no view branches on `parentId`, so a
+    /// dangling parent id renders as a standalone post rather than breaking.
+    func test_removeFeedMessage_orphanedReply_keepsItsFieldsIntact() {
+        sut.insertFeedMessage(makeMessage(id: "parent"))
+        sut.insertFeedMessage(makeMessage(id: "reply", content: "a reply", parentId: "parent"))
+        sut.removeFeedMessage(id: "parent")
+        let orphan = sut.feedMessages.first
+        XCTAssertEqual(orphan?.id, "reply")
+        XCTAssertEqual(orphan?.content, "a reply")
+        XCTAssertEqual(orphan?.parentId, "parent")
+    }
+
+    /// The orphan has to survive the cache round-trip too: `[Message]` decodes all or
+    /// nothing, so a row that failed to decode would take the whole feed cache with it.
+    func test_removeFeedMessage_orphanedReply_survivesTheCacheRoundTrip() async {
+        let uid = makeCachedUserId()
+        sut.onUserIdAvailable(uid)
+        sut.insertFeedMessage(makeMessage(id: "parent"))
+        sut.insertFeedMessage(makeMessage(id: "reply", parentId: "parent"))
+        let seeded = await cachedFeedIds(forUserId: uid, awaiting: ["reply", "parent"])
+        XCTAssertEqual(seeded, ["reply", "parent"], "cache was not seeded")
+
+        sut.removeFeedMessage(id: "parent")
+        _ = await cachedFeedIds(forUserId: uid, awaiting: ["reply"])
+
+        let relaunched = AppDataStore()
+        relaunched.onUserIdAvailable(uid)
+        let ids = await feedIds(of: relaunched, awaiting: ["reply"])
+        XCTAssertEqual(ids, ["reply"])
+        XCTAssertEqual(relaunched.feedMessages.first?.parentId, "parent")
+    }
+
+    // MARK: - removeFeedMessage: the view's working copy
+
+    /// The optimistic half. `FeedView.deleteMessage` drops the row from its own copy
+    /// and then tells the store; a merge of the two afterwards must leave it gone.
+    func test_storeRowRemoval_withTheLocalRemoval_leavesTheRowGone() {
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        sut.insertFeedMessage(makeMessage(id: "b"))
+        var viewCopy = sut.feedMessages
+
+        sut.removeFeedMessage(id: "a")
+        viewCopy.removeAll { $0.id == "a" }
+
+        let merged = FeedMerge.merge(existing: viewCopy, incoming: sut.feedMessages)
+        XCTAssertEqual(merged.messages.map(\.id), ["b"])
+    }
+
+    /// Why that local removal is load-bearing rather than merely faster: `FeedMerge`
+    /// keeps rows the store does not hold, which is how paginated pages survive a
+    /// merge. The store call alone cannot evict a row the view already holds.
+    func test_storeRowRemoval_withoutTheLocalRemoval_keepsTheRowOnScreen() {
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        let viewCopy = sut.feedMessages
+
+        sut.removeFeedMessage(id: "a")
+
+        let merged = FeedMerge.merge(existing: viewCopy, incoming: sut.feedMessages)
+        XCTAssertEqual(merged.messages.map(\.id), ["a"])
     }
 
     // MARK: - feedRevision
@@ -370,12 +539,53 @@ final class AppDataStoreTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeMessage(id: String, content: String = "test") -> Message {
+    private func makeMessage(id: String, content: String = "test", parentId: String? = nil) -> Message {
         Message(id: id, content: content, publiclyVisible: true,
                 userId: "u1", createdAt: "2026-01-01T00:00:00Z",
                 updatedAt: nil, user: nil, imageUrls: nil, videoUrls: nil,
-                linkMetadata: nil, parentId: nil, scheduledAt: nil,
+                linkMetadata: nil, parentId: parentId, scheduledAt: nil,
                 tags: nil, digCount: 0, dugByMe: false, crossPostUrls: nil)
+    }
+
+    /// A user id no other test (or earlier run) has cached under, so the feed-cache
+    /// assertions read only what the test itself wrote.
+    private func makeCachedUserId() -> String {
+        let uid = "test-user-\(UUID().uuidString)"
+        seededUserIds.append(uid)
+        return uid
+    }
+
+    /// `saveFeedCache` writes through a detached `Task` into an actor, so the file is
+    /// not on disk when the mutating call returns. Polls for the expected ids instead
+    /// of sleeping a fixed interval, and returns whatever it last read so a failure
+    /// reports the actual cached state.
+    private func cachedFeedIds(forUserId uid: String,
+                               awaiting expected: [String],
+                               timeout: TimeInterval = 3.0) async -> [String]? {
+        let cache = DataCache()
+        let deadline = Date().addingTimeInterval(timeout)
+        var last: [String]?
+        repeat {
+            let loaded: [Message]? = await cache.load(key: "\(uid)_feed")
+            last = loaded?.map(\.id)
+            if last == expected { return last }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        } while Date() < deadline
+        return last
+    }
+
+    /// `onUserIdAvailable` hydrates from the cache in a detached `Task` — same polling
+    /// reason as `cachedFeedIds`.
+    private func feedIds(of store: AppDataStore,
+                         awaiting expected: [String],
+                         timeout: TimeInterval = 3.0) async -> [String] {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let ids = store.feedMessages.map(\.id)
+            if ids == expected { return ids }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        } while Date() < deadline
+        return store.feedMessages.map(\.id)
     }
 
     private func makeDocument(id: String) -> Document {
