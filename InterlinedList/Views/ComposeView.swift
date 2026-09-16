@@ -810,9 +810,9 @@ struct ComposeView: View {
     /// can't change server-side anyway. See issue #76.
     private func refreshLinkMetadata(for messageId: String) {
         Task { @MainActor in
-            guard let previews = try? await APIClient.shared.refreshMessageMetadata(messageId: messageId)
+            guard let links = try? await APIClient.shared.refreshMessageMetadata(messageId: messageId)
             else { return }
-            store.applyLinkMetadata(LinkMetadataItem.from(previews: previews), toMessageId: messageId)
+            store.applyLinkMetadata(links, toMessageId: messageId)
         }
     }
 }

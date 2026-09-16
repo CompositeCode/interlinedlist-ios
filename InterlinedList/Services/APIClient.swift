@@ -366,16 +366,20 @@ final class APIClient {
     }
 
     /// Fetch/refresh OpenGraph link-preview metadata for a message's links.
+    ///
+    /// `app/api/messages/[id]/metadata/route.ts` answers `{ "links": [...] }` at the
+    /// top level from both exits (no links detected → `[]`; otherwise the fetched
+    /// items), and each entry is the same `LinkMetadataItem` the feed row carries —
+    /// both come out of `fetchMultipleLinkMetadata`, as `/api/link-metadata` does.
+    /// `links` is decoded as required on purpose: the previous wrapper mismatch
+    /// survived because a missing key degraded to an empty array in silence.
     @discardableResult
-    func refreshMessageMetadata(messageId: String) async throws -> [MessageLinkPreview] {
-        struct Response: Decodable {
-            struct Meta: Decodable { let links: [MessageLinkPreview]? }
-            let metadata: Meta?
-        }
+    func refreshMessageMetadata(messageId: String) async throws -> [LinkMetadataItem] {
+        struct Response: Decodable { let links: [LinkMetadataItem] }
         let encoded = messageId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? messageId
         struct Empty: Encodable {}
         let response: Response = try await postCamel("/api/messages/\(encoded)/metadata", body: Empty())
-        return response.metadata?.links ?? []
+        return response.links
     }
 
     func editMessage(id: String, content: String, publiclyVisible: Bool?) async throws -> Message {
