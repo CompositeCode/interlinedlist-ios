@@ -65,30 +65,78 @@ final class APIClientIdentitiesTests: XCTestCase {
 
     // MARK: unlinkIdentity
 
-    func test_unlinkIdentity_sendsDeleteWithBody() async throws {
+    func test_unlinkIdentity_sendsDeleteToIdentitiesPath() async throws {
         session.stub(data: Data(), statusCode: 204)
-        try await sut.unlinkIdentity(provider: "github", providerId: "abc-123")
-        XCTAssertEqual(session.lastRequest?.url?.path, "/api/user/identities")
+        try await sut.unlinkIdentity(provider: "github")
         XCTAssertEqual(session.lastRequest?.httpMethod, "DELETE")
-        let body = String(data: session.lastRequest?.httpBody ?? Data(), encoding: .utf8) ?? ""
-        XCTAssertTrue(body.contains("\"provider\":\"github\""))
-        XCTAssertTrue(body.contains("\"providerId\":\"abc-123\""),
-                      "Body must use camelCase providerId. Got: \(body)")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/user/identities")
+    }
+
+    func test_unlinkIdentity_sendsProviderAsQueryParameter() async throws {
+        session.stub(data: Data(), statusCode: 204)
+        try await sut.unlinkIdentity(provider: "github")
+        XCTAssertEqual(session.lastRequest?.url?.query, "provider=github")
+    }
+
+    func test_unlinkIdentity_sendsEmptyBody() async throws {
+        // The route reads the query string and never parses a body; a JSON payload
+        // here is what produced 400 "provider is required".
+        session.stub(data: Data(), statusCode: 204)
+        try await sut.unlinkIdentity(provider: "github")
+        XCTAssertNil(session.lastRequest?.httpBody)
+    }
+
+    func test_unlinkIdentity_mastodonProvider_keepsInstanceSuffix() async throws {
+        session.stub(data: Data(), statusCode: 204)
+        try await sut.unlinkIdentity(provider: "mastodon:techhub.social")
+        let value = URLComponents(url: try XCTUnwrap(session.lastRequest?.url), resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "provider" })?.value
+        XCTAssertEqual(value, "mastodon:techhub.social")
+    }
+
+    func test_unlinkIdentity_providerWithQueryDelimiters_percentEncodesThem() async throws {
+        session.stub(data: Data(), statusCode: 204)
+        try await sut.unlinkIdentity(provider: "mastodon:a+b&c=d")
+        let query = try XCTUnwrap(session.lastRequest?.url?.query)
+        XCTAssertEqual(query, "provider=mastodon:a%2Bb%26c%3Dd")
+        let value = URLComponents(url: try XCTUnwrap(session.lastRequest?.url), resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "provider" })?.value
+        XCTAssertEqual(value, "mastodon:a+b&c=d")
     }
 
     func test_unlinkIdentity_sendsBearerToken() async throws {
         session.stub(data: Data(), statusCode: 204)
-        try await sut.unlinkIdentity(provider: "github", providerId: "x")
+        try await sut.unlinkIdentity(provider: "github")
         XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
     }
 
     func test_unlinkIdentity_403_throws() async throws {
         session.stub(data: Data(), statusCode: 403)
         do {
-            try await sut.unlinkIdentity(provider: "github", providerId: "x")
+            try await sut.unlinkIdentity(provider: "github")
             XCTFail("Expected throw")
         } catch APIError.status(let code) {
             XCTAssertEqual(code, 403)
+        }
+    }
+
+    func test_unlinkIdentity_401_throws() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            try await sut.unlinkIdentity(provider: "github")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
+
+    func test_unlinkIdentity_404_surfacesRouteMessage() async throws {
+        session.stub(json: #"{"error":"Identity not found"}"#, statusCode: 404)
+        do {
+            try await sut.unlinkIdentity(provider: "github")
+            XCTFail("Expected throw")
+        } catch APIError.server(let message) {
+            XCTAssertEqual(message, "Identity not found")
         }
     }
 
