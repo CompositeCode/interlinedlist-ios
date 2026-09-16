@@ -318,6 +318,9 @@ struct FeedView: View {
                     if let index = messages.firstIndex(where: { $0.id == updated.id }) {
                         messages[index] = updated
                     }
+                    // The working copy can hold rows the store's page never saw, so the
+                    // local write above stays; this keeps the store and its cache in step.
+                    store.updateFeedMessage(updated)
                 }
             }
             .alert("Delete message?", isPresented: Binding(
@@ -382,7 +385,7 @@ struct FeedView: View {
             if authState.isLoggedIn { Task { await loadMessages() } }
         }
         return nav
-            .onChange(of: store.feedMessages.count) { _, _ in
+            .onChange(of: store.feedRevision) { _, _ in
                 guard !showOnlyMine && tagFilter == nil else { return }
                 if !syncedFromStore {
                     let msgs = store.feedMessages
@@ -391,12 +394,10 @@ struct FeedView: View {
                     isLoading = false
                     syncedFromStore = !msgs.isEmpty
                 } else {
-                    let existingIds = Set(messages.map { $0.id })
-                    let newMessages = store.feedMessages.filter { !existingIds.contains($0.id) }
-                    if !newMessages.isEmpty {
-                        messages.insert(contentsOf: newMessages, at: 0)
-                        initDigStates(from: newMessages)
-                    }
+                    let result = FeedMerge.merge(existing: messages, incoming: store.feedMessages)
+                    guard !result.changed.isEmpty else { return }
+                    messages = result.messages
+                    initDigStates(from: result.changed)
                 }
             }
             .onChange(of: store.feedLoading) { _, loading in

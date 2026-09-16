@@ -120,6 +120,8 @@
 		A5C47F6A46E3CE8708789CB2 /* PublicBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74B5AC4D76899CEAF620E402 /* PublicBrowse.swift */; };
 		ADE33267E8D212F2863B1ABB /* APIClientSearchUsersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93B62D89758287A728A56C9B /* APIClientSearchUsersTests.swift */; };
 		B1C1D1E1F1A10001 /* DataCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10002 /* DataCache.swift */; };
+		FEED105A0000000000000001 /* FeedMerge.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEED105A0000000000000002 /* FeedMerge.swift */; };
+		FEED105A0000000000000003 /* FeedMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEED105A0000000000000004 /* FeedMergeTests.swift */; };
 		B1C1D1E1F1A10003 /* AppDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C1D1E1F1A10004 /* AppDataStore.swift */; };
 		0A87E63E7459CCDD35BFCFC9 /* MuteConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 137B3E2137C83882B8434673 /* MuteConfirmation.swift */; };
 		1F2D51E9719CC8F468BF5107 /* MuteStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA27DCE269D834AE6F1C569D /* MuteStoreTests.swift */; };
@@ -377,6 +379,8 @@
 		A79A316417B99AB22D2FFDC1 /* JetBrainsMono.ttf */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file; path = InterlinedList/Fonts/JetBrainsMono.ttf; sourceTree = SOURCE_ROOT; };
 		AE452BC01A7461AF5199FFE6 /* AIJSON.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AIJSON.swift; sourceTree = "<group>"; };
 		B1C1D1E1F1A10002 /* DataCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataCache.swift; sourceTree = "<group>"; };
+		FEED105A0000000000000002 /* FeedMerge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedMerge.swift; sourceTree = "<group>"; };
+		FEED105A0000000000000004 /* FeedMergeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedMergeTests.swift; sourceTree = "<group>"; };
 		B1C1D1E1F1A10004 /* AppDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataStore.swift; sourceTree = "<group>"; };
 		B1C1D1E1F1A10006 /* SkeletonBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonBlock.swift; sourceTree = "<group>"; };
 		B1C1D1E1F1A10008 /* FeedSkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedSkeletonView.swift; sourceTree = "<group>"; };
@@ -592,6 +596,7 @@
 				966A4B3A93B371DF62CDE9B4 /* APIClient+ListContributors.swift */,
 				A3C3D3E3F3A30056 /* URLSessionProtocol.swift */,
 				B1C1D1E1F1A10002 /* DataCache.swift */,
+				FEED105A0000000000000002 /* FeedMerge.swift */,
 				B1C1D1E1F1A10004 /* AppDataStore.swift */,
 				D0A1D0A1D0A10002 /* OAuthCoordinator.swift */,
 				1F84433332486544DA15C7BA /* APIClient+Documents.swift */,
@@ -806,6 +811,7 @@
 				D4C3953B4568AA7A2EA19EED /* ComposeImageUploaderTests.swift */,
 				BA27DCE269D834AE6F1C569D /* MuteStoreTests.swift */,
 				8E384ED04860E87973898F89 /* DocumentSyncMergeTests.swift */,
+				FEED105A0000000000000004 /* FeedMergeTests.swift */,
 				D42A88BDF9EB795F41CF2F64 /* DocumentSyncOutboxTests.swift */,
 				126B48E798CB7064F46382CC /* DocumentSyncConflictTests.swift */,
 				D2113D42FDEA77E3C0E4974E /* ServerLimitsStoreTests.swift */,
@@ -949,6 +955,7 @@
 				A3C3D3E3F3A30053 /* DocumentsView.swift in Sources */,
 				A3C3D3E3F3A30055 /* URLSessionProtocol.swift in Sources */,
 				B1C1D1E1F1A10001 /* DataCache.swift in Sources */,
+				FEED105A0000000000000001 /* FeedMerge.swift in Sources */,
 				B1C1D1E1F1A10003 /* AppDataStore.swift in Sources */,
 				B1C1D1E1F1A10005 /* SkeletonBlock.swift in Sources */,
 				B1C1D1E1F1A10007 /* FeedSkeletonView.swift in Sources */,
@@ -1119,6 +1126,7 @@
 				C8AFF749A154E5F96FB77DE2 /* APIClientSessionsTests.swift in Sources */,
 				FC004747AE60A6796DAD36AB /* APIClientDocumentSyncTests.swift in Sources */,
 				4A2F1A2E2FB0B4BC857F9E30 /* DocumentSyncMergeTests.swift in Sources */,
+				FEED105A0000000000000003 /* FeedMergeTests.swift in Sources */,
 				1C47F69DF0848EF0C45C51EE /* DocumentSyncModelTests.swift in Sources */,
 				213A17C03007A464190DB5D6 /* APIClientMessageByIdTests.swift in Sources */,
 				C6197F8F1B52DAE1B1D4A2F1 /* AppDeepLinkParseTests.swift in Sources */,
