@@ -801,13 +801,19 @@ struct ComposeView: View {
     /// waiting on something else to backfill it. Fire-and-forget by design: the
     /// preview is a secondary datum, so a failure must never surface on the publish
     /// path or delay the success alert — not even a 401, which isn't escalated here
-    /// because the post that just succeeded proves the session is live.
+    /// because the post that just succeeded proves the session is live. The response
+    /// is folded into the row this publish inserted; an empty response or a message
+    /// no longer in the feed leaves it exactly as it was.
     ///
     /// Not called from the edit path: there is no route that accepts a content edit
     /// today (`PATCH /api/messages/{id}` reschedules), so an edited message's links
     /// can't change server-side anyway. See issue #76.
     private func refreshLinkMetadata(for messageId: String) {
-        Task { _ = try? await APIClient.shared.refreshMessageMetadata(messageId: messageId) }
+        Task { @MainActor in
+            guard let previews = try? await APIClient.shared.refreshMessageMetadata(messageId: messageId)
+            else { return }
+            store.applyLinkMetadata(LinkMetadataItem.from(previews: previews), toMessageId: messageId)
+        }
     }
 }
 

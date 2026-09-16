@@ -42,6 +42,41 @@ struct MessageLinkPreview: Codable, Identifiable {
     var id: String { url }
 }
 
+extension LinkMetadataItem {
+    /// Rebuilds the feed row's nested preview shape from the flat previews the
+    /// metadata refresh returns, so a just-published message can render its card
+    /// without waiting for the next feed fetch.
+    ///
+    /// `metadata` stays nil when a preview resolved to nothing renderable: the feed
+    /// card is drawn only for a non-nil `metadata` (`LinkPreviewBlock`), so an
+    /// all-nil content object would draw an empty box. The item itself is kept,
+    /// because its `url` is what the rest of the app reads off a link.
+    ///
+    /// `platform` and `fetchStatus` stay nil rather than being guessed: the flat
+    /// preview carries neither, and nothing renders off them.
+    init(preview: MessageLinkPreview) {
+        let title = Self.trimmedNonEmpty(preview.title)
+        let description = Self.trimmedNonEmpty(preview.description)
+        let thumbnail = Self.trimmedNonEmpty(preview.image)
+        let content: LinkMetadataItemContent? =
+            title == nil && description == nil && thumbnail == nil
+            ? nil
+            : LinkMetadataItemContent(thumbnail: thumbnail, title: title,
+                                      description: description, text: nil, type: nil)
+        self.init(url: preview.url, platform: nil, metadata: content, fetchStatus: nil)
+    }
+
+    static func from(previews: [MessageLinkPreview]) -> [LinkMetadataItem] {
+        previews.map(LinkMetadataItem.init(preview:))
+    }
+
+    private static func trimmedNonEmpty(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+}
+
 /// One destination a message was actually cross-posted to, echoed back on the
 /// Message after it publishes (server field: `crossPostUrls`). The shape differs
 /// per platform — Mastodon carries `statusId`/`instanceUrl`, Bluesky carries
@@ -76,7 +111,9 @@ struct Message: Codable, Identifiable {
     let user: MessageUser?
     let imageUrls: [String]?
     let videoUrls: [String]?
-    let linkMetadata: LinkMetadata?
+    /// The only mutable field on the row: the metadata refresh that follows a
+    /// publish backfills it in place on the already-inserted feed message.
+    var linkMetadata: LinkMetadata?
     let parentId: String?
     let scheduledAt: String?
     let tags: [String]?
