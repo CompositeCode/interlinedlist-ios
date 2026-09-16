@@ -82,9 +82,7 @@ struct SettingsView: View {
                 // Guard against spurious saves when syncFromUser sets the initial value on appear.
                 let serverTheme = authState.user?.theme ?? "system"
                 guard newValue != serverTheme else { return }
-                // "system" means no explicit preference — send nil so the server clears it.
-                // Sending the string "system" is rejected or treated as default (light) by the server.
-                Task { await save(theme: newValue == "system" ? nil : newValue) }
+                Task { await save(theme: newValue) }
             }
         }
     }
