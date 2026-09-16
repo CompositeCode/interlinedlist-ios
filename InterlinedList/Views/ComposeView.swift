@@ -289,18 +289,7 @@ struct ComposeView: View {
 
     /// The first `http(s)` URL in the draft, used to drive a live preview card.
     /// Recomputed on each content change; cheap enough for per-keystroke use.
-    private var firstDetectedURL: String? {
-        guard !content.isEmpty,
-              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-        else { return nil }
-        let range = NSRange(content.startIndex..<content.endIndex, in: content)
-        guard let match = detector.firstMatch(in: content, options: [], range: range),
-              let url = match.url,
-              let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https"
-        else { return nil }
-        return url.absoluteString
-    }
+    private var firstDetectedURL: String? { firstDetectedHTTPURL(in: content) }
 
     private func loadLinkPreview(_ url: String) async {
         do {
@@ -786,6 +775,9 @@ struct ComposeView: View {
                 store.insertFeedMessage(result.message)
             }
             showSuccess = true
+            if firstDetectedHTTPURL(in: text) != nil {
+                refreshLinkMetadata(for: result.message.id)
+            }
             if isReply || isRepost {
                 dismiss()
             }
@@ -803,4 +795,34 @@ struct ComposeView: View {
             errorMessage = "Connection failed. Please try again."
         }
     }
+
+    /// Asks the server to fetch OpenGraph metadata for a just-published message's
+    /// links, matching what the web composer does, so the preview populates without
+    /// waiting on something else to backfill it. Fire-and-forget by design: the
+    /// preview is a secondary datum, so a failure must never surface on the publish
+    /// path or delay the success alert — not even a 401, which isn't escalated here
+    /// because the post that just succeeded proves the session is live.
+    ///
+    /// Not called from the edit path: there is no route that accepts a content edit
+    /// today (`PATCH /api/messages/{id}` reschedules), so an edited message's links
+    /// can't change server-side anyway. See issue #76.
+    private func refreshLinkMetadata(for messageId: String) {
+        Task { _ = try? await APIClient.shared.refreshMessageMetadata(messageId: messageId) }
+    }
+}
+
+/// The first `http(s)` URL in `text`, or `nil` when it contains none. The composer's
+/// live preview card and the post-publish metadata refresh both key off this, and
+/// they have to agree on whether the message carries a link at all.
+func firstDetectedHTTPURL(in text: String) -> String? {
+    guard !text.isEmpty,
+          let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+    else { return nil }
+    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+    guard let match = detector.firstMatch(in: text, options: [], range: range),
+          let url = match.url,
+          let scheme = url.scheme?.lowercased(),
+          scheme == "http" || scheme == "https"
+    else { return nil }
+    return url.absoluteString
 }
