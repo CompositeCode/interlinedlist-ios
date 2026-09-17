@@ -399,6 +399,15 @@ final class APIClient {
         return message
     }
 
+    /// Cross-post reply counts for one message, fetched from Bluesky/Mastodon/LinkedIn/X.
+    /// Despite the name this is **not** in-app reply counts. The route is rate-limited
+    /// (30/min) and caches for 10 minutes, so call it once per detail view and never in
+    /// a loop — and never from the feed.
+    func crossPostReplyCounts(messageId: String) async throws -> ReplyCountsResponse {
+        struct Empty: Encodable {}
+        return try await post("/api/messages/\(pathSegment(messageId))/reply-counts", body: Empty())
+    }
+
     struct DigResponse: Decodable { let digCount: Int; let dugByMe: Bool }
 
     func dig(messageId: String) async throws -> DigResponse {
@@ -661,6 +670,19 @@ final class APIClient {
     /// user to read; only creating from one is subscriber-gated.
     func documentTemplates() async throws -> [DocumentTemplate] {
         let response: DocumentTemplatesResponse = try await get("/api/documents/templates")
+        return response.templates
+    }
+
+    /// Seeds the account's default template set (subscriber-only). The route answers
+    /// with the freshly seeded list, so the caller does not need a follow-up read.
+    /// A 403 means the subscriber gate rejected the call — see `TemplatePickerView`.
+    func seedDefaultDocumentTemplates() async throws -> [DocumentTemplate] {
+        struct Empty: Encodable {}
+        struct SeedResponse: Decodable {
+            let templatesFolderId: String?
+            let templates: [DocumentTemplate]
+        }
+        let response: SeedResponse = try await post("/api/documents/templates/seed-defaults", body: Empty())
         return response.templates
     }
 
@@ -948,10 +970,12 @@ final class APIClient {
 
     // MARK: - Profile
 
-    func updateProfile(displayName: String?, bio: String?, defaultVisibility: Bool?) async throws -> User {
-        struct Body: Encodable { let displayName: String?; let bio: String?; let defaultVisibility: Bool? }
+    /// The wire key is `defaultPubliclyVisible` — `PATCH /api/user/update` destructures that
+    /// name and ignores anything else, so a mismatch here is silently dropped, not rejected.
+    func updateProfile(displayName: String?, bio: String?, defaultPubliclyVisible: Bool?) async throws -> User {
+        struct Body: Encodable { let displayName: String?; let bio: String?; let defaultPubliclyVisible: Bool? }
         struct WrappedResponse: Decodable { let user: User? }
-        let body = Body(displayName: displayName, bio: bio, defaultVisibility: defaultVisibility)
+        let body = Body(displayName: displayName, bio: bio, defaultPubliclyVisible: defaultPubliclyVisible)
         let wrapped: WrappedResponse = try await patchCamel("/api/user/update", body: body)
         if let user = wrapped.user { return user }
         return try await currentUser()
@@ -959,14 +983,37 @@ final class APIClient {
 
     /// Update user preferences (theme, default visibility, advanced-post toggle).
     /// Returns the refreshed user.
-    func updateUserSettings(theme: String? = nil, defaultVisibility: Bool? = nil, showAdvancedPostSettings: Bool? = nil) async throws -> User {
+    func updateUserSettings(
+        theme: String? = nil,
+        defaultPubliclyVisible: Bool? = nil,
+        showAdvancedPostSettings: Bool? = nil,
+        isPrivateAccount: Bool? = nil,
+        viewingPreference: String? = nil,
+        messagesPerPage: Int? = nil,
+        showPreviews: Bool? = nil,
+        notificationTrayLimit: Int? = nil
+    ) async throws -> User {
         struct Body: Encodable {
             let theme: String?
-            let defaultVisibility: Bool?
+            let defaultPubliclyVisible: Bool?
             let showAdvancedPostSettings: Bool?
+            let isPrivateAccount: Bool?
+            let viewingPreference: String?
+            let messagesPerPage: Int?
+            let showPreviews: Bool?
+            let notificationTrayLimit: Int?
         }
         struct WrappedResponse: Decodable { let user: User? }
-        let body = Body(theme: theme, defaultVisibility: defaultVisibility, showAdvancedPostSettings: showAdvancedPostSettings)
+        let body = Body(
+            theme: theme,
+            defaultPubliclyVisible: defaultPubliclyVisible,
+            showAdvancedPostSettings: showAdvancedPostSettings,
+            isPrivateAccount: isPrivateAccount,
+            viewingPreference: viewingPreference,
+            messagesPerPage: messagesPerPage,
+            showPreviews: showPreviews,
+            notificationTrayLimit: notificationTrayLimit
+        )
         let wrapped: WrappedResponse = try await patchCamel("/api/user/update", body: body)
         if let user = wrapped.user { return user }
         return try await currentUser()
