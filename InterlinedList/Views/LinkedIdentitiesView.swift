@@ -30,6 +30,10 @@ struct LinkedIdentitiesView: View {
     /// Set when the Mastodon prompt is repairing an existing row rather than
     /// linking a fresh one, so the reconnect follow-up can re-check that row.
     @State private var reconnectingIdentity: APIClient.LinkedIdentity?
+    /// Verify-route results keyed by identity id, kept apart from `statusSnapshot`
+    /// because only these exercised the stored credential.
+    @State private var verifiedHealth: [String: IdentityHealth] = [:]
+    @State private var checkingIdentityIDs: Set<String> = []
 
     var body: some View {
         List {
@@ -56,7 +60,7 @@ struct LinkedIdentitiesView: View {
                 Text("Connected accounts")
             } footer: {
                 if !isLoading && !identities.isEmpty {
-                    Text("A connection shown as unknown couldn't be checked — it hasn't been disconnected.")
+                    Text("A connection shown as unknown couldn't be checked — it hasn't been disconnected. Check connection asks the provider whether your saved sign-in still works.")
                         .font(.ilMono(12))
                 }
             }
@@ -118,7 +122,9 @@ struct LinkedIdentitiesView: View {
 
     @ViewBuilder
     private func identityRow(_ identity: APIClient.LinkedIdentity) -> some View {
-        let health = statusSnapshot?.health(for: identity)
+        // A verify result outranks the snapshot: it exercised the credential
+        // itself, which no `/status` route does.
+        let health = verifiedHealth[identity.id] ?? statusSnapshot?.health(for: identity)
         HStack(spacing: 12) {
             Image(systemName: OAuthProvider(rawValue: identity.providerType)?.systemImageName ?? "link")
                 .frame(width: 24)
@@ -132,14 +138,17 @@ struct LinkedIdentitiesView: View {
                         .foregroundStyle(.secondary)
                 }
                 healthLabel(health, for: identity)
-                if health?.isStale == true {
-                    Button("Reconnect") {
-                        startReconnect(identity)
+                HStack(spacing: 8) {
+                    checkConnectionButton(identity)
+                    if health?.isStale == true {
+                        Button("Reconnect") {
+                            startReconnect(identity)
+                        }
+                        .buttonStyle(.bordered)
+                        .font(.ilBody(14))
+                        .disabled(linkInFlight)
+                        .accessibilityLabel("Reconnect \(displayName(for: identity.provider))")
                     }
-                    .buttonStyle(.bordered)
-                    .font(.ilBody(14))
-                    .disabled(linkInFlight)
-                    .accessibilityLabel("Reconnect \(displayName(for: identity.provider))")
                 }
             }
             Spacer()
@@ -150,6 +159,25 @@ struct LinkedIdentitiesView: View {
             .font(.ilBody(15))
             .accessibilityLabel("Disconnect \(displayName(for: identity.provider))")
         }
+    }
+
+    @ViewBuilder
+    private func checkConnectionButton(_ identity: APIClient.LinkedIdentity) -> some View {
+        let name = displayName(for: identity.provider)
+        let isChecking = checkingIdentityIDs.contains(identity.id)
+        Button {
+            Task { await checkConnection(identity) }
+        } label: {
+            if isChecking {
+                ProgressView().controlSize(.small)
+            } else {
+                Text("Check connection")
+            }
+        }
+        .buttonStyle(.bordered)
+        .font(.ilBody(14))
+        .disabled(isChecking)
+        .accessibilityLabel(isChecking ? "Checking \(name) connection" : "Check \(name) connection")
     }
 
     @ViewBuilder
@@ -166,6 +194,11 @@ struct LinkedIdentitiesView: View {
                 .font(.ilMono(12))
                 .foregroundStyle(.green)
                 .accessibilityLabel("\(name) connected")
+        case .verified:
+            Label("Sign-in verified", systemImage: "checkmark.seal.fill")
+                .font(.ilMono(12))
+                .foregroundStyle(.green)
+                .accessibilityLabel("\(name) sign-in verified")
         case .needsReconnect(let reason):
             VStack(alignment: .leading, spacing: 2) {
                 Label("Needs reconnect", systemImage: "exclamationmark.triangle.fill")
@@ -194,6 +227,7 @@ struct LinkedIdentitiesView: View {
     private func load() async {
         errorMessage = nil
         isLoading = true
+        verifiedHealth = [:]
         do {
             identities = try await APIClient.shared.linkedIdentities()
             isLoading = false
@@ -268,11 +302,29 @@ struct LinkedIdentitiesView: View {
         }
     }
 
+    /// Manual and per-identity on purpose: the backend calls the third-party
+    /// provider for every one of these, so a sweep on appear would bill five
+    /// remote round-trips to a screen the user only opened to read.
+    private func checkConnection(_ identity: APIClient.LinkedIdentity) async {
+        let name = displayName(for: identity.provider)
+        checkingIdentityIDs.insert(identity.id)
+        defer { checkingIdentityIDs.remove(identity.id) }
+        do {
+            let verification = try await APIClient.shared.verifyIdentity(provider: identity.provider)
+            verifiedHealth[identity.id] = IdentityHealth(verification: verification, providerName: name)
+        } catch APIError.status(401) {
+            verifiedHealth[identity.id] = .uncheckable(providerName: name)
+            authState.handleUnauthorized()
+        } catch {
+            verifiedHealth[identity.id] = .uncheckable(providerName: name)
+        }
+    }
+
     private func unlink(_ identity: APIClient.LinkedIdentity) async {
         errorMessage = nil
         pendingUnlink = nil
         do {
-            try await APIClient.shared.unlinkIdentity(provider: identity.provider, providerId: identity.id)
+            try await APIClient.shared.unlinkIdentity(provider: identity.provider)
             await load()
         } catch APIError.status(401) {
             authState.handleUnauthorized()

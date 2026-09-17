@@ -169,15 +169,68 @@ final class APIClient {
         return response.identities ?? []
     }
 
-    func unlinkIdentity(provider: String, providerId: String) async throws {
-        struct Body: Encodable { let provider: String; let providerId: String }
-        try await deleteCamel("/api/user/identities", body: Body(provider: provider, providerId: providerId))
+    /// `DELETE /api/user/identities?provider=…` — the route reads `provider` from
+    /// the **query string** and never parses a body, so a JSON payload here answers
+    /// `400 "provider is required"`. It also deletes by `{userId, provider}` alone,
+    /// which removes *every* identity stored under that provider value (an account
+    /// with two rows for the same provider loses both); the identity's own id is
+    /// not read at all.
+    func unlinkIdentity(provider: String) async throws {
+        let encoded = provider.addingPercentEncoding(withAllowedCharacters: Self.queryValueAllowed) ?? provider
+        try await delete("/api/user/identities?provider=\(encoded)")
     }
 
-    func verifyIdentity(provider: String, providerId: String) async throws {
-        struct Body: Encodable { let provider: String; let providerId: String }
-        struct Response: Decodable { let ok: Bool? }
-        let _: Response = try await postCamel("/api/user/identities/verify", body: Body(provider: provider, providerId: providerId))
+    /// `.urlQueryAllowed` permits the sub-delimiters `+ & = ? # /` — legal
+    /// *somewhere* in a query string, but inside a single value they end it or
+    /// split it into another parameter. `+` matters most: the backend reads params
+    /// through `URLSearchParams`, which decodes a literal `+` as a space.
+    private static let queryValueAllowed: CharacterSet = {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+&=?#/")
+        return allowed
+    }()
+
+    /// Carries the verify route's two "credential is unusable" statuses out of the
+    /// transport, which can only signal by throwing, back to the outcome value
+    /// `verifyIdentity` returns.
+    private enum IdentityVerificationRejection: Error {
+        case credentialRejected
+        case identityMissing
+    }
+
+    /// `POST /api/user/identities/verify` — the only route that proves a linked
+    /// identity's stored credential still works. It loads the credential and
+    /// exercises it upstream: Bluesky by restoring the DPoP-bound AT Protocol
+    /// session, every other provider by calling its "who am I" endpoint. On success
+    /// the backend stamps `lastVerifiedAt`.
+    ///
+    /// This is emphatically **not** what the five `/status` routes report. Those
+    /// answer either "the server holds OAuth app credentials for this provider"
+    /// (LinkedIn/Twitter/GitHub) or "a row exists in this user's identity table"
+    /// (Bluesky/Mastodon) — both stay cheerfully `configured: true` after a token is
+    /// revoked upstream. See `APIClient+Identities` for the full breakdown.
+    ///
+    /// The route reads only `body.provider`; the `providerId` it also accepts is
+    /// never looked at, so it isn't sent. Each call hits the third-party provider,
+    /// so this is a user-initiated check, never an on-appear sweep.
+    func verifyIdentity(provider: String) async throws -> IdentityVerification {
+        struct Body: Encodable { let provider: String }
+        struct Response: Decodable { let success: Bool? }
+        do {
+            let _: Response = try await postCamel(
+                "/api/user/identities/verify",
+                body: Body(provider: provider),
+                mappingStatuses: [
+                    400: IdentityVerificationRejection.credentialRejected,
+                    404: IdentityVerificationRejection.identityMissing,
+                ]
+            )
+            return .verified
+        } catch IdentityVerificationRejection.credentialRejected {
+            return .needsReconnect(.credentialRejected)
+        } catch IdentityVerificationRejection.identityMissing {
+            return .needsReconnect(.identityMissing)
+        }
     }
 
     // MARK: - OAuth configuration status
@@ -389,6 +442,15 @@ final class APIClient {
         let response: Response = try await patchCamel("/api/messages/\(encoded)", body: Body(content: content, publiclyVisible: publiclyVisible))
         guard let message = response.data else { throw APIError.noData }
         return message
+    }
+
+    /// Cross-post reply counts for one message, fetched from Bluesky/Mastodon/LinkedIn/X.
+    /// Despite the name this is **not** in-app reply counts. The route is rate-limited
+    /// (30/min) and caches for 10 minutes, so call it once per detail view and never in
+    /// a loop — and never from the feed.
+    func crossPostReplyCounts(messageId: String) async throws -> ReplyCountsResponse {
+        struct Empty: Encodable {}
+        return try await post("/api/messages/\(pathSegment(messageId))/reply-counts", body: Empty())
     }
 
     struct DigResponse: Decodable { let digCount: Int; let dugByMe: Bool }
@@ -656,6 +718,19 @@ final class APIClient {
         return response.templates
     }
 
+    /// Seeds the account's default template set (subscriber-only). The route answers
+    /// with the freshly seeded list, so the caller does not need a follow-up read.
+    /// A 403 means the subscriber gate rejected the call — see `TemplatePickerView`.
+    func seedDefaultDocumentTemplates() async throws -> [DocumentTemplate] {
+        struct Empty: Encodable {}
+        struct SeedResponse: Decodable {
+            let templatesFolderId: String?
+            let templates: [DocumentTemplate]
+        }
+        let response: SeedResponse = try await post("/api/documents/templates/seed-defaults", body: Empty())
+        return response.templates
+    }
+
     /// Copies a template into a new document (subscriber-only). Body is camelCase
     /// (`templateDocumentId`, `targetFolderId`) — pass nil to create at root. The
     /// endpoint may wrap the document or return it bare; tolerate both like createDocument.
@@ -699,16 +774,6 @@ final class APIClient {
         return list
     }
 
-    func updateListSchema(listId: String, schemaDSL: String) async throws -> [ListPropertyDef] {
-        struct Body: Encodable { let schema: String }
-        // Response shape isn't documented; tolerate missing `properties` (e.g. {"ok":true}).
-        struct Response: Decodable { let properties: [ListPropertyDef]? }
-        let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
-        let response: Response = try await putCamel("/api/lists/\(encoded)/schema",
-                                                    body: Body(schema: schemaDSL))
-        return response.properties ?? []
-    }
-
     func searchLists(q: String, limit: Int = 20, offset: Int = 0) async throws -> ([UserList], Pagination?) {
         let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
         struct Response: Decodable { let lists: [UserList]; let pagination: Pagination? }
@@ -723,18 +788,6 @@ final class APIClient {
     /// Returns 400 "GitHub account not linked" when no GitHub identity is linked.
     func githubRepos() async throws -> [GitHubRepo] {
         return try await get("/api/github/repos")
-    }
-
-    /// Open (or `state`) issues for a repo (`GET /api/github/issues?repo=owner/repo`,
-    /// Bearer). Raw GitHub REST array; decode defensively.
-    func githubIssues(repo: String, state: String = "open") async throws -> [GitHubIssue] {
-        var components = URLComponents(string: baseURL + "/api/github/issues")
-        components?.queryItems = [
-            URLQueryItem(name: "repo", value: repo),
-            URLQueryItem(name: "state", value: state),
-        ]
-        let query = components?.percentEncodedQuery.map { "?" + $0 } ?? ""
-        return try await get("/api/github/issues" + query)
     }
 
     /// Re-syncs a GitHub-backed list's cached rows from GitHub issues
@@ -962,10 +1015,12 @@ final class APIClient {
 
     // MARK: - Profile
 
-    func updateProfile(displayName: String?, bio: String?, defaultVisibility: Bool?) async throws -> User {
-        struct Body: Encodable { let displayName: String?; let bio: String?; let defaultVisibility: Bool? }
+    /// The wire key is `defaultPubliclyVisible` — `PATCH /api/user/update` destructures that
+    /// name and ignores anything else, so a mismatch here is silently dropped, not rejected.
+    func updateProfile(displayName: String?, bio: String?, defaultPubliclyVisible: Bool?) async throws -> User {
+        struct Body: Encodable { let displayName: String?; let bio: String?; let defaultPubliclyVisible: Bool? }
         struct WrappedResponse: Decodable { let user: User? }
-        let body = Body(displayName: displayName, bio: bio, defaultVisibility: defaultVisibility)
+        let body = Body(displayName: displayName, bio: bio, defaultPubliclyVisible: defaultPubliclyVisible)
         let wrapped: WrappedResponse = try await patchCamel("/api/user/update", body: body)
         if let user = wrapped.user { return user }
         return try await currentUser()
@@ -973,14 +1028,37 @@ final class APIClient {
 
     /// Update user preferences (theme, default visibility, advanced-post toggle).
     /// Returns the refreshed user.
-    func updateUserSettings(theme: String? = nil, defaultVisibility: Bool? = nil, showAdvancedPostSettings: Bool? = nil) async throws -> User {
+    func updateUserSettings(
+        theme: String? = nil,
+        defaultPubliclyVisible: Bool? = nil,
+        showAdvancedPostSettings: Bool? = nil,
+        isPrivateAccount: Bool? = nil,
+        viewingPreference: String? = nil,
+        messagesPerPage: Int? = nil,
+        showPreviews: Bool? = nil,
+        notificationTrayLimit: Int? = nil
+    ) async throws -> User {
         struct Body: Encodable {
             let theme: String?
-            let defaultVisibility: Bool?
+            let defaultPubliclyVisible: Bool?
             let showAdvancedPostSettings: Bool?
+            let isPrivateAccount: Bool?
+            let viewingPreference: String?
+            let messagesPerPage: Int?
+            let showPreviews: Bool?
+            let notificationTrayLimit: Int?
         }
         struct WrappedResponse: Decodable { let user: User? }
-        let body = Body(theme: theme, defaultVisibility: defaultVisibility, showAdvancedPostSettings: showAdvancedPostSettings)
+        let body = Body(
+            theme: theme,
+            defaultPubliclyVisible: defaultPubliclyVisible,
+            showAdvancedPostSettings: showAdvancedPostSettings,
+            isPrivateAccount: isPrivateAccount,
+            viewingPreference: viewingPreference,
+            messagesPerPage: messagesPerPage,
+            showPreviews: showPreviews,
+            notificationTrayLimit: notificationTrayLimit
+        )
         let wrapped: WrappedResponse = try await patchCamel("/api/user/update", body: body)
         if let user = wrapped.user { return user }
         return try await currentUser()
@@ -1247,11 +1325,6 @@ final class APIClient {
 
     // MARK: - Organizations (Phase 8)
 
-    func organizations(limit: Int = 30, offset: Int = 0) async throws -> (orgs: [Organization], pagination: Pagination?) {
-        let response: OrganizationsResponse = try await get("/api/organizations?limit=\(limit)&offset=\(offset)")
-        return (response.organizations, response.pagination)
-    }
-
     func organization(id: String) async throws -> Organization {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
         let response: OrganizationResponse = try await get("/api/organizations/\(encoded)")
@@ -1422,20 +1495,6 @@ final class APIClient {
         struct Body: Encodable { let recipientId: String; let body: String; let imageUrls: [String] }
         let response: DMMessageResponse = try await postCamel("/api/dm", body: Body(recipientId: recipientId, body: body, imageUrls: imageUrls))
         return response.message
-    }
-
-    func directMessage(id: String) async throws -> DMMessage {
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: DMMessageResponse = try await get("/api/dm/\(encoded)")
-        return response.message
-    }
-
-    @discardableResult
-    func markDMRead(id: String) async throws -> Int {
-        struct Empty: Encodable {}
-        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let response: DMUpdatedResponse = try await post("/api/dm/\(encoded)/read", body: Empty())
-        return response.updated
     }
 
     func trashDM(id: String) async throws {

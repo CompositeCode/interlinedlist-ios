@@ -7,7 +7,14 @@ import Foundation
 
 @MainActor
 final class AuthState: ObservableObject {
-    @Published private(set) var user: User?
+    @Published private(set) var user: User? {
+        didSet {
+            // Every path that loads or updates the account funnels through here, so
+            // this is the one place the theme mirror is written. Logout (user == nil)
+            // deliberately leaves it alone: the login screen keeps the last choice.
+            if let user { themeStore.save(user.theme) }
+        }
+    }
     @Published private(set) var isRestoring = true
     @Published private(set) var hasToken: Bool = false
     /// Provider types (e.g. "github", "mastodon") linked to this account, or nil
@@ -15,8 +22,10 @@ final class AuthState: ObservableObject {
     @Published private(set) var linkedProviders: Set<String>?
 
     private let api = APIClient.shared
+    private let themeStore: ThemePreferenceStore
 
-    init() {
+    init(themeStore: ThemePreferenceStore = ThemePreferenceStore()) {
+        self.themeStore = themeStore
         if let token = KeychainService.loadToken() {
             api.setBearerToken(token)
             hasToken = true

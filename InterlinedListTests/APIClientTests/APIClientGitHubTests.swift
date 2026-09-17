@@ -91,20 +91,6 @@ final class APIClientGitHubTests: XCTestCase {
         }
     }
 
-    // MARK: - githubIssues()
-
-    func test_githubIssues_sendsRepoAndStateQuery() async throws {
-        session.stub(json: #"[{"number":1,"title":"Bug","state":"open","html_url":"https://github.com/o/r/issues/1"}]"#)
-        let issues = try await sut.githubIssues(repo: "octocat/Hello-World", state: "open")
-        XCTAssertEqual(session.lastRequest?.url?.path, "/api/github/issues")
-        let query = session.lastRequest?.url?.query ?? ""
-        XCTAssertTrue(query.contains("repo=octocat/Hello-World") || query.contains("repo=octocat%2FHello-World"))
-        XCTAssertTrue(query.contains("state=open"))
-        XCTAssertEqual(issues.first?.number, 1)
-        XCTAssertEqual(issues.first?.title, "Bug")
-        XCTAssertEqual(issues.first?.htmlUrl, "https://github.com/o/r/issues/1")
-    }
-
     // MARK: - refreshList()
 
     func test_refreshList_sendsPostToCorrectPath() async throws {

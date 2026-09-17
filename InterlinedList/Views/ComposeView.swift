@@ -21,6 +21,11 @@ struct ComposeView: View {
     var replyTo: Message? = nil
     /// When set, this view reposts (pushes) the given message, with optional commentary.
     var repostOf: Message? = nil
+    /// Seed text for the composer — used by "Schedule a post from this row". Only
+    /// an initial value: everything stays editable, and posting goes through the
+    /// same POST /api/messages path as every other compose, so the posting gates
+    /// are not duplicated here.
+    var prefillContent: String? = nil
     @State private var content = ""
     @State private var tags = ""
     @State private var linkPreview: LinkMetadataItem?
@@ -126,6 +131,11 @@ struct ComposeView: View {
         guard !isReply else { return }
         publiclyVisible = authState.user?.defaultPubliclyVisible ?? true
         showAdvancedBar = authState.user?.showAdvancedPostSettings ?? false
+        // Seed once: `onAppear` can fire again when the sheet returns to the
+        // foreground, and re-seeding would discard the user's edits.
+        if let prefillContent, content.isEmpty {
+            content = prefillContent
+        }
     }
     private var maxMessageLength: Int { authState.user?.maxMessageLength ?? defaultMaxMessageLength }
     private var remainingCharacters: Int { max(0, maxMessageLength - content.count) }

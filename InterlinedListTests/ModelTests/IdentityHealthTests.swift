@@ -157,4 +157,57 @@ final class IdentityHealthTests: XCTestCase {
         XCTAssertEqual(OAuthProvider.bluesky.statusKind, .userIdentityRow)
         XCTAssertEqual(OAuthProvider.mastodon.statusKind, .userIdentityRow)
     }
+
+    // MARK: verify-route outcome → row health
+
+    func test_health_fromVerified_isVerifiedAndNotStale() {
+        let health = IdentityHealth(verification: .verified, providerName: "Bluesky")
+        XCTAssertEqual(health, .verified)
+        XCTAssertFalse(health.isStale)
+    }
+
+    /// `verified` outranks `connected` and must stay its own case: a status route
+    /// can say "connected" about a credential nobody has ever exercised.
+    func test_health_verified_isNotTheSameAsConnected() {
+        XCTAssertNotEqual(IdentityHealth(verification: .verified, providerName: "Bluesky"), .connected)
+    }
+
+    func test_health_fromCredentialRejected_isStaleAndNamesProvider() {
+        let health = IdentityHealth(verification: .needsReconnect(.credentialRejected), providerName: "Bluesky")
+        XCTAssertTrue(health.isStale, "a rejected credential must offer reconnect")
+        guard case .needsReconnect(let reason) = health else {
+            return XCTFail("expected needsReconnect, got \(health)")
+        }
+        XCTAssertTrue(reason.contains("Bluesky"), "Got: \(reason)")
+    }
+
+    func test_health_fromIdentityMissing_isStaleAndNamesProvider() {
+        let health = IdentityHealth(verification: .needsReconnect(.identityMissing), providerName: "Mastodon")
+        XCTAssertTrue(health.isStale)
+        guard case .needsReconnect(let reason) = health else {
+            return XCTFail("expected needsReconnect, got \(health)")
+        }
+        XCTAssertTrue(reason.contains("Mastodon"), "Got: \(reason)")
+    }
+
+    /// The two failures must not read alike: one is "reconnect", the other is
+    /// "nothing changed".
+    func test_health_rejectedAndMissing_readDifferently() {
+        XCTAssertNotEqual(
+            IdentityHealth(verification: .needsReconnect(.credentialRejected), providerName: "Bluesky"),
+            IdentityHealth(verification: .needsReconnect(.identityMissing), providerName: "Bluesky")
+        )
+    }
+
+    /// A check that never ran proves nothing — it must never send the user off to
+    /// re-authorize a healthy account.
+    func test_uncheckable_isUnknownNotStale() {
+        let health = IdentityHealth.uncheckable(providerName: "Bluesky")
+        XCTAssertFalse(health.isStale)
+        guard case .unknown(let reason) = health else {
+            return XCTFail("expected unknown, got \(health)")
+        }
+        XCTAssertTrue(reason.contains("unchanged"), "Got: \(reason)")
+        XCTAssertNotEqual(health, IdentityHealth(verification: .needsReconnect(.credentialRejected), providerName: "Bluesky"))
+    }
 }

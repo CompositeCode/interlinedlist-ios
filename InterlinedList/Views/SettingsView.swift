@@ -16,6 +16,11 @@ struct SettingsView: View {
     @State private var theme: String = "system"
     @State private var defaultPublic: Bool = true
     @State private var showAdvanced: Bool = false
+    @State private var isPrivateAccount: Bool = false
+    @State private var feedScope: FeedScope = .allMessages
+    @State private var messagesPerPage: Int = ViewPreferenceBounds.defaultMessagesPerPage
+    @State private var showPreviews: Bool = true
+    @State private var notificationTrayLimit: Int = ViewPreferenceBounds.defaultNotificationTrayLimit
     @State private var settingsError: String?
     @State private var safariLink: SafariLink?
 
@@ -33,7 +38,10 @@ struct SettingsView: View {
             Form {
                 appearanceSection
                 postingSection
+                viewPreferencesSection
+                privacySection
                 accountsSection
+                devicesSection
                 notificationsSection
                 moderationSection
                 aboutSection
@@ -67,6 +75,11 @@ struct SettingsView: View {
         theme = user.theme ?? "system"
         defaultPublic = user.defaultPubliclyVisible ?? true
         showAdvanced = user.showAdvancedPostSettings ?? false
+        isPrivateAccount = user.isPrivateAccount ?? false
+        feedScope = FeedScope.from(user.viewingPreference)
+        messagesPerPage = user.messagesPerPage ?? ViewPreferenceBounds.defaultMessagesPerPage
+        showPreviews = user.showPreviews ?? true
+        notificationTrayLimit = user.notificationTrayLimit ?? ViewPreferenceBounds.defaultNotificationTrayLimit
     }
 
     // MARK: - Sections
@@ -82,9 +95,7 @@ struct SettingsView: View {
                 // Guard against spurious saves when syncFromUser sets the initial value on appear.
                 let serverTheme = authState.user?.theme ?? "system"
                 guard newValue != serverTheme else { return }
-                // "system" means no explicit preference — send nil so the server clears it.
-                // Sending the string "system" is rejected or treated as default (light) by the server.
-                Task { await save(theme: newValue == "system" ? nil : newValue) }
+                Task { await save(theme: newValue) }
             }
         }
     }
@@ -95,7 +106,7 @@ struct SettingsView: View {
                 .onChange(of: defaultPublic) { _, newValue in
                     let serverValue = authState.user?.defaultPubliclyVisible ?? true
                     guard newValue != serverValue else { return }
-                    Task { await save(defaultVisibility: newValue) }
+                    Task { await save(defaultPubliclyVisible: newValue) }
                 }
             Toggle("Show advanced post settings", isOn: $showAdvanced)
                 .onChange(of: showAdvanced) { _, newValue in
@@ -109,6 +120,72 @@ struct SettingsView: View {
         }
     }
 
+    private var viewPreferencesSection: some View {
+        Section {
+            Picker("Show posts from", selection: $feedScope) {
+                ForEach(FeedScope.allCases) { scope in
+                    Text(scope.label).tag(scope)
+                }
+            }
+            .accessibilityLabel("Feed scope")
+            .onChange(of: feedScope) { _, newValue in
+                guard newValue != FeedScope.from(authState.user?.viewingPreference) else { return }
+                Task { await save(viewingPreference: newValue.rawValue) }
+            }
+
+            Stepper(value: $messagesPerPage, in: ViewPreferenceBounds.messagesPerPage) {
+                LabeledContent("Posts per page", value: messagesPerPage, format: .number)
+            }
+            .accessibilityLabel("Posts per page, \(messagesPerPage)")
+            .onChange(of: messagesPerPage) { _, newValue in
+                guard newValue != authState.user?.messagesPerPage else { return }
+                Task { await save(messagesPerPage: newValue) }
+            }
+
+            Toggle("Show link previews", isOn: $showPreviews)
+                .onChange(of: showPreviews) { _, newValue in
+                    guard newValue != (authState.user?.showPreviews ?? true) else { return }
+                    Task { await save(showPreviews: newValue) }
+                }
+
+            Stepper(value: $notificationTrayLimit, in: ViewPreferenceBounds.notificationTrayLimit) {
+                LabeledContent("Notifications in the tray", value: notificationTrayLimit, format: .number)
+            }
+            .accessibilityLabel("Notifications in the tray, \(notificationTrayLimit)")
+            .onChange(of: notificationTrayLimit) { _, newValue in
+                guard newValue != authState.user?.notificationTrayLimit else { return }
+                Task { await save(notificationTrayLimit: newValue) }
+            }
+        } header: {
+            Text("View preferences")
+        } footer: {
+            Text("Feed scope is applied on the server, so it changes what the feed returns everywhere you're signed in.")
+        }
+    }
+
+    private var privacySection: some View {
+        Section {
+            Toggle("Private account", isOn: $isPrivateAccount)
+                .accessibilityLabel("Private account")
+                .onChange(of: isPrivateAccount) { _, newValue in
+                    let serverValue = authState.user?.isPrivateAccount ?? false
+                    guard newValue != serverValue else { return }
+                    Task { await save(isPrivateAccount: newValue) }
+                }
+            if isPrivateAccount {
+                NavigationLink {
+                    FollowRequestsView().environmentObject(authState)
+                } label: {
+                    Label("Follow requests", systemImage: "person.badge.clock")
+                }
+            }
+        } header: {
+            Text("Privacy")
+        } footer: {
+            Text("New followers must be approved. Your posts stay visible only to approved followers.")
+        }
+    }
+
     @ViewBuilder
     private var accountsSection: some View {
         if authState.user?.isSubscriber == true {
@@ -119,6 +196,20 @@ struct SettingsView: View {
                     Label("Connected accounts", systemImage: "link")
                 }
             }
+        }
+    }
+
+    private var devicesSection: some View {
+        Section {
+            NavigationLink {
+                AppDevicesView().environmentObject(authState)
+            } label: {
+                Label("Devices", systemImage: "laptopcomputer.and.iphone")
+            }
+        } header: {
+            Text("Applications")
+        } footer: {
+            Text("Devices signed in to InterlinedList, mirroring Settings → Applications on the web.")
         }
     }
 
@@ -172,17 +263,36 @@ struct SettingsView: View {
 
     // MARK: - Persistence
 
-    private func save(theme: String? = nil, defaultVisibility: Bool? = nil, showAdvancedPostSettings: Bool? = nil) async {
+    private func save(
+        theme: String? = nil,
+        defaultPubliclyVisible: Bool? = nil,
+        showAdvancedPostSettings: Bool? = nil,
+        isPrivateAccount: Bool? = nil,
+        viewingPreference: String? = nil,
+        messagesPerPage: Int? = nil,
+        showPreviews: Bool? = nil,
+        notificationTrayLimit: Int? = nil
+    ) async {
         settingsError = nil
         do {
             let updated = try await APIClient.shared.updateUserSettings(
                 theme: theme,
-                defaultVisibility: defaultVisibility,
-                showAdvancedPostSettings: showAdvancedPostSettings
+                defaultPubliclyVisible: defaultPubliclyVisible,
+                showAdvancedPostSettings: showAdvancedPostSettings,
+                isPrivateAccount: isPrivateAccount,
+                viewingPreference: viewingPreference,
+                messagesPerPage: messagesPerPage,
+                showPreviews: showPreviews,
+                notificationTrayLimit: notificationTrayLimit
             )
             authState.updateUser(updated)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
+        } catch APIError.server(let message) {
+            // The route 400s with a specific reason for an out-of-range value; show it
+            // rather than a generic failure that reads as a network problem.
+            settingsError = message
+            syncFromUser()
         } catch {
             settingsError = "Could not save settings."
             // Revert local controls to match server state so they don't show a value that wasn't saved.
