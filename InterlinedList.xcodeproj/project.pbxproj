@@ -240,7 +240,6 @@
 		T1E5T1E5T1E5P003 /* APIClientSearchDocumentsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */; };
 		T1E5T1E5T1E5P005 /* APIClientSearchListsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */; };
 		T1E5T1E5T1E5P007 /* ListSchemaDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P008 /* ListSchemaDraftTests.swift */; };
-		T1E5T1E5T1E5P009 /* APIClientUpdateListSchemaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */; };
 		T1E5T1E5T1E5P011 /* EnvLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P012 /* EnvLoader.swift */; };
 		T1E5T1E5T1E5P013 /* E2EReadOnlyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */; };
 		T1E5T1E5T1E5P015 /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */; };
@@ -505,7 +504,6 @@
 		T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientSearchDocumentsTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientSearchListsTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5P008 /* ListSchemaDraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListSchemaDraftTests.swift; sourceTree = "<group>"; };
-		T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientUpdateListSchemaTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5P012 /* EnvLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvLoader.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5P014 /* E2EReadOnlyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2EReadOnlyTests.swift; sourceTree = "<group>"; };
 		T1E5T1E5T1E5P016 /* KeychainServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
@@ -780,7 +778,6 @@
 				T1E5T1E5T1E5P002 /* APIClientListFolderTests.swift */,
 				T1E5T1E5T1E5P004 /* APIClientSearchDocumentsTests.swift */,
 				T1E5T1E5T1E5P006 /* APIClientSearchListsTests.swift */,
-				T1E5T1E5T1E5P010 /* APIClientUpdateListSchemaTests.swift */,
 				T1E5T1E5T1E5P018 /* APIClientPasswordResetTests.swift */,
 				T1E5T1E5T1E5P01A /* APIClientEmailVerificationTests.swift */,
 				T1E5T1E5T1E5P01C /* APIClientIdentitiesTests.swift */,
@@ -1154,7 +1151,6 @@
 				T1E5T1E5T1E5P003 /* APIClientSearchDocumentsTests.swift in Sources */,
 				T1E5T1E5T1E5P005 /* APIClientSearchListsTests.swift in Sources */,
 				T1E5T1E5T1E5P007 /* ListSchemaDraftTests.swift in Sources */,
-				T1E5T1E5T1E5P009 /* APIClientUpdateListSchemaTests.swift in Sources */,
 				T1E5T1E5T1E5P011 /* EnvLoader.swift in Sources */,
 				T1E5T1E5T1E5P013 /* E2EReadOnlyTests.swift in Sources */,
 				T1E5T1E5T1E5P015 /* KeychainServiceTests.swift in Sources */,
