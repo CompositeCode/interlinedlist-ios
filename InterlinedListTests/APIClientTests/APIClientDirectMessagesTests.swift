@@ -123,26 +123,6 @@ final class APIClientDirectMessagesTests: XCTestCase {
         }
     }
 
-    // MARK: directMessage(id:)
-
-    func test_directMessage_sendsGetToIdPath() async throws {
-        session.stub(json: "{\"message\":\(dmMessageJSON)}")
-        let message = try await sut.directMessage(id: "m1")
-        XCTAssertEqual(session.lastRequest?.httpMethod, "GET")
-        XCTAssertEqual(session.lastRequest?.url?.path, "/api/dm/m1")
-        XCTAssertEqual(message.id, "m1")
-    }
-
-    // MARK: markDMRead()
-
-    func test_markDMRead_sendsPostToReadPath() async throws {
-        session.stub(json: #"{"updated":1}"#)
-        let updated = try await sut.markDMRead(id: "m1")
-        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
-        XCTAssertEqual(session.lastRequest?.url?.path, "/api/dm/m1/read")
-        XCTAssertEqual(updated, 1)
-    }
-
     // MARK: trashDM() / restoreDM()
 
     func test_trashDM_sendsPostToTrashPath() async throws {

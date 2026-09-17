@@ -258,7 +258,7 @@ struct EditProfileView: View {
             let updated = try await APIClient.shared.updateProfile(
                 displayName: trimmedName.isEmpty ? nil : trimmedName,
                 bio: trimmedBio.isEmpty ? nil : trimmedBio,
-                defaultVisibility: defaultPublic
+                defaultPubliclyVisible: defaultPublic
             )
             authState.updateUser(updated)
             dismiss()
