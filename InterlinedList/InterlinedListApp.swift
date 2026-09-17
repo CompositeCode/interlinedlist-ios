@@ -16,10 +16,6 @@ struct InterlinedListApp: App {
     @StateObject private var settingsSync = AppSettingsSyncService()
     @Environment(\.scenePhase) private var scenePhase
 
-    init() {
-        configureNavigationBarAppearance()
-    }
-
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -52,10 +48,7 @@ struct InterlinedListApp: App {
                     }
                 }
                 .sheet(item: $router.pendingDeepLink) { link in
-                    // A sheet inherits the color-scheme override from RootView (it is a
-                    // window-level trait) but not its tint, so brand the sheet's own
-                    // controls here or they render iOS system blue.
-                    deepLinkSheet(for: link).tint(ILColor.link)
+                    deepLinkSheet(for: link)
                 }
         }
     }
@@ -173,24 +166,6 @@ struct InterlinedListApp: App {
         } catch {
             // Same rationale as verifyEmail above.
         }
-    }
-
-    private func configureNavigationBarAppearance() {
-        let teal = UIColor { $0.userInterfaceStyle == .dark
-            ? UIColor(red: 0.047, green: 0.173, blue: 0.227, alpha: 1)
-            : UIColor(red: 0.094, green: 0.282, blue: 0.376, alpha: 1) }
-        let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = teal
-        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-        let back = UIBarButtonItemAppearance()
-        back.normal.titleTextAttributes = [.foregroundColor: UIColor.white]
-        appearance.backButtonAppearance = back
-        UINavigationBar.appearance().standardAppearance = appearance
-        UINavigationBar.appearance().scrollEdgeAppearance = appearance
-        UINavigationBar.appearance().compactAppearance = appearance
-        UINavigationBar.appearance().tintColor = .white
     }
 }
 
@@ -322,7 +297,31 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        configureNavigationBarAppearance()
         return true
+    }
+
+    /// Must not run from `App.init()`. Building the back-button appearance there
+    /// resolves UIKit's default bar-button styling before UIApplication has adopted
+    /// the `AccentColor` asset, which caches system blue as the process tint for the
+    /// rest of the launch — so every control that isn't explicitly tinted renders
+    /// iOS blue instead of brand green (#102).
+    private func configureNavigationBarAppearance() {
+        let teal = UIColor { $0.userInterfaceStyle == .dark
+            ? UIColor(red: 0.047, green: 0.173, blue: 0.227, alpha: 1)
+            : UIColor(red: 0.094, green: 0.282, blue: 0.376, alpha: 1) }
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = teal
+        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        let back = UIBarButtonItemAppearance()
+        back.normal.titleTextAttributes = [.foregroundColor: UIColor.white]
+        appearance.backButtonAppearance = back
+        UINavigationBar.appearance().standardAppearance = appearance
+        UINavigationBar.appearance().scrollEdgeAppearance = appearance
+        UINavigationBar.appearance().compactAppearance = appearance
+        UINavigationBar.appearance().tintColor = .white
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

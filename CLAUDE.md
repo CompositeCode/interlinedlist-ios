@@ -59,6 +59,18 @@ xcodebuild test -scheme InterlinedList -destination 'platform=iOS Simulator,id=<
 
 ## Gotchas (current)
 
+- **Brand tint comes from the `AccentColor` asset — never add a hierarchy-wide `.tint`.** The asset
+  (= `ILColor.primary`) becomes the process tint, so it reaches *every* surface, including sheets,
+  alerts and UIKit-hosted chrome; a `.tint` set inside `RootView` only reaches that view's own
+  subtree, which is why an un-tinted sheet used to fall back to system blue. A new sheet therefore
+  needs nothing. `.tint` stays legal for genuinely local colour (swipe-action backgrounds, a
+  `ProgressView` on a dark overlay).
+- **Do not configure `UIAppearance` from `App.init()`.** Building a `UIBarButtonItemAppearance`'s
+  state appearance that early resolves UIKit's default bar-button styling before UIApplication has
+  adopted the accent asset, caching system blue as the process tint for the whole launch — the
+  accent is then silently ignored everywhere. `configureNavigationBarAppearance()` runs from
+  `AppDelegate.application(_:didFinishLaunchingWithOptions:)` for exactly this reason;
+  `AppAccentColorTests` guards it.
 - **Document folders are path-scoped, not query/body-scoped.** `GET`/`POST /api/documents` are root-only (GET ignores `?folderId`; POST has no `folderId`). Folder contents = `GET /api/documents/folders/{id}/documents`; create-in-folder = `POST .../folders/{id}/documents`; only `PATCH /api/documents/{id}` takes `folderId` to move. Wrong route silently drops the doc to root.
 - **GitHub-backed lists are editable via the standard `/api/lists/:id/data` routes** — they proxy to GitHub Issues (POST→create, PUT→patch, DELETE→close; a row's `id` **is** the issue number). Updates must send the **FULL row**: the backend rebuilds the issue and defaults a missing required `title` to `"Untitled"`, so a partial `PUT` renames the issue. Use `updateItem` (full row), not `updateRow`; see `ListDetailView.setGitHubState`.
 - **GitHub schema + response shapes:** the server returns the synthetic schema in `GET /api/lists/:id` `properties` (`isReadOnly`, `state` as a `select`); `ListPropertyDef.gitHubIssueSchema()` is a client fallback when it's empty. Row-mutation responses return the saved row under **`data`**, not `row`. Rows headline via `ListPropertyDef.primaryDisplayField(from:)`, not `schema.first`.

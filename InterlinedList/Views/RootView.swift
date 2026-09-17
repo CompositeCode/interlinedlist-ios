@@ -21,7 +21,6 @@ struct RootView: View {
             }
         }
         .preferredColorScheme(preferredScheme)
-        .tint(ILColor.link)
         // The server resizes every image upload to its own cap regardless of
         // what the client sends, so read the caps once at launch and let
         // ImageUploadProcessor size to them. Public route — no token needed,
