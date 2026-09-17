@@ -41,8 +41,13 @@ enum ProviderStatusOutcome: Equatable {
 /// Per-identity health, as far as the status routes can honestly report it.
 enum IdentityHealth: Equatable {
     case connected
+    /// Stronger than `connected`: the stored credential was exercised against the
+    /// provider and came back working (`POST /api/user/identities/verify`). No
+    /// `/status` route can produce this — none of them touches the token.
+    case verified
     /// The provider positively contradicted a listed identity — the row it should
-    /// have is gone, so reconnecting is the repair.
+    /// have is gone, or the stored credential was rejected — so reconnecting is
+    /// the repair.
     case needsReconnect(reason: String)
     /// Either the check failed, or the route can't speak to this identity at all.
     /// Never rendered as "disconnected".
@@ -51,6 +56,47 @@ enum IdentityHealth: Equatable {
     var isStale: Bool {
         if case .needsReconnect = self { return true }
         return false
+    }
+}
+
+/// What `POST /api/user/identities/verify` answered for one identity.
+///
+/// Both cases are *answers*: the route loaded the stored credential and reported
+/// on it. A check that could not be made throws instead of landing here, because
+/// it proves nothing about the credential either way.
+enum IdentityVerification: Equatable {
+    /// `200 {"success":true}` — the credential still works upstream (and the
+    /// backend stamped `lastVerifiedAt`).
+    case verified
+    case needsReconnect(IdentityVerificationFailure)
+}
+
+/// The two ways the verify route says "this connection is unusable".
+enum IdentityVerificationFailure: Equatable {
+    /// `400` — the provider rejected the stored credential (expired or revoked),
+    /// or there is no token stored to check at all.
+    case credentialRejected
+    /// `404` — the account no longer has an identity row for this provider.
+    case identityMissing
+}
+
+extension IdentityHealth {
+    init(verification: IdentityVerification, providerName: String) {
+        switch verification {
+        case .verified:
+            self = .verified
+        case .needsReconnect(.credentialRejected):
+            self = .needsReconnect(reason: "\(providerName) rejected the saved sign-in. Reconnect to keep posting.")
+        case .needsReconnect(.identityMissing):
+            self = .needsReconnect(reason: "\(providerName) is no longer connected to this account.")
+        }
+    }
+
+    /// The check itself failed — no route, no session, no answer. Deliberately not
+    /// `needsReconnect`: a dead check says nothing about the credential, and
+    /// sending a user to re-authorize a working account is worse than saying nothing.
+    static func uncheckable(providerName: String) -> IdentityHealth {
+        .unknown(reason: "Couldn't run the check just now. Your \(providerName) connection is unchanged.")
     }
 }
 
