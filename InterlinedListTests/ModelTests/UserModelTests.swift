@@ -87,4 +87,27 @@ final class UserModelTests: XCTestCase {
         let user = try decoder.decode(User.self, from: Data(json.utf8))
         XCTAssertNil(user.isPrivateAccount)
     }
+
+    // MARK: View preferences (#49)
+
+    func test_decodesViewPreferences() throws {
+        let json = #"""
+        {"id":"u1","email":"a@b.com","username":"alice","viewingPreference":"following_only",
+         "messagesPerPage":25,"showPreviews":false,"notificationTrayLimit":40}
+        """#
+        let user = try decoder.decode(User.self, from: Data(json.utf8))
+        XCTAssertEqual(user.viewingPreference, "following_only")
+        XCTAssertEqual(user.messagesPerPage, 25)
+        XCTAssertEqual(user.showPreviews, false)
+        XCTAssertEqual(user.notificationTrayLimit, 40)
+    }
+
+    func test_viewPreferences_areNilWhenAbsent() throws {
+        let json = #"{"id":"u1","email":"a@b.com","username":"alice"}"#
+        let user = try decoder.decode(User.self, from: Data(json.utf8))
+        XCTAssertNil(user.viewingPreference)
+        XCTAssertNil(user.messagesPerPage)
+        XCTAssertNil(user.showPreviews)
+        XCTAssertNil(user.notificationTrayLimit)
+    }
 }

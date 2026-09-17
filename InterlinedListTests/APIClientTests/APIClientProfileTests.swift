@@ -99,6 +99,37 @@ final class APIClientProfileTests: XCTestCase {
         XCTAssertNil(json["isPrivateAccount"], "An untouched setting must not be sent")
     }
 
+    // MARK: View preferences (#49)
+
+    func test_updateUserSettings_sendsViewPreferenceKeys() async throws {
+        session.stub(json: #"{"user":\#(userJSON)}"#)
+        _ = try await sut.updateUserSettings(
+            viewingPreference: "following_only",
+            messagesPerPage: 25,
+            showPreviews: false,
+            notificationTrayLimit: 40
+        )
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["viewingPreference"] as? String, "following_only")
+        XCTAssertEqual(json["messagesPerPage"] as? Int, 25)
+        XCTAssertEqual(json["showPreviews"] as? Bool, false)
+        XCTAssertEqual(json["notificationTrayLimit"] as? Int, 40)
+        XCTAssertNil(json["viewing_preference"], "Body must NOT use snake_case keys")
+        XCTAssertNil(json["messages_per_page"], "Body must NOT use snake_case keys")
+    }
+
+    func test_updateUserSettings_omitsUntouchedViewPreferences() async throws {
+        session.stub(json: #"{"user":\#(userJSON)}"#)
+        _ = try await sut.updateUserSettings(showPreviews: true)
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["showPreviews"] as? Bool, true)
+        XCTAssertNil(json["viewingPreference"])
+        XCTAssertNil(json["messagesPerPage"])
+        XCTAssertNil(json["notificationTrayLimit"])
+    }
+
     // MARK: Wire-key regression (#46)
 
     // PATCH /api/user/update destructures `defaultPubliclyVisible`. It ignores unknown keys
