@@ -35,6 +35,7 @@
 		264F2B22B11DA2FF8D2AD68A /* ShareLinksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03C47A3ECFD7F4D25F91E3BE /* ShareLinksSheet.swift */; };
 		29AE2CB98C2CF115F997F74A /* FindPeopleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7D812B42F75DBEA52611BE0 /* FindPeopleView.swift */; };
 		29E56B202B1B0FCD63C90664 /* CreateFromSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B4D57788950D4B94BB40AE0 /* CreateFromSheet.swift */; };
+		2B03F34643E35505BCEF674C /* ListRowSorting.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6A90E1B873C1B5452DB2F30 /* ListRowSorting.swift */; };
 		2B99F4DE40ABB197360D9650 /* TagDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A7982C7C11D3E9002E51A0 /* TagDiscovery.swift */; };
 		2BD179B7617ABFD7271B9FB8 /* GitHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5802D2FF0552D510BB51D636 /* GitHub.swift */; };
 		362DEA03EA2CDD9E135B1411 /* APIClientDirectMessagesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A3F2C860C6B16F84CFFE12 /* APIClientDirectMessagesTests.swift */; };
@@ -88,6 +89,7 @@
 		99E688DB379BD4A824487604 /* ComposeImageUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7063C59228E7D97A16B17D /* ComposeImageUploader.swift */; };
 		9B647B54BF1F121446C58857 /* Materialize.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EC3EB1E17182C51042BA83 /* Materialize.swift */; };
 		9CA0B53AE87AA79D8BAC81FF /* FollowListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EF29F5DC946D80A63000209 /* FollowListView.swift */; };
+		9DFDF38F0AFBF42EB781E5E5 /* ListRowSortingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17B744392C4A9FA73672136A /* ListRowSortingTests.swift */; };
 		A057072E1611947A2415D4D9 /* DocumentCollaboratorsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5110757D7694EC9FBF4366F7 /* DocumentCollaboratorsView.swift */; };
 		A06A40D471C18810E4DA0FBE /* CreateFromColumnEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95C36D72E3B993A1C09981BA /* CreateFromColumnEditor.swift */; };
 		A0FBE78E04FAA7E6052DDECE /* GitHubMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9CCBC371A0DEF4F2F42A941 /* GitHubMetadata.swift */; };
@@ -273,6 +275,7 @@
 		12F53DE7756042E68A3D1C33 /* APIClientTagsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClientTagsTests.swift; sourceTree = "<group>"; };
 		137B3E2137C83882B8434673 /* MuteConfirmation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MuteConfirmation.swift; sourceTree = "<group>"; };
 		164718CC67967AC147E30465 /* CrossPostLinksView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CrossPostLinksView.swift; sourceTree = "<group>"; };
+		17B744392C4A9FA73672136A /* ListRowSortingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListRowSortingTests.swift; sourceTree = "<group>"; };
 		1D4AE47FA0D5B0B2F713F5AA /* MutedUsersView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MutedUsersView.swift; sourceTree = "<group>"; };
 		1DC9510D4092B9D8DE46F152 /* APIClient+Identities.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "APIClient+Identities.swift"; sourceTree = "<group>"; };
 		1F84433332486544DA15C7BA /* APIClient+Documents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "APIClient+Documents.swift"; sourceTree = "<group>"; };
@@ -448,6 +451,7 @@
 		F3E6216F2FFB4666000D153A /* InterlinedList.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = InterlinedList.entitlements; sourceTree = "<group>"; };
 		F54C1776AD4A8F204FA8A2BC /* AIArtifactTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AIArtifactTests.swift; sourceTree = "<group>"; };
 		F5569B56DBD6747BB9587870 /* SessionsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
+		F6A90E1B873C1B5452DB2F30 /* ListRowSorting.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListRowSorting.swift; sourceTree = "<group>"; };
 		F78B096C366108083D174366 /* MarkdownBlockTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MarkdownBlockTests.swift; sourceTree = "<group>"; };
 		F7FD22FBB140088C4C19A054 /* ListContributorsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListContributorsView.swift; sourceTree = "<group>"; };
 		F9CCBC371A0DEF4F2F42A941 /* GitHubMetadata.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GitHubMetadata.swift; sourceTree = "<group>"; };
@@ -634,6 +638,7 @@
 				E581F7084CA5B54C804C96E8 /* MaterializePlanner.swift */,
 				EE97DA0960589AD7409730C3 /* APIClient+Materialize.swift */,
 				C0973B73544CBC37CA793B70 /* APIClient+GitHub.swift */,
+				F6A90E1B873C1B5452DB2F30 /* ListRowSorting.swift */,
 				27B6C2E881562C906D9C2DB4 /* APIClient+DirectMessages.swift */,
 				6B267D1F0B37E1861F58AFE7 /* ListRowComposeText.swift */,
 			);
@@ -832,6 +837,7 @@
 				281721EB23841D6DD2F6EE58 /* AIServiceTests.swift */,
 				B1E878BF21B7951D1F6D5012 /* MarkdownBlocksTests.swift */,
 				9A5EDB36FBED0F9134DD2BD9 /* MaterializePlannerTests.swift */,
+				17B744392C4A9FA73672136A /* ListRowSortingTests.swift */,
 				696C31DEAC12A6922D9365C8 /* ListRowComposeTextTests.swift */,
 			);
 			path = ServiceTests;
@@ -1070,6 +1076,7 @@
 				A06A40D471C18810E4DA0FBE /* CreateFromColumnEditor.swift in Sources */,
 				5F02C865EE007AFFA08E9D60 /* MultiSelectField.swift in Sources */,
 				BC5F98582B7D3B15655BBBED /* SelectionActionBar.swift in Sources */,
+				2B03F34643E35505BCEF674C /* ListRowSorting.swift in Sources */,
 				ED493B7F94E68940BB0258B3 /* DMConversation.swift in Sources */,
 				8972DDDDEF696CD4283D97AE /* APIClient+DirectMessages.swift in Sources */,
 				EBD94F95FD771285BEB38C10 /* ListRowComposeText.swift in Sources */,
@@ -1171,6 +1178,7 @@
 				BCED4A30A06C0B2521E5BF71 /* MarkdownBlocksTests.swift in Sources */,
 				536A88A4EA05DD9D0866F2AC /* MaterializePlannerTests.swift in Sources */,
 				9922A874E8EBACB8FBB83976 /* CreateFromColumnTests.swift in Sources */,
+				9DFDF38F0AFBF42EB781E5E5 /* ListRowSortingTests.swift in Sources */,
 				D74FA886D6F1AE873E679EA5 /* APIClientDMConversationsTests.swift in Sources */,
 				F49DE4618E3EDFBDE2D66B1A /* ListRowComposeTextTests.swift in Sources */,
 				F5ADADB7D863EAB9BD4996C6 /* ViewPreferencesTests.swift in Sources */,
