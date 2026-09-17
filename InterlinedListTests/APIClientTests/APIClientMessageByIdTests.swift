@@ -84,4 +84,56 @@ final class APIClientMessageByIdTests: XCTestCase {
             XCTAssertEqual(code, 401)
         }
     }
+
+    // MARK: crossPostReplyCounts() — #62
+
+    func test_crossPostReplyCounts_postsToTheReplyCountsPath() async throws {
+        session.stub(json: #"{"replyCounts":[],"repliesCheckedAt":"2026-09-15T00:00:00.000Z"}"#)
+        _ = try await sut.crossPostReplyCounts(messageId: "m1")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/messages/m1/reply-counts")
+    }
+
+    func test_crossPostReplyCounts_decodesEntries() async throws {
+        session.stub(json: #"""
+        {"replyCounts":[
+          {"platform":"bluesky","count":12,"status":"success","checkedAt":"2026-09-15T00:00:00.000Z"},
+          {"platform":"mastodon","count":4,"status":"success","checkedAt":"2026-09-15T00:00:00.000Z"},
+          {"platform":"linkedin","status":"unsupported","checkedAt":"2026-09-15T00:00:00.000Z"},
+          {"platform":"twitter","status":"error","checkedAt":"2026-09-15T00:00:00.000Z"}
+        ],"repliesCheckedAt":"2026-09-15T00:00:00.000Z"}
+        """#)
+        let response = try await sut.crossPostReplyCounts(messageId: "m1")
+        XCTAssertEqual(response.replyCounts.count, 4)
+        XCTAssertEqual(response.repliesCheckedAt, "2026-09-15T00:00:00.000Z")
+
+        // Only `success` entries with a count are worth drawing.
+        let displayable = response.replyCounts.filter(\.isDisplayable)
+        XCTAssertEqual(displayable.map(\.platform), ["bluesky", "mastodon"])
+        XCTAssertEqual(displayable.first?.count, 12)
+
+        let unsupported = try XCTUnwrap(response.replyCounts.first { $0.platform == "linkedin" })
+        XCTAssertFalse(unsupported.isDisplayable)
+        XCTAssertNil(unsupported.count)
+        let errored = try XCTUnwrap(response.replyCounts.first { $0.platform == "twitter" })
+        XCTAssertFalse(errored.isDisplayable)
+    }
+
+    func test_crossPostReplyCounts_percentEncodesTheMessageId() async throws {
+        session.stub(json: #"{"replyCounts":[],"repliesCheckedAt":null}"#)
+        _ = try await sut.crossPostReplyCounts(messageId: "a b/c")
+        let url = try XCTUnwrap(session.lastRequest?.url?.absoluteString)
+        XCTAssertTrue(url.hasSuffix("/reply-counts"), "URL was \(url)")
+        XCTAssertFalse(url.contains("a b"), "Message id must be percent-encoded: \(url)")
+    }
+
+    func test_crossPostReplyCounts_429_throwsSoTheCallerCanSwallowIt() async throws {
+        session.stub(json: #"{"error":"Too many requests. Please try again later."}"#, statusCode: 429)
+        do {
+            _ = try await sut.crossPostReplyCounts(messageId: "m1")
+            XCTFail("Expected a throw")
+        } catch APIError.server(let message) {
+            XCTAssertEqual(message, "Too many requests. Please try again later.")
+        }
+    }
 }

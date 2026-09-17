@@ -43,13 +43,35 @@ Perform a focused code review of the Swift/SwiftUI changes on the current branch
    ### Code quality
    - [ ] No unnecessary comments (only "why", never "what")
    - [ ] No dead code, unused variables, or leftover `TODO` without a tracking issue
+   - [ ] **Every new `APIClient` function has a call site outside `Services/APIClient*`.** An endpoint
+         consumed only by a function no screen calls looks like coverage in an endpoint diff while
+         being a missing feature — that is how "documents shared with me", "mute", "add org member"
+         and "trash a DM" stayed invisible for a year. If it is deliberately unwired, say why in a
+         comment on the function.
+   - [ ] **Request-body keys match what the route destructures.** `PATCH /api/user/update` and friends
+         ignore unknown keys and still answer `200`, so a mismatch is silent data loss, not an error.
+         Read the route, don't infer the name.
 
-4. **Summarize findings** as:
+4. **Run the zero-call-site sweep** (cheap, catches the above mechanically):
+   ```bash
+   for f in InterlinedList/Services/APIClient*.swift; do
+     grep -oE '^\s+(@discardableResult\s+)?func [a-zA-Z0-9_]+' "$f" | sed -E 's/.*func //'
+   done | sort -u | while read -r fn; do
+     n=$(grep -rn "\.${fn}(" InterlinedList/ | grep -vc "InterlinedList/Services/APIClient")
+     [ "$n" -eq 0 ] && echo "zero app call sites: $fn"
+   done
+   ```
+   Transport helpers (`get`, `post*`, `put*`, `patch*`, `delete*`, `checkResponse`,
+   `postMultipartRawData`, `pathSegment`, `serverErrorMessage`) are called via `Self.` inside the
+   client and will always show up here — ignore them. Anything else needs wiring, deleting, or a
+   comment explaining why it is kept.
+
+5. **Summarize findings** as:
    - Blockers (must fix before merge)
    - Suggestions (non-blocking improvements)
    - Positives (good patterns worth noting)
 
-5. **Run a build** to confirm there are no compilation errors. Prefer XcodeBuildMCP `build_sim` (after `session_show_defaults`); raw fallback pins a concrete UDID (`name=iPhone 16` alone is ambiguous across runtimes):
+6. **Run a build** to confirm there are no compilation errors. Prefer XcodeBuildMCP `build_sim` (after `session_show_defaults`); raw fallback pins a concrete UDID (`name=iPhone 16` alone is ambiguous across runtimes):
    ```bash
    xcodebuild -scheme InterlinedList \
      -destination 'platform=iOS Simulator,id=<SIM_UDID>' \
