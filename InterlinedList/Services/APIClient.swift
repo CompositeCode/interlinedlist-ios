@@ -176,19 +176,9 @@ final class APIClient {
     /// with two rows for the same provider loses both); the identity's own id is
     /// not read at all.
     func unlinkIdentity(provider: String) async throws {
-        let encoded = provider.addingPercentEncoding(withAllowedCharacters: Self.queryValueAllowed) ?? provider
+        let encoded = queryValue(provider)
         try await delete("/api/user/identities?provider=\(encoded)")
     }
-
-    /// `.urlQueryAllowed` permits the sub-delimiters `+ & = ? # /` — legal
-    /// *somewhere* in a query string, but inside a single value they end it or
-    /// split it into another parameter. `+` matters most: the backend reads params
-    /// through `URLSearchParams`, which decodes a literal `+` as a space.
-    private static let queryValueAllowed: CharacterSet = {
-        var allowed = CharacterSet.urlQueryAllowed
-        allowed.remove(charactersIn: "+&=?#/")
-        return allowed
-    }()
 
     /// Carries the verify route's two "credential is unusable" statuses out of the
     /// transport, which can only signal by throwing, back to the outcome value
@@ -703,7 +693,7 @@ final class APIClient {
     }
 
     func searchDocuments(q: String, limit: Int = 20, offset: Int = 0) async throws -> ([Document], Pagination?) {
-        let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
+        let qEncoded = queryValue(q)
         struct Response: Decodable { let documents: [Document]; let pagination: Pagination? }
         let response: Response = try await get("/api/documents/search?q=\(qEncoded)&limit=\(limit)&offset=\(offset)")
         return (response.documents, response.pagination)
@@ -775,7 +765,7 @@ final class APIClient {
     }
 
     func searchLists(q: String, limit: Int = 20, offset: Int = 0) async throws -> ([UserList], Pagination?) {
-        let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
+        let qEncoded = queryValue(q)
         struct Response: Decodable { let lists: [UserList]; let pagination: Pagination? }
         let response: Response = try await get("/api/lists/search?q=\(qEncoded)&limit=\(limit)&offset=\(offset)")
         return (response.lists, response.pagination)
@@ -1176,8 +1166,7 @@ final class APIClient {
         let encoded = listId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? listId
         var path = "/api/lists/\(encoded)/watchers/users?limit=\(limit)&offset=\(offset)"
         if let search, !search.isEmpty {
-            let q = search.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? search
-            path += "&search=\(q)"
+            path += "&search=\(queryValue(search))"
         }
         let response: WatcherCandidatesResponse = try await get(path)
         return response.users
@@ -1288,7 +1277,7 @@ final class APIClient {
 
     func searchDocumentCollaboratorCandidates(id: String, query: String) async throws -> [WatcherCandidate] {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? id
-        let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        let q = queryValue(query)
         let response: WatcherCandidatesResponse = try await get("/api/documents/\(encoded)/collaborators/users?q=\(q)")
         return response.users
     }
@@ -1399,7 +1388,7 @@ final class APIClient {
     // MARK: - Message search (Phase 13 / B2)
 
     func searchMessages(q: String, limit: Int = 20, offset: Int = 0) async throws -> (messages: [Message], pagination: Pagination?) {
-        let qEncoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
+        let qEncoded = queryValue(q)
         let response: MessagesResponse = try await get("/api/messages/search?q=\(qEncoded)&limit=\(limit)&offset=\(offset)")
         return (response.messages, response.pagination)
     }
@@ -1527,7 +1516,7 @@ final class APIClient {
     /// Auto-marks received messages read.
     func dmThreadUpdates(username: String, after: String) async throws -> DMThread {
         let encodedUser = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
-        let encodedAfter = after.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? after
+        let encodedAfter = queryValue(after)
         return try await get("/api/dm/thread/\(encodedUser)/updates?after=\(encodedAfter)")
     }
 
