@@ -272,7 +272,7 @@ struct LinkedIdentitiesView: View {
         errorMessage = nil
         pendingUnlink = nil
         do {
-            try await APIClient.shared.unlinkIdentity(provider: identity.provider, providerId: identity.id)
+            try await APIClient.shared.unlinkIdentity(provider: identity.provider)
             await load()
         } catch APIError.status(401) {
             authState.handleUnauthorized()

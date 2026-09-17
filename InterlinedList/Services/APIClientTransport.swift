@@ -135,8 +135,9 @@ extension APIClient {
         return try decoder.decode(T.self, from: data)
     }
 
-    /// DELETE with a camelCase JSON body — a few routes identify their target in
-    /// the body rather than the path (identity unlink, push unregister).
+    /// DELETE with a camelCase JSON body — for routes that identify their target in
+    /// the body rather than the path (push unregister). Check the route first: a
+    /// body sent to a route that reads the query string is silently ignored.
     func deleteCamel<B: Encodable>(_ path: String, body: B) async throws {
         var request = try jsonRequest(path, method: "DELETE")
         request.httpBody = try camelCaseEncoder.encode(body)

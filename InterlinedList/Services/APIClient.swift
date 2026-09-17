@@ -169,10 +169,26 @@ final class APIClient {
         return response.identities ?? []
     }
 
-    func unlinkIdentity(provider: String, providerId: String) async throws {
-        struct Body: Encodable { let provider: String; let providerId: String }
-        try await deleteCamel("/api/user/identities", body: Body(provider: provider, providerId: providerId))
+    /// `DELETE /api/user/identities?provider=…` — the route reads `provider` from
+    /// the **query string** and never parses a body, so a JSON payload here answers
+    /// `400 "provider is required"`. It also deletes by `{userId, provider}` alone,
+    /// which removes *every* identity stored under that provider value (an account
+    /// with two rows for the same provider loses both); the identity's own id is
+    /// not read at all.
+    func unlinkIdentity(provider: String) async throws {
+        let encoded = provider.addingPercentEncoding(withAllowedCharacters: Self.queryValueAllowed) ?? provider
+        try await delete("/api/user/identities?provider=\(encoded)")
     }
+
+    /// `.urlQueryAllowed` permits the sub-delimiters `+ & = ? # /` — legal
+    /// *somewhere* in a query string, but inside a single value they end it or
+    /// split it into another parameter. `+` matters most: the backend reads params
+    /// through `URLSearchParams`, which decodes a literal `+` as a space.
+    private static let queryValueAllowed: CharacterSet = {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+&=?#/")
+        return allowed
+    }()
 
     /// Actively verifies a stored OAuth credential — the only route that reports real
     /// token health. The five `/status` routes report whether a *provider* is
