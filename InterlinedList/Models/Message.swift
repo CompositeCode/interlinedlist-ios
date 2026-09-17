@@ -32,16 +32,6 @@ struct LinkMetadata: Codable {
     let links: [LinkMetadataItem]
 }
 
-/// A single resolved link preview from POST /api/messages/:id/metadata.
-struct MessageLinkPreview: Codable, Identifiable {
-    let url: String
-    let title: String?
-    let description: String?
-    let image: String?
-
-    var id: String { url }
-}
-
 /// One destination a message was actually cross-posted to, echoed back on the
 /// Message after it publishes (server field: `crossPostUrls`). The shape differs
 /// per platform — Mastodon carries `statusId`/`instanceUrl`, Bluesky carries
@@ -76,7 +66,9 @@ struct Message: Codable, Identifiable {
     let user: MessageUser?
     let imageUrls: [String]?
     let videoUrls: [String]?
-    let linkMetadata: LinkMetadata?
+    /// The only mutable field on the row: the metadata refresh that follows a
+    /// publish backfills it in place on the already-inserted feed message.
+    var linkMetadata: LinkMetadata?
     let parentId: String?
     let scheduledAt: String?
     let tags: [String]?
@@ -237,4 +229,24 @@ struct CreateMessageResponse: Codable {
     let message: String?
     let data: Message?
     let crossPostResults: [CrossPostResult]?
+}
+
+/// One platform's cross-post reply count, from `POST /api/messages/{id}/reply-counts`.
+/// The server caches for 10 minutes and backs unsupported platforms off for 24 hours,
+/// so the client never retries on its own.
+struct ReplyCountEntry: Codable, Identifiable {
+    let platform: String
+    let count: Int?
+    /// `success`, `unsupported` or `error`. Only `success` entries are worth drawing.
+    let status: String
+    let checkedAt: String?
+
+    var id: String { platform }
+
+    var isDisplayable: Bool { status == "success" && count != nil }
+}
+
+struct ReplyCountsResponse: Codable {
+    let replyCounts: [ReplyCountEntry]
+    let repliesCheckedAt: String?
 }

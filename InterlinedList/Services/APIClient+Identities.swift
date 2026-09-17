@@ -26,8 +26,11 @@ import Foundation
 /// The backend *does* track real per-identity health (`LinkedIdentity.needsReconnect`,
 /// flagged by `lib/twitter/token-refresh.ts` on a permanent auth failure, and
 /// already surfaced by `getLinkedIdentitiesForUser`), but `GET /api/user/identities`
-/// does not select it. Until it does, a token revoked upstream cannot be seen
-/// from the app — see `IdentityHealth` for how far these routes let us go.
+/// does not select it — so a revoked token is invisible to every route in this
+/// file. The one route that does exercise the stored credential is
+/// `POST /api/user/identities/verify` (`APIClient.verifyIdentity(provider:)`); it
+/// calls the third-party provider, so it runs only when the user asks for it.
+/// See `IdentityHealth` for how far these routes let us go without it.
 extension APIClient {
 
     /// `GET /api/auth/github/status` — public. `clientId` is not a secret (the

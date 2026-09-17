@@ -21,6 +21,11 @@ struct ComposeView: View {
     var replyTo: Message? = nil
     /// When set, this view reposts (pushes) the given message, with optional commentary.
     var repostOf: Message? = nil
+    /// Seed text for the composer — used by "Schedule a post from this row". Only
+    /// an initial value: everything stays editable, and posting goes through the
+    /// same POST /api/messages path as every other compose, so the posting gates
+    /// are not duplicated here.
+    var prefillContent: String? = nil
     @State private var content = ""
     @State private var tags = ""
     @State private var linkPreview: LinkMetadataItem?
@@ -126,6 +131,11 @@ struct ComposeView: View {
         guard !isReply else { return }
         publiclyVisible = authState.user?.defaultPubliclyVisible ?? true
         showAdvancedBar = authState.user?.showAdvancedPostSettings ?? false
+        // Seed once: `onAppear` can fire again when the sheet returns to the
+        // foreground, and re-seeding would discard the user's edits.
+        if let prefillContent, content.isEmpty {
+            content = prefillContent
+        }
     }
     private var maxMessageLength: Int { authState.user?.maxMessageLength ?? defaultMaxMessageLength }
     private var remainingCharacters: Int { max(0, maxMessageLength - content.count) }
@@ -289,18 +299,7 @@ struct ComposeView: View {
 
     /// The first `http(s)` URL in the draft, used to drive a live preview card.
     /// Recomputed on each content change; cheap enough for per-keystroke use.
-    private var firstDetectedURL: String? {
-        guard !content.isEmpty,
-              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
-        else { return nil }
-        let range = NSRange(content.startIndex..<content.endIndex, in: content)
-        guard let match = detector.firstMatch(in: content, options: [], range: range),
-              let url = match.url,
-              let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https"
-        else { return nil }
-        return url.absoluteString
-    }
+    private var firstDetectedURL: String? { firstDetectedHTTPURL(in: content) }
 
     private func loadLinkPreview(_ url: String) async {
         do {
@@ -786,6 +785,9 @@ struct ComposeView: View {
                 store.insertFeedMessage(result.message)
             }
             showSuccess = true
+            if firstDetectedHTTPURL(in: text) != nil {
+                refreshLinkMetadata(for: result.message.id)
+            }
             if isReply || isRepost {
                 dismiss()
             }
@@ -803,4 +805,40 @@ struct ComposeView: View {
             errorMessage = "Connection failed. Please try again."
         }
     }
+
+    /// Asks the server to fetch OpenGraph metadata for a just-published message's
+    /// links, matching what the web composer does, so the preview populates without
+    /// waiting on something else to backfill it. Fire-and-forget by design: the
+    /// preview is a secondary datum, so a failure must never surface on the publish
+    /// path or delay the success alert — not even a 401, which isn't escalated here
+    /// because the post that just succeeded proves the session is live. The response
+    /// is folded into the row this publish inserted; an empty response or a message
+    /// no longer in the feed leaves it exactly as it was.
+    ///
+    /// Not called from the edit path: there is no route that accepts a content edit
+    /// today (`PATCH /api/messages/{id}` reschedules), so an edited message's links
+    /// can't change server-side anyway. See issue #76.
+    private func refreshLinkMetadata(for messageId: String) {
+        Task { @MainActor in
+            guard let links = try? await APIClient.shared.refreshMessageMetadata(messageId: messageId)
+            else { return }
+            store.applyLinkMetadata(links, toMessageId: messageId)
+        }
+    }
+}
+
+/// The first `http(s)` URL in `text`, or `nil` when it contains none. The composer's
+/// live preview card and the post-publish metadata refresh both key off this, and
+/// they have to agree on whether the message carries a link at all.
+func firstDetectedHTTPURL(in text: String) -> String? {
+    guard !text.isEmpty,
+          let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+    else { return nil }
+    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+    guard let match = detector.firstMatch(in: text, options: [], range: range),
+          let url = match.url,
+          let scheme = url.scheme?.lowercased(),
+          scheme == "http" || scheme == "https"
+    else { return nil }
+    return url.absoluteString
 }

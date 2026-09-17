@@ -537,13 +537,83 @@ final class AppDataStoreTests: XCTestCase {
                  createdAt: "2026-07-01T00:00:00Z", updatedAt: updatedAt)
     }
 
+    // MARK: - applyLinkMetadata
+
+    private func link(_ url: String, title: String) -> LinkMetadataItem {
+        LinkMetadataItem(url: url, platform: nil,
+                         metadata: LinkMetadataItemContent(thumbnail: nil, title: title,
+                                                           description: nil, text: nil, type: nil),
+                         fetchStatus: nil)
+    }
+
+    func test_applyLinkMetadata_setsMetadataOnTargetMessage() {
+        sut.insertFeedMessage(makeMessage(id: "m1"))
+
+        sut.applyLinkMetadata([link("https://example.com", title: "Example")], toMessageId: "m1")
+
+        let updated = sut.feedMessages.first { $0.id == "m1" }
+        XCTAssertEqual(updated?.linkMetadata?.links.count, 1)
+        XCTAssertEqual(updated?.linkMetadata?.links.first?.url, "https://example.com")
+        XCTAssertEqual(updated?.linkMetadata?.links.first?.metadata?.title, "Example")
+    }
+
+    func test_applyLinkMetadata_leavesOtherMessagesUntouched() {
+        sut.insertFeedMessage(makeMessage(id: "older"))
+        sut.insertFeedMessage(makeMessage(id: "target"))
+        sut.insertFeedMessage(makeMessage(id: "newer"))
+
+        sut.applyLinkMetadata([link("https://example.com", title: "Example")], toMessageId: "target")
+
+        XCTAssertNil(sut.feedMessages.first { $0.id == "older" }?.linkMetadata)
+        XCTAssertNil(sut.feedMessages.first { $0.id == "newer" }?.linkMetadata)
+        XCTAssertEqual(sut.feedMessages.map(\.id), ["newer", "target", "older"])
+    }
+
+    func test_applyLinkMetadata_replacesExistingMetadata() {
+        let stale = LinkMetadata(links: [link("https://stale.example", title: "Stale")])
+        sut.insertFeedMessage(makeMessage(id: "m1", linkMetadata: stale))
+
+        sut.applyLinkMetadata([link("https://fresh.example", title: "Fresh")], toMessageId: "m1")
+
+        let links = sut.feedMessages.first { $0.id == "m1" }?.linkMetadata?.links
+        XCTAssertEqual(links?.count, 1)
+        XCTAssertEqual(links?.first?.url, "https://fresh.example")
+    }
+
+    func test_applyLinkMetadata_unknownMessageId_isNoOp() {
+        sut.insertFeedMessage(makeMessage(id: "m1"))
+
+        sut.applyLinkMetadata([link("https://example.com", title: "Example")], toMessageId: "gone")
+
+        XCTAssertEqual(sut.feedMessages.count, 1)
+        XCTAssertNil(sut.feedMessages.first?.linkMetadata)
+    }
+
+    func test_applyLinkMetadata_emptyFeed_isNoOp() {
+        sut.applyLinkMetadata([link("https://example.com", title: "Example")], toMessageId: "m1")
+        XCTAssertTrue(sut.feedMessages.isEmpty)
+    }
+
+    /// `{ links: [] }` is what the route answers when it resolved nothing, so it
+    /// must not blank a preview a feed fetch already supplied.
+    func test_applyLinkMetadata_emptyLinks_leavesExistingMetadata() {
+        let existing = LinkMetadata(links: [link("https://example.com", title: "Example")])
+        sut.insertFeedMessage(makeMessage(id: "m1", linkMetadata: existing))
+
+        sut.applyLinkMetadata([], toMessageId: "m1")
+
+        XCTAssertEqual(sut.feedMessages.first?.linkMetadata?.links.first?.metadata?.title, "Example")
+    }
+
     // MARK: - Helpers
 
-    private func makeMessage(id: String, content: String = "test", parentId: String? = nil) -> Message {
+    private func makeMessage(id: String, content: String = "test",
+                             parentId: String? = nil,
+                             linkMetadata: LinkMetadata? = nil) -> Message {
         Message(id: id, content: content, publiclyVisible: true,
                 userId: "u1", createdAt: "2026-01-01T00:00:00Z",
                 updatedAt: nil, user: nil, imageUrls: nil, videoUrls: nil,
-                linkMetadata: nil, parentId: parentId, scheduledAt: nil,
+                linkMetadata: linkMetadata, parentId: parentId, scheduledAt: nil,
                 tags: nil, digCount: 0, dugByMe: false, crossPostUrls: nil)
     }
 
