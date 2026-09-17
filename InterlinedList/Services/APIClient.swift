@@ -190,17 +190,47 @@ final class APIClient {
         return allowed
     }()
 
-    /// Actively verifies a stored OAuth credential — the only route that reports real
-    /// token health. The five `/status` routes report whether a *provider* is
-    /// configured server-side, not whether this account's token still works, which is
-    /// why `LinkedIdentitiesView` cannot show a "reconnect needed" state today. Kept
-    /// as the primitive that closes that gap; no caller yet.
+    /// Carries the verify route's two "credential is unusable" statuses out of the
+    /// transport, which can only signal by throwing, back to the outcome value
+    /// `verifyIdentity` returns.
+    private enum IdentityVerificationRejection: Error {
+        case credentialRejected
+        case identityMissing
+    }
+
+    /// `POST /api/user/identities/verify` — the only route that proves a linked
+    /// identity's stored credential still works. It loads the credential and
+    /// exercises it upstream: Bluesky by restoring the DPoP-bound AT Protocol
+    /// session, every other provider by calling its "who am I" endpoint. On success
+    /// the backend stamps `lastVerifiedAt`.
     ///
-    /// Note: the route reads only `provider` — `providerId` is accepted and ignored.
-    func verifyIdentity(provider: String, providerId: String) async throws {
-        struct Body: Encodable { let provider: String; let providerId: String }
-        struct Response: Decodable { let ok: Bool? }
-        let _: Response = try await postCamel("/api/user/identities/verify", body: Body(provider: provider, providerId: providerId))
+    /// This is emphatically **not** what the five `/status` routes report. Those
+    /// answer either "the server holds OAuth app credentials for this provider"
+    /// (LinkedIn/Twitter/GitHub) or "a row exists in this user's identity table"
+    /// (Bluesky/Mastodon) — both stay cheerfully `configured: true` after a token is
+    /// revoked upstream. See `APIClient+Identities` for the full breakdown.
+    ///
+    /// The route reads only `body.provider`; the `providerId` it also accepts is
+    /// never looked at, so it isn't sent. Each call hits the third-party provider,
+    /// so this is a user-initiated check, never an on-appear sweep.
+    func verifyIdentity(provider: String) async throws -> IdentityVerification {
+        struct Body: Encodable { let provider: String }
+        struct Response: Decodable { let success: Bool? }
+        do {
+            let _: Response = try await postCamel(
+                "/api/user/identities/verify",
+                body: Body(provider: provider),
+                mappingStatuses: [
+                    400: IdentityVerificationRejection.credentialRejected,
+                    404: IdentityVerificationRejection.identityMissing,
+                ]
+            )
+            return .verified
+        } catch IdentityVerificationRejection.credentialRejected {
+            return .needsReconnect(.credentialRejected)
+        } catch IdentityVerificationRejection.identityMissing {
+            return .needsReconnect(.identityMissing)
+        }
     }
 
     // MARK: - OAuth configuration status

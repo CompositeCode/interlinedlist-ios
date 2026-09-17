@@ -143,17 +143,79 @@ final class APIClientIdentitiesTests: XCTestCase {
     // MARK: verifyIdentity
 
     func test_verifyIdentity_sendsCorrectPath() async throws {
-        session.stub(json: #"{"ok":true}"#)
-        try await sut.verifyIdentity(provider: "bluesky", providerId: "did:plc:abc")
+        session.stub(json: #"{"success":true}"#)
+        _ = try await sut.verifyIdentity(provider: "bluesky")
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/user/identities/verify")
         XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
     }
 
     func test_verifyIdentity_bodyUsesCamelCase() async throws {
-        session.stub(json: #"{"ok":true}"#)
-        try await sut.verifyIdentity(provider: "bluesky", providerId: "did:plc:abc")
+        session.stub(json: #"{"success":true}"#)
+        _ = try await sut.verifyIdentity(provider: "mastodon:techhub.social")
         let body = String(data: session.lastRequest?.httpBody ?? Data(), encoding: .utf8) ?? ""
-        XCTAssertTrue(body.contains("\"providerId\":\"did:plc:abc\""), "Got: \(body)")
+        XCTAssertTrue(body.contains("\"provider\":\"mastodon:techhub.social\""), "Got: \(body)")
+    }
+
+    /// The route reads `body.provider` only — `providerId` was accepted and ignored.
+    func test_verifyIdentity_bodyOmitsProviderId() async throws {
+        session.stub(json: #"{"success":true}"#)
+        _ = try await sut.verifyIdentity(provider: "bluesky")
+        let body = String(data: session.lastRequest?.httpBody ?? Data(), encoding: .utf8) ?? ""
+        XCTAssertFalse(body.contains("providerId"), "Got: \(body)")
+    }
+
+    func test_verifyIdentity_success_returnsVerified() async throws {
+        session.stub(json: #"{"success":true}"#)
+        let verification = try await sut.verifyIdentity(provider: "github")
+        XCTAssertEqual(verification, .verified)
+    }
+
+    /// 400 is the route's "loaded the credential, the provider rejected it" answer
+    /// (also "No token to verify") — an outcome, not a transport fault.
+    func test_verifyIdentity_400_returnsCredentialRejected() async throws {
+        session.stub(json: #"{"error":"Verification failed - token may be expired","code":"bad_request"}"#, statusCode: 400)
+        let verification = try await sut.verifyIdentity(provider: "bluesky")
+        XCTAssertEqual(verification, .needsReconnect(.credentialRejected))
+    }
+
+    func test_verifyIdentity_404_returnsIdentityMissing() async throws {
+        session.stub(json: #"{"error":"Identity not found","code":"not_found"}"#, statusCode: 404)
+        let verification = try await sut.verifyIdentity(provider: "twitter")
+        XCTAssertEqual(verification, .needsReconnect(.identityMissing))
+    }
+
+    func test_verifyIdentity_401_throwsStatusError() async throws {
+        session.stub(json: #"{"error":"Unauthorized","code":"unauthorized"}"#, statusCode: 401)
+        do {
+            _ = try await sut.verifyIdentity(provider: "bluesky")
+            XCTFail("Expected throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
+
+    /// A 5xx must not be mistaken for a dead token: the check never ran.
+    func test_verifyIdentity_500_throwsRatherThanReportingNeedsReconnect() async throws {
+        session.stub(json: #"{"error":"Internal server error","code":"internal_error"}"#, statusCode: 500)
+        do {
+            let verification = try await sut.verifyIdentity(provider: "bluesky")
+            XCTFail("Expected throw, got \(verification)")
+        } catch APIError.server(let message) {
+            XCTAssertEqual(message, "Internal server error")
+        }
+    }
+
+    /// The route couldn't be reached at all — also distinct from "token is bad".
+    func test_verifyIdentity_transportFailure_throwsRatherThanReportingNeedsReconnect() async throws {
+        let failing = FailingURLSession(error: URLError(.notConnectedToInternet))
+        let client = APIClient(session: failing)
+        client.setBearerToken("tok")
+        do {
+            let verification = try await client.verifyIdentity(provider: "bluesky")
+            XCTFail("Expected throw, got \(verification)")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .notConnectedToInternet)
+        }
     }
 
     // MARK: provider filtering (exercising the logic ComposeView applies to the identities list)
@@ -202,5 +264,20 @@ final class APIClientIdentitiesTests: XCTestCase {
         let identities = try await sut.linkedIdentities()
         let hasTwitter = identities.contains { $0.provider == "twitter" }
         XCTAssertFalse(hasTwitter)
+    }
+}
+
+/// `MockURLSession` can only answer with a status; this one fails the way a
+/// dropped connection does, which is a different thing for the verify route to
+/// report than any status the server could send.
+private final class FailingURLSession: URLSessionProtocol {
+    private let error: Error
+
+    init(error: Error) {
+        self.error = error
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        throw error
     }
 }
