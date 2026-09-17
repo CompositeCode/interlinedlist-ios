@@ -652,6 +652,19 @@ final class APIClient {
         return response.templates
     }
 
+    /// Seeds the account's default template set (subscriber-only). The route answers
+    /// with the freshly seeded list, so the caller does not need a follow-up read.
+    /// A 403 means the subscriber gate rejected the call — see `TemplatePickerView`.
+    func seedDefaultDocumentTemplates() async throws -> [DocumentTemplate] {
+        struct Empty: Encodable {}
+        struct SeedResponse: Decodable {
+            let templatesFolderId: String?
+            let templates: [DocumentTemplate]
+        }
+        let response: SeedResponse = try await post("/api/documents/templates/seed-defaults", body: Empty())
+        return response.templates
+    }
+
     /// Copies a template into a new document (subscriber-only). Body is camelCase
     /// (`templateDocumentId`, `targetFolderId`) — pass nil to create at root. The
     /// endpoint may wrap the document or return it bare; tolerate both like createDocument.
