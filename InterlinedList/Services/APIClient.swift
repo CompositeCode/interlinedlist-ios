@@ -387,6 +387,15 @@ final class APIClient {
         return message
     }
 
+    /// Cross-post reply counts for one message, fetched from Bluesky/Mastodon/LinkedIn/X.
+    /// Despite the name this is **not** in-app reply counts. The route is rate-limited
+    /// (30/min) and caches for 10 minutes, so call it once per detail view and never in
+    /// a loop — and never from the feed.
+    func crossPostReplyCounts(messageId: String) async throws -> ReplyCountsResponse {
+        struct Empty: Encodable {}
+        return try await post("/api/messages/\(pathSegment(messageId))/reply-counts", body: Empty())
+    }
+
     struct DigResponse: Decodable { let digCount: Int; let dugByMe: Bool }
 
     func dig(messageId: String) async throws -> DigResponse {
@@ -649,6 +658,19 @@ final class APIClient {
     /// user to read; only creating from one is subscriber-gated.
     func documentTemplates() async throws -> [DocumentTemplate] {
         let response: DocumentTemplatesResponse = try await get("/api/documents/templates")
+        return response.templates
+    }
+
+    /// Seeds the account's default template set (subscriber-only). The route answers
+    /// with the freshly seeded list, so the caller does not need a follow-up read.
+    /// A 403 means the subscriber gate rejected the call — see `TemplatePickerView`.
+    func seedDefaultDocumentTemplates() async throws -> [DocumentTemplate] {
+        struct Empty: Encodable {}
+        struct SeedResponse: Decodable {
+            let templatesFolderId: String?
+            let templates: [DocumentTemplate]
+        }
+        let response: SeedResponse = try await post("/api/documents/templates/seed-defaults", body: Empty())
         return response.templates
     }
 

@@ -26,6 +26,9 @@ struct MessagesInboxView: View {
 
     @State private var folder: DMFolder = .inbox
     @State private var messages: [DMMessage] = []
+    @State private var conversations: [DMConversation] = []
+    @State private var conversationCursor: String?
+    @State private var isLoadingMoreConversations = false
     @State private var isLoading = true
     @State private var error: String?
     @State private var showRecipientPicker = false
@@ -80,6 +83,14 @@ struct MessagesInboxView: View {
             .navigationDestination(item: $selectedThreadUser) { user in
                 DMThreadView(username: user.username, initialUser: user)
                     .environmentObject(authState)
+                    .onDisappear {
+                        // Opening a thread marks it read server-side, so the row's
+                        // unread count and the tab badge are both stale on the way back.
+                        Task {
+                            await refreshUnreadBadge()
+                            if folder == .inbox { await loadConversations() }
+                        }
+                    }
             }
         }
         .task(id: folder) { await load() }
@@ -89,6 +100,60 @@ struct MessagesInboxView: View {
 
     @ViewBuilder
     private var content: some View {
+        if folder == .inbox {
+            conversationContent
+        } else {
+            folderContent
+        }
+    }
+
+    /// The Inbox is conversation-grouped — one row per correspondent with that
+    /// conversation's unread count. Sent and Deleted stay per-message: the
+    /// conversations route is inbox-shaped only.
+    @ViewBuilder
+    private var conversationContent: some View {
+        if isLoading && conversations.isEmpty {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error, conversations.isEmpty {
+            ContentUnavailableView {
+                Label("Unable to load", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(error)
+            } actions: {
+                Button("Retry") { Task { await load() } }
+            }
+        } else if conversations.isEmpty {
+            ContentUnavailableView(
+                emptyTitle,
+                systemImage: "envelope",
+                description: Text(emptyDescription)
+            )
+        } else {
+            List {
+                ForEach(conversations) { conversation in
+                    Button {
+                        selectedThreadUser = conversation.otherUser
+                    } label: {
+                        DMConversationRow(conversation: conversation)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if conversationCursor != nil {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                    .onAppear { Task { await loadMoreConversations() } }
+                }
+            }
+            .listStyle(.plain)
+            .refreshable { await load() }
+        }
+    }
+
+    @ViewBuilder
+    private var folderContent: some View {
         if isLoading && messages.isEmpty {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error, messages.isEmpty {
@@ -165,6 +230,10 @@ struct MessagesInboxView: View {
         isLoading = true
         error = nil
         defer { isLoading = false }
+        if folder == .inbox {
+            await loadConversations()
+            return
+        }
         do {
             let response = try await APIClient.shared.directMessages(folder: folder)
             messages = response.items
@@ -174,6 +243,40 @@ struct MessagesInboxView: View {
             error = msg
         } catch {
             self.error = "Could not load messages."
+        }
+    }
+
+    private func loadConversations() async {
+        do {
+            let page = try await APIClient.shared.dmConversations()
+            conversations = page.items
+            conversationCursor = page.nextCursor
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.server(let msg) {
+            error = msg
+        } catch {
+            self.error = "Could not load messages."
+        }
+    }
+
+    /// Keyset paging: the cursor the server issued is passed back untouched. Rows are
+    /// de-duplicated by `pairKey` because a conversation that receives a message
+    /// mid-scroll can move between pages.
+    private func loadMoreConversations() async {
+        guard let cursor = conversationCursor, !isLoadingMoreConversations else { return }
+        isLoadingMoreConversations = true
+        defer { isLoadingMoreConversations = false }
+        do {
+            let page = try await APIClient.shared.dmConversations(cursor: cursor)
+            let seen = Set(conversations.map(\.pairKey))
+            conversations.append(contentsOf: page.items.filter { !seen.contains($0.pairKey) })
+            conversationCursor = page.nextCursor
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            // Stop paging rather than spinning forever on a broken cursor.
+            conversationCursor = nil
         }
     }
 
@@ -214,6 +317,87 @@ struct MessagesInboxView: View {
                 actionError = failureCopy
             }
         }
+    }
+}
+
+/// One conversation row: the correspondent, the last message preview, and that
+/// conversation's unread count as a pill (web parity, "99+" capped).
+private struct DMConversationRow: View {
+    let conversation: DMConversation
+
+    var body: some View {
+        HStack(spacing: 12) {
+            avatar
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(conversation.otherUser.displayNameOrUsername)
+                        .font(.ilBody(15))
+                        .fontWeight(conversation.unreadCount > 0 ? .bold : .medium)
+                    Spacer()
+                    Text(relativeTime(conversation.lastCreatedAt))
+                        .font(.ilMono(10))
+                        .foregroundStyle(.secondary)
+                }
+                if !conversation.previewText.isEmpty {
+                    HStack(spacing: 4) {
+                        if conversation.isMine {
+                            Text("You:")
+                                .font(.ilBody())
+                                .foregroundStyle(.tertiary)
+                        }
+                        Text(conversation.previewText)
+                            .font(.ilBody())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+            }
+            if let badge = conversation.unreadBadge {
+                Text(badge)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(ILColor.primary)
+                    .clipShape(Capsule())
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if let urlString = conversation.otherUser.avatar, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFill()
+                } else {
+                    Image(systemName: "person.circle.fill").resizable().scaledToFit()
+                }
+            }
+            .frame(width: 40, height: 40)
+            .clipShape(Circle())
+        } else {
+            Image(systemName: "person.circle.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 40, height: 40)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var accessibilityText: String {
+        var parts = [conversation.otherUser.displayNameOrUsername]
+        if conversation.unreadCount > 0 {
+            parts.append("\(conversation.unreadCount) unread")
+        }
+        if !conversation.previewText.isEmpty {
+            parts.append(conversation.previewText)
+        }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -292,16 +476,18 @@ private struct DMInboxRow: View {
         return "\(unread)\(name). \(previewText ?? "")"
     }
 
-    private func relativeTime(_ iso: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
-            let f = RelativeDateTimeFormatter()
-            f.unitsStyle = .abbreviated
-            return f.localizedString(for: date, relativeTo: Date())
-        }
-        return ""
+}
+
+/// Shared by the conversation rows and the flat folder rows.
+private func relativeTime(_ iso: String) -> String {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f.localizedString(for: date, relativeTo: Date())
     }
+    return ""
 }
 
 /// Recipient picker for starting a new conversation (mutual-follow set).

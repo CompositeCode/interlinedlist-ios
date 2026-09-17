@@ -768,6 +768,8 @@ private struct DocumentDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var showSharing = false
     @State private var showCreateFrom = false
+    @StateObject private var presence = DocumentPresenceService()
+    @Environment(\.scenePhase) private var scenePhase
 
     /// "Create from…" writes a list/document, both subscriber-gated on the
     /// backend — hide it for free users rather than surface a 403.
@@ -778,6 +780,35 @@ private struct DocumentDetailView: View {
         self.onUpdate = onUpdate
         self.onDelete = onDelete
         _current = State(initialValue: document)
+    }
+
+    /// "N people viewing", with the names on tap. Remote carets are deliberately out
+    /// of scope — mirroring them on a phone-sized editor is noise, not information.
+    private var presenceChip: some View {
+        Menu {
+            ForEach(presence.others) { other in
+                Text(other.name)
+            }
+            if presence.isStale {
+                Divider()
+                Text("This document has changed since you opened it.")
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: presence.isStale ? "exclamationmark.circle" : "person.2.fill")
+                Text("\(presence.viewerCount)")
+            }
+            .font(.ilMono(11))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(ILColor.surface2)
+            .clipShape(Capsule())
+        }
+        .accessibilityLabel(
+            presence.viewerCount == 1
+                ? "1 other person viewing"
+                : "\(presence.viewerCount) other people viewing"
+        )
     }
 
     var body: some View {
@@ -796,6 +827,9 @@ private struct DocumentDetailView: View {
         .navigationTitle(current.title)
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            if presence.viewerCount > 0 {
+                ToolbarItem(placement: .topBarLeading) { presenceChip }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Edit") { showEdit = true }
@@ -824,6 +858,17 @@ private struct DocumentDetailView: View {
                 }
                 .accessibilityLabel("Document options")
                 .buttonStyle(.plain)
+            }
+        }
+        // Heartbeat only while this document is on screen AND the scene is active —
+        // a phone must not poll from the background.
+        .task { presence.start(documentId: current.id) }
+        .onDisappear { presence.stop() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                presence.start(documentId: current.id)
+            } else {
+                presence.stop()
             }
         }
         .sheet(isPresented: $showEdit) {
@@ -1197,6 +1242,14 @@ private struct TemplatePickerView: View {
     @State private var creatingId: String?
     @State private var loadError: String?
     @State private var createError: String?
+    @State private var isSeeding = false
+    @State private var seedGateClosed = false
+
+    /// Hidden for free accounts, and hidden again if the route 403s — a gate that
+    /// slipped is a stale local subscriber flag, not something to show a price for.
+    private var canSeedDefaults: Bool {
+        authState.user?.isSubscriber == true && !seedGateClosed
+    }
 
     var body: some View {
         NavigationStack {
@@ -1217,6 +1270,22 @@ private struct TemplatePickerView: View {
                         Label("No Templates", systemImage: "doc.on.doc")
                     } description: {
                         Text("You have no document templates yet.")
+                    } actions: {
+                        // Subscriber-only, and absent rather than disabled for free
+                        // accounts — no control, no price, no upsell (Guideline 3.1.1).
+                        if canSeedDefaults {
+                            Button {
+                                Task { await seedDefaults() }
+                            } label: {
+                                if isSeeding {
+                                    ProgressView()
+                                } else {
+                                    Text("Add the default templates")
+                                }
+                            }
+                            .disabled(isSeeding)
+                            .accessibilityLabel("Add the default templates")
+                        }
                     }
                 } else {
                     List(templates) { template in
@@ -1276,6 +1345,29 @@ private struct TemplatePickerView: View {
             loadError = msg
         } catch {
             loadError = "Failed to load templates."
+        }
+    }
+
+    private func seedDefaults() async {
+        guard !isSeeding else { return }
+        isSeeding = true
+        defer { isSeeding = false }
+        do {
+            templates = try await APIClient.shared.seedDefaultDocumentTemplates()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.forbidden {
+            // The gate rejected us, so the local subscriber flag is stale. Hide the
+            // control and re-read the user rather than surfacing a payment message.
+            seedGateClosed = true
+            await authState.refreshUser()
+        } catch APIError.status(403) {
+            seedGateClosed = true
+            await authState.refreshUser()
+        } catch APIError.server(let msg) {
+            createError = msg
+        } catch {
+            createError = "Failed to add the default templates."
         }
     }
 
