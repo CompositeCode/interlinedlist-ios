@@ -52,7 +52,10 @@ struct InterlinedListApp: App {
                     }
                 }
                 .sheet(item: $router.pendingDeepLink) { link in
-                    deepLinkSheet(for: link)
+                    // A sheet inherits the color-scheme override from RootView (it is a
+                    // window-level trait) but not its tint, so brand the sheet's own
+                    // controls here or they render iOS system blue.
+                    deepLinkSheet(for: link).tint(ILColor.link)
                 }
         }
     }
