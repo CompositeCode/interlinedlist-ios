@@ -23,6 +23,7 @@ struct MessageDetailView: View {
     @State private var muteTarget: MuteTarget?
     @State private var muteError: String?
     @State private var showCreateFrom = false
+    @State private var replyCounts: [String: Int] = [:]
     @EnvironmentObject var authState: AuthState
     @EnvironmentObject var store: AppDataStore
 
@@ -60,7 +61,7 @@ struct MessageDetailView: View {
                 Section { previews }
             }
             if let urls = message.crossPostUrls, !urls.isEmpty {
-                Section { CrossPostLinksView(urls: urls) }
+                Section { CrossPostLinksView(urls: urls, replyCounts: replyCounts) }
             }
             Section { actions }
         }
@@ -103,6 +104,26 @@ struct MessageDetailView: View {
             Task { await mute(target) }
         }
         .task { try? await muteStore.loadIfNeeded() }
+        .task { await loadReplyCounts() }
+    }
+
+    /// Cross-post reply counts are a secondary datum on the detail view only. The guard
+    /// on `crossPostUrls` is what protects the route's 30/min rate limit — a message with
+    /// no cross-posts must issue no request at all. Failures, 429 included, are swallowed:
+    /// the server already caches for 10 minutes, so there is nothing useful to retry.
+    private func loadReplyCounts() async {
+        guard let urls = message.crossPostUrls, !urls.isEmpty else { return }
+        guard replyCounts.isEmpty else { return }
+        do {
+            let response = try await APIClient.shared.crossPostReplyCounts(messageId: message.id)
+            replyCounts = Dictionary(
+                uniqueKeysWithValues: response.replyCounts
+                    .filter(\.isDisplayable)
+                    .compactMap { entry in entry.count.map { (entry.platform.lowercased(), $0) } }
+            )
+        } catch {
+            // Secondary datum — no banner, no retry.
+        }
     }
 
     private func mute(_ target: MuteTarget) async {

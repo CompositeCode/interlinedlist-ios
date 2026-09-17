@@ -29,6 +29,19 @@ struct User: Codable, Identifiable {
     /// The user's default GitHub repo ("owner/repo") for GitHub-backed lists,
     /// or nil if none is set. Serialized camelCase by the API.
     let githubDefaultRepo: String?
+    /// Private account: new followers need approval and posts stay visible only
+    /// to approved followers. Drives the follow-request flow server-side.
+    let isPrivateAccount: Bool?
+    /// Server-side feed scope. One of `all_messages`, `following_only`,
+    /// `followers_only`, `my_messages` — the messages and search routes build
+    /// their visibility clause from this, so it changes what the feed returns.
+    let viewingPreference: String?
+    /// Feed page size (server accepts 10–30).
+    let messagesPerPage: Int?
+    /// Render link previews in the feed.
+    let showPreviews: Bool?
+    /// How many notifications `?scope=tray` returns (server accepts 10–40).
+    let notificationTrayLimit: Int?
 
     var displayNameOrUsername: String {
         displayName?.isEmpty == false ? (displayName ?? username) : username
@@ -44,7 +57,9 @@ struct User: Codable, Identifiable {
          avatar: String?, bio: String?, theme: String?, emailVerified: Bool?,
          createdAt: String?, maxMessageLength: Int?, showAdvancedPostSettings: Bool?,
          defaultPubliclyVisible: Bool?, customerStatus: String?,
-         githubDefaultRepo: String? = nil) {
+         githubDefaultRepo: String? = nil, isPrivateAccount: Bool? = nil,
+         viewingPreference: String? = nil, messagesPerPage: Int? = nil,
+         showPreviews: Bool? = nil, notificationTrayLimit: Int? = nil) {
         self.id = id
         self.email = email
         self.username = username
@@ -59,6 +74,11 @@ struct User: Codable, Identifiable {
         self.defaultPubliclyVisible = defaultPubliclyVisible
         self.customerStatus = customerStatus
         self.githubDefaultRepo = githubDefaultRepo
+        self.isPrivateAccount = isPrivateAccount
+        self.viewingPreference = viewingPreference
+        self.messagesPerPage = messagesPerPage
+        self.showPreviews = showPreviews
+        self.notificationTrayLimit = notificationTrayLimit
     }
 }
 
