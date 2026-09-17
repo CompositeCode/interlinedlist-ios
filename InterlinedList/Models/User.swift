@@ -29,6 +29,9 @@ struct User: Codable, Identifiable {
     /// The user's default GitHub repo ("owner/repo") for GitHub-backed lists,
     /// or nil if none is set. Serialized camelCase by the API.
     let githubDefaultRepo: String?
+    /// Private account: new followers need approval and posts stay visible only
+    /// to approved followers. Drives the follow-request flow server-side.
+    let isPrivateAccount: Bool?
 
     var displayNameOrUsername: String {
         displayName?.isEmpty == false ? (displayName ?? username) : username
@@ -44,7 +47,7 @@ struct User: Codable, Identifiable {
          avatar: String?, bio: String?, theme: String?, emailVerified: Bool?,
          createdAt: String?, maxMessageLength: Int?, showAdvancedPostSettings: Bool?,
          defaultPubliclyVisible: Bool?, customerStatus: String?,
-         githubDefaultRepo: String? = nil) {
+         githubDefaultRepo: String? = nil, isPrivateAccount: Bool? = nil) {
         self.id = id
         self.email = email
         self.username = username
@@ -59,6 +62,7 @@ struct User: Codable, Identifiable {
         self.defaultPubliclyVisible = defaultPubliclyVisible
         self.customerStatus = customerStatus
         self.githubDefaultRepo = githubDefaultRepo
+        self.isPrivateAccount = isPrivateAccount
     }
 }
 

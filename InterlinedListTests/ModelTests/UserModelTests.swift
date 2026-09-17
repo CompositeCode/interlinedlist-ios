@@ -73,4 +73,18 @@ final class UserModelTests: XCTestCase {
              maxMessageLength: nil, showAdvancedPostSettings: nil,
              defaultPubliclyVisible: nil, customerStatus: customerStatus)
     }
+
+    // MARK: isPrivateAccount (#48)
+
+    func test_decodesIsPrivateAccount() throws {
+        let json = #"{"id":"u1","email":"a@b.com","username":"alice","isPrivateAccount":true}"#
+        let user = try decoder.decode(User.self, from: Data(json.utf8))
+        XCTAssertEqual(user.isPrivateAccount, true)
+    }
+
+    func test_isPrivateAccount_isNilWhenAbsent() throws {
+        let json = #"{"id":"u1","email":"a@b.com","username":"alice"}"#
+        let user = try decoder.decode(User.self, from: Data(json.utf8))
+        XCTAssertNil(user.isPrivateAccount)
+    }
 }
