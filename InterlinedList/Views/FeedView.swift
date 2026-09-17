@@ -14,6 +14,7 @@ struct FeedView: View {
     @State private var errorMessage: String?
     @State private var pagination: Pagination?
     @State private var showPreviews = true
+    @State private var didSyncViewPreferences = false
     @State private var showOnlyMine = false
     @State private var tagFilter: String? = nil
     @State private var messageToDelete: Message?
@@ -163,6 +164,12 @@ struct FeedView: View {
         List {
             Section {
                 Toggle("Show previews", isOn: $showPreviews)
+                    .onChange(of: showPreviews) { _, newValue in
+                        // The web writes this from the feed too, so keep one source of
+                        // truth on the account instead of a per-screen local override.
+                        guard newValue != (authState.user?.showPreviews ?? true) else { return }
+                        Task { await savePreviewPreference(newValue) }
+                    }
                 Toggle("My Posts", isOn: $showOnlyMine)
             }
             if !feedTags.isEmpty {
@@ -377,7 +384,10 @@ struct FeedView: View {
         .muteConfirmation(target: $muteTarget, errorMessage: $muteError) { target in
             Task { await mute(target) }
         }
-        .task { await applyInitialState() }
+        .task {
+            syncViewPreferences()
+            await applyInitialState()
+        }
         .onChange(of: authState.user?.id) { _, _ in
             if authState.isLoggedIn { Task { await loadMessages() } }
         }
@@ -410,6 +420,19 @@ struct FeedView: View {
             }
             .onChange(of: showOnlyMine) { _, _ in Task { await loadMessages() } }
             .onChange(of: tagFilter) { _, _ in Task { await loadMessages() } }
+            // Feed scope and page size are applied server-side, so a change in Settings
+            // has to refetch — the already-loaded page was built under the old scope.
+            .onChange(of: authState.user?.viewingPreference) { _, _ in
+                syncedFromStore = true
+                Task { await loadMessages() }
+            }
+            .onChange(of: authState.user?.messagesPerPage) { _, _ in
+                syncedFromStore = true
+                Task { await loadMessages() }
+            }
+            .onChange(of: authState.user?.showPreviews) { _, newValue in
+                showPreviews = newValue ?? true
+            }
     }
 
     @ToolbarContentBuilder
@@ -602,12 +625,38 @@ struct FeedView: View {
         }
     }
 
+    /// Feed page size comes from the account (`messagesPerPage`, 10–30). Accounts that
+    /// never set one keep the size the feed shipped with.
+    private var pageSize: Int {
+        authState.user?.messagesPerPage ?? ViewPreferenceBounds.defaultMessagesPerPage
+    }
+
+    /// `showPreviews` is an account setting the web also writes, so seed the in-feed
+    /// toggle from it once rather than defaulting to on every launch.
+    private func syncViewPreferences() {
+        guard !didSyncViewPreferences, let user = authState.user else { return }
+        didSyncViewPreferences = true
+        showPreviews = user.showPreviews ?? true
+    }
+
+    private func savePreviewPreference(_ value: Bool) async {
+        do {
+            let updated = try await APIClient.shared.updateUserSettings(showPreviews: value)
+            authState.updateUser(updated)
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch {
+            // A secondary display preference — leave the toggle where the user put it
+            // for this session rather than interrupting the feed with an error.
+        }
+    }
+
     private func loadMessages() async {
         errorMessage = nil
         isLoading = true
         defer { isLoading = false }
         do {
-            let (list, pag) = try await APIClient.shared.messages(limit: 50, offset: 0, onlyMine: showOnlyMine, tag: tagFilter)
+            let (list, pag) = try await APIClient.shared.messages(limit: pageSize, offset: 0, onlyMine: showOnlyMine, tag: tagFilter)
             messages = list
             pagination = pag
             initDigStates(from: list)
@@ -626,7 +675,7 @@ struct FeedView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            let (list, pag) = try await APIClient.shared.messages(limit: 50, offset: messages.count, onlyMine: showOnlyMine, tag: tagFilter)
+            let (list, pag) = try await APIClient.shared.messages(limit: pageSize, offset: messages.count, onlyMine: showOnlyMine, tag: tagFilter)
             messages.append(contentsOf: list)
             pagination = pag
             initDigStates(from: list)
