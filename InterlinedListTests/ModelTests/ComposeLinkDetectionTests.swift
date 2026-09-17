@@ -52,7 +52,7 @@ final class ComposeLinkDetectionTests: XCTestCase {
         let session = MockURLSession()
         let sut = APIClient(session: session)
         sut.setBearerToken("tok")
-        session.stub(json: #"{"metadata":{"links":[]}}"#)
+        session.stub(json: #"{"links":[]}"#)
 
         await publishAndRefreshIfLinked("just a thought, no links at all", using: sut)
 
@@ -64,7 +64,7 @@ final class ComposeLinkDetectionTests: XCTestCase {
         let session = MockURLSession()
         let sut = APIClient(session: session)
         sut.setBearerToken("tok")
-        session.stub(json: #"{"metadata":{"links":[{"url":"https://example.com","title":"E","description":null,"image":null}]}}"#)
+        session.stub(json: #"{"links":[{"url":"https://example.com","platform":"other","metadata":{"title":"E","type":"link"},"fetchStatus":"success"}]}"#)
 
         await publishAndRefreshIfLinked("read this https://example.com", using: sut, messageId: "m42")
 

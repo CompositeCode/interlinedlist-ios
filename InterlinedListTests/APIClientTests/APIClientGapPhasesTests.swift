@@ -272,12 +272,4 @@ final class APIClientGapPhasesTests: XCTestCase {
         XCTAssertEqual(result.crossPostResults.first?.platform, "bluesky")
         XCTAssertEqual(result.crossPostResults.first?.success, true)
     }
-
-    func test_refreshMessageMetadata_decodesLinks() async throws {
-        session.stub(json: #"{"message":"ok","metadata":{"links":[{"url":"https://x.com","title":"X","description":"d","image":"i"}]}}"#)
-        let links = try await sut.refreshMessageMetadata(messageId: "m1")
-        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
-        XCTAssertTrue(session.lastRequest?.url?.path.hasSuffix("/api/messages/m1/metadata") == true)
-        XCTAssertEqual(links.first?.title, "X")
-    }
 }
