@@ -13,6 +13,7 @@ struct InterlinedListApp: App {
     @StateObject private var authState = AuthState()
     @StateObject private var store = AppDataStore()
     @StateObject private var router = AppRouter()
+    @StateObject private var settingsSync = AppSettingsSyncService()
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -25,12 +26,17 @@ struct InterlinedListApp: App {
                 .environmentObject(authState)
                 .environmentObject(store)
                 .environmentObject(router)
+                .environmentObject(settingsSync)
                 .onChange(of: authState.hasToken) { _, has in
                     if has {
                         PushService.shared.requestPermissionAndRegister()
+                        Task { await syncAppSettings() }
                     } else {
                         PushService.shared.unregister()
                         store.reset()
+                        // The device id is deliberately NOT cleared — it belongs to
+                        // the install, not the session, and re-registering on every
+                        // sign-in would litter the account's device list.
                     }
                 }
                 .onOpenURL { url in
@@ -129,6 +135,18 @@ struct InterlinedListApp: App {
         case .resetPassword, .userProfile, .message, .document, .list,
              .publicList, .publicDocument, .sharedDocument, .sharedList:
             router.pendingDeepLink = link
+        }
+    }
+
+    /// Registers this install with the settings-sync service so it appears in the
+    /// web's Settings → Applications, then mirrors the account-level preferences
+    /// into the shared document so a fresh install elsewhere can bootstrap from it.
+    @MainActor
+    private func syncAppSettings() async {
+        guard await settingsSync.registerDeviceIfNeeded() != nil else { return }
+        _ = await settingsSync.loadSharedSettings()
+        if let user = authState.user {
+            await settingsSync.save(AppSettingsSyncService.sharedSettings(from: user))
         }
     }
 

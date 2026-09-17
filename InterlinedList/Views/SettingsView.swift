@@ -41,6 +41,7 @@ struct SettingsView: View {
                 viewPreferencesSection
                 privacySection
                 accountsSection
+                devicesSection
                 notificationsSection
                 moderationSection
                 aboutSection
@@ -197,6 +198,20 @@ struct SettingsView: View {
                     Label("Connected accounts", systemImage: "link")
                 }
             }
+        }
+    }
+
+    private var devicesSection: some View {
+        Section {
+            NavigationLink {
+                AppDevicesView().environmentObject(authState)
+            } label: {
+                Label("Devices", systemImage: "laptopcomputer.and.iphone")
+            }
+        } header: {
+            Text("Applications")
+        } footer: {
+            Text("Devices signed in to InterlinedList, mirroring Settings → Applications on the web.")
         }
     }
 
