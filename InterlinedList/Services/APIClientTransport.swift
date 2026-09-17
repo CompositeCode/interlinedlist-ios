@@ -8,6 +8,12 @@ import os.log
 
 private let transportLog = Logger(subsystem: "com.interlinedlist.app", category: "APIClient")
 
+/// `.urlQueryAllowed` permits the sub-delimiters `+ & = ? # /` — legal *somewhere*
+/// in a query string, but inside a single value they end it or split it into
+/// another parameter. `+` matters most: the backend reads params through
+/// `URLSearchParams`, which decodes a literal `+` as a space.
+private let queryValueAllowed = CharacterSet.urlQueryAllowed.subtracting(CharacterSet(charactersIn: "+&=?#/"))
+
 /// The HTTP seam every `APIClient` endpoint is built on: URL assembly, auth
 /// header, body encoding, status checking, decoding.
 ///
@@ -192,10 +198,22 @@ extension APIClient {
         return data
     }
 
-    /// Percent-encodes one path segment. `?? segment` keeps the call sites free
-    /// of force-unwraps; encoding only fails for inputs a path can't hold anyway.
+    // MARK: - URL encoding
+
+    /// Percent-encodes one path *segment* — the part between two slashes. `??
+    /// segment` keeps the call sites free of force-unwraps; encoding only fails
+    /// for inputs a path can't hold anyway.
     func pathSegment(_ segment: String) -> String {
         segment.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? segment
+    }
+
+    /// Percent-encodes one query *value* — whatever follows a `=` in the query
+    /// string, typically a user-typed search term or a server-issued opaque
+    /// cursor. Not interchangeable with `pathSegment(_:)`: see
+    /// `queryValueAllowed` for the sub-delimiters this has to strip and that one
+    /// must not.
+    func queryValue(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? value
     }
 
     // MARK: - Private
