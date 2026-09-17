@@ -82,6 +82,92 @@ final class AppDataStoreTests: XCTestCase {
         wait(for: [countIncreased], timeout: 1.0)
     }
 
+    // MARK: - updateFeedMessage
+
+    func test_updateFeedMessage_replacesTheRowContent() {
+        sut.insertFeedMessage(makeMessage(id: "a", content: "before"))
+        sut.updateFeedMessage(makeMessage(id: "a", content: "after"))
+        XCTAssertEqual(sut.feedMessages.first?.content, "after")
+    }
+
+    func test_updateFeedMessage_keepsCountAndOrder() {
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        sut.insertFeedMessage(makeMessage(id: "b"))
+        sut.updateFeedMessage(makeMessage(id: "a", content: "edited"))
+        XCTAssertEqual(sut.feedMessages.map(\.id), ["b", "a"])
+        XCTAssertEqual(sut.feedMessages.last?.content, "edited")
+    }
+
+    func test_updateFeedMessage_leavesOtherRowsAlone() {
+        sut.insertFeedMessage(makeMessage(id: "a", content: "a-content"))
+        sut.insertFeedMessage(makeMessage(id: "b", content: "b-content"))
+        sut.updateFeedMessage(makeMessage(id: "b", content: "edited"))
+        XCTAssertEqual(sut.feedMessages.last?.content, "a-content")
+    }
+
+    func test_updateFeedMessage_unknownId_isANoOp() {
+        sut.insertFeedMessage(makeMessage(id: "a", content: "kept"))
+        sut.updateFeedMessage(makeMessage(id: "ghost", content: "ignored"))
+        XCTAssertEqual(sut.feedMessages.map(\.id), ["a"])
+        XCTAssertEqual(sut.feedMessages.first?.content, "kept")
+    }
+
+    // MARK: - feedRevision
+
+    /// The whole point of the revision: `Message` compares by id, so neither the
+    /// array nor its count moves when a row is edited in place.
+    func test_feedRevision_movesWhenARowIsEditedInPlace() {
+        sut.insertFeedMessage(makeMessage(id: "a", content: "before"))
+        let before = sut.feedRevision
+        let countBefore = sut.feedMessages.count
+        sut.updateFeedMessage(makeMessage(id: "a", content: "after"))
+        XCTAssertEqual(sut.feedMessages.count, countBefore)
+        XCTAssertGreaterThan(sut.feedRevision, before)
+    }
+
+    func test_feedRevision_movesWhenARowIsInserted() {
+        let before = sut.feedRevision
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        XCTAssertGreaterThan(sut.feedRevision, before)
+    }
+
+    func test_feedRevision_doesNotMoveForAnUnknownId() {
+        sut.insertFeedMessage(makeMessage(id: "a"))
+        let before = sut.feedRevision
+        sut.updateFeedMessage(makeMessage(id: "ghost"))
+        XCTAssertEqual(sut.feedRevision, before)
+    }
+
+    // MARK: - store mutation reaching the feed's working copy
+
+    /// End of the chain the bug broke: the store edits a row, and the copy `FeedView`
+    /// renders from picks the edit up through `FeedMerge` without a reload.
+    func test_storeRowEdit_reachesTheViewsWorkingCopy() {
+        sut.insertFeedMessage(makeMessage(id: "a", content: "before"))
+        let viewCopy = sut.feedMessages
+        let revisionBefore = sut.feedRevision
+
+        sut.updateFeedMessage(makeMessage(id: "a", content: "after"))
+
+        XCTAssertGreaterThan(sut.feedRevision, revisionBefore)
+        let merged = FeedMerge.merge(existing: viewCopy, incoming: sut.feedMessages)
+        XCTAssertEqual(merged.messages.count, 1)
+        XCTAssertEqual(merged.messages.first?.content, "after")
+    }
+
+    /// The view's copy runs ahead of the store once pagination has appended a page;
+    /// a store edit must not drop those rows.
+    func test_storeRowEdit_keepsPaginatedRowsTheStoreNeverSaw() {
+        sut.insertFeedMessage(makeMessage(id: "p1", content: "before"))
+        let viewCopy = sut.feedMessages + [makeMessage(id: "p2"), makeMessage(id: "p3")]
+
+        sut.updateFeedMessage(makeMessage(id: "p1", content: "after"))
+
+        let merged = FeedMerge.merge(existing: viewCopy, incoming: sut.feedMessages)
+        XCTAssertEqual(merged.messages.map(\.id), ["p1", "p2", "p3"])
+        XCTAssertEqual(merged.messages.first?.content, "after")
+    }
+
     // MARK: - reset
 
     func test_reset_clearsFeedMessages() {
@@ -352,8 +438,9 @@ final class AppDataStoreTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeMessage(id: String, linkMetadata: LinkMetadata? = nil) -> Message {
-        Message(id: id, content: "test", publiclyVisible: true,
+    private func makeMessage(id: String, content: String = "test",
+                             linkMetadata: LinkMetadata? = nil) -> Message {
+        Message(id: id, content: content, publiclyVisible: true,
                 userId: "u1", createdAt: "2026-01-01T00:00:00Z",
                 updatedAt: nil, user: nil, imageUrls: nil, videoUrls: nil,
                 linkMetadata: linkMetadata, parentId: nil, scheduledAt: nil,

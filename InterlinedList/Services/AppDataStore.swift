@@ -7,7 +7,16 @@ import Foundation
 
 @MainActor
 final class AppDataStore: ObservableObject {
-    @Published private(set) var feedMessages: [Message] = []
+    @Published private(set) var feedMessages: [Message] = [] {
+        didSet { feedRevision &+= 1 }
+    }
+
+    /// Bumped on every mutation of `feedMessages`, in-place row edits included.
+    /// `Message`'s `Equatable` is identity-based (`id` only), so neither the array
+    /// nor its `count` moves when a row's content is replaced — a view mirroring the
+    /// feed has nothing else to observe.
+    @Published private(set) var feedRevision = 0
+
     @Published private(set) var feedLoading = true
     @Published private(set) var feedError: String?
 
@@ -480,6 +489,15 @@ final class AppDataStore: ObservableObject {
 
     func insertFeedMessage(_ message: Message) {
         feedMessages.insert(message, at: 0)
+        saveFeedCache()
+    }
+
+    /// Replaces an already-loaded row with a newer copy of itself. Unknown id: no-op —
+    /// the feed page is a window, not the whole timeline, so a message that has scrolled
+    /// out of it is not an error.
+    func updateFeedMessage(_ message: Message) {
+        guard let index = feedMessages.firstIndex(where: { $0.id == message.id }) else { return }
+        feedMessages[index] = message
         saveFeedCache()
     }
 
