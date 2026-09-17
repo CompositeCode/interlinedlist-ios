@@ -159,4 +159,25 @@ final class APIClientProfileTests: XCTestCase {
         let user = try await sut.updateUserSettings(theme: "light")
         XCTAssertEqual(user.username, "alice")
     }
+
+    func test_updateUserSettings_systemTheme_sendsLiteralSystemString() async throws {
+        session.stub(json: #"{"user":\#(userJSON)}"#)
+        _ = try await sut.updateUserSettings(theme: "system")
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["theme"] as? String, "system", #"Body must be {"theme":"system"}"#)
+        XCTAssertEqual(json.count, 1, "Only the changed field belongs in the body")
+    }
+
+    func test_updateUserSettings_nilTheme_omitsThemeKey() async throws {
+        // Synthesized Encodable uses encodeIfPresent, and /api/user/update applies
+        // `...(theme !== undefined && { theme })` — so a nil theme is a silent no-op,
+        // never a clear. Callers must send "system" verbatim to select the OS theme.
+        session.stub(json: #"{"user":\#(userJSON)}"#)
+        _ = try await sut.updateUserSettings(theme: nil, showAdvancedPostSettings: true)
+        let body = try XCTUnwrap(session.lastRequest?.httpBody)
+        let json = try XCTUnwrap(try? JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNil(json["theme"])
+        XCTAssertEqual(json.count, 1)
+    }
 }
