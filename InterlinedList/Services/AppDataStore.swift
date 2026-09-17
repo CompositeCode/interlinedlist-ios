@@ -483,6 +483,20 @@ final class AppDataStore: ObservableObject {
         saveFeedCache()
     }
 
+    /// Replaces the link previews on one already-inserted feed message, so the row
+    /// a publish just added can show its card as soon as the metadata refresh lands.
+    ///
+    /// A message that isn't in the feed is a no-op, and so is an empty `links`: the
+    /// metadata route answers `{ links: [] }` for a message it resolved nothing for,
+    /// and blanking a preview a feed fetch had already supplied would be a
+    /// regression, not a refresh.
+    func applyLinkMetadata(_ links: [LinkMetadataItem], toMessageId id: String) {
+        guard !links.isEmpty,
+              let index = feedMessages.firstIndex(where: { $0.id == id }) else { return }
+        feedMessages[index].linkMetadata = LinkMetadata(links: links)
+        saveFeedCache()
+    }
+
     func removeList(id: String) { userLists.removeAll { $0.id == id }; saveListsCache() }
 
     /// Idempotent upsert by id — safe to call after `createDocumentOffline`
