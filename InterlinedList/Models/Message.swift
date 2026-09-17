@@ -275,3 +275,23 @@ struct CreateMessageResponse: Codable {
     let data: Message?
     let crossPostResults: [CrossPostResult]?
 }
+
+/// One platform's cross-post reply count, from `POST /api/messages/{id}/reply-counts`.
+/// The server caches for 10 minutes and backs unsupported platforms off for 24 hours,
+/// so the client never retries on its own.
+struct ReplyCountEntry: Codable, Identifiable {
+    let platform: String
+    let count: Int?
+    /// `success`, `unsupported` or `error`. Only `success` entries are worth drawing.
+    let status: String
+    let checkedAt: String?
+
+    var id: String { platform }
+
+    var isDisplayable: Bool { status == "success" && count != nil }
+}
+
+struct ReplyCountsResponse: Codable {
+    let replyCounts: [ReplyCountEntry]
+    let repliesCheckedAt: String?
+}
