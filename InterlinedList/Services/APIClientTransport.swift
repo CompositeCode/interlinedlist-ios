@@ -97,6 +97,24 @@ extension APIClient {
         return try await perform(request)
     }
 
+    /// POST (camelCase body) that maps selected non-2xx statuses to caller-supplied
+    /// errors *before* the generic body-driven mapping runs — the write-side twin of
+    /// `get(_:mappingStatuses:)`. For routes where a 4xx is an **answer** rather than
+    /// a fault: identity verification replies `400` for "this credential is dead",
+    /// which `checkResponse` would otherwise flatten into the same `.server(…)` a
+    /// 500 produces, making "your token expired" indistinguishable from "the check
+    /// couldn't run".
+    func postCamel<T: Decodable, B: Encodable>(_ path: String, body: B, mappingStatuses statusErrors: [Int: Error]) async throws -> T {
+        var request = try jsonRequest(path, method: "POST")
+        request.httpBody = try camelCaseEncoder.encode(body)
+        let (data, response) = try await session.data(for: request)
+        if let status = (response as? HTTPURLResponse)?.statusCode, let mapped = statusErrors[status] {
+            throw mapped
+        }
+        try checkResponse(data: data, response: response)
+        return try decoder.decode(T.self, from: data)
+    }
+
     func putCamel<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
         var request = try jsonRequest(path, method: "PUT")
         request.httpBody = try camelCaseEncoder.encode(body)
@@ -135,8 +153,9 @@ extension APIClient {
         return try decoder.decode(T.self, from: data)
     }
 
-    /// DELETE with a camelCase JSON body — a few routes identify their target in
-    /// the body rather than the path (identity unlink, push unregister).
+    /// DELETE with a camelCase JSON body — for routes that identify their target in
+    /// the body rather than the path (push unregister). Check the route first: a
+    /// body sent to a route that reads the query string is silently ignored.
     func deleteCamel<B: Encodable>(_ path: String, body: B) async throws {
         var request = try jsonRequest(path, method: "DELETE")
         request.httpBody = try camelCaseEncoder.encode(body)

@@ -124,4 +124,47 @@ final class APIClientDocumentTemplatesTests: XCTestCase {
             XCTAssertEqual(code, 403)
         }
     }
+
+    // MARK: seedDefaultDocumentTemplates() — #57
+
+    func test_seedDefaults_postsToSeedDefaultsPath() async throws {
+        session.stub(json: #"{"templatesFolderId":"f1","templates":[]}"#)
+        _ = try await sut.seedDefaultDocumentTemplates()
+        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/documents/templates/seed-defaults")
+    }
+
+    func test_seedDefaults_returnsTheSeededTemplates() async throws {
+        session.stub(json: #"""
+        {"templatesFolderId":"f1","templates":[
+          {"id":"t1","title":"Meeting notes","relativePath":"Templates/meeting.md"},
+          {"id":"t2","title":"Weekly review","relativePath":null}
+        ]}
+        """#)
+        let templates = try await sut.seedDefaultDocumentTemplates()
+        XCTAssertEqual(templates.count, 2)
+        XCTAssertEqual(templates.first?.title, "Meeting notes")
+        XCTAssertEqual(templates.first?.relativePath, "Templates/meeting.md")
+        XCTAssertNil(templates.last?.relativePath)
+    }
+
+    func test_seedDefaults_throwsForbiddenWhenTheSubscriberGateRejects() async throws {
+        session.stub(json: #"{"error":"Subscribe to create documents."}"#, statusCode: 403)
+        do {
+            _ = try await sut.seedDefaultDocumentTemplates()
+            XCTFail("Expected a throw")
+        } catch APIError.forbidden(let message) {
+            XCTAssertEqual(message, "Subscribe to create documents.")
+        }
+    }
+
+    func test_seedDefaults_401_throwsStatusError() async throws {
+        session.stub(data: Data(), statusCode: 401)
+        do {
+            _ = try await sut.seedDefaultDocumentTemplates()
+            XCTFail("Expected a throw")
+        } catch APIError.status(let code) {
+            XCTAssertEqual(code, 401)
+        }
+    }
 }
