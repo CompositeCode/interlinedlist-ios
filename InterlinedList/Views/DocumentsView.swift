@@ -1197,6 +1197,14 @@ private struct TemplatePickerView: View {
     @State private var creatingId: String?
     @State private var loadError: String?
     @State private var createError: String?
+    @State private var isSeeding = false
+    @State private var seedGateClosed = false
+
+    /// Hidden for free accounts, and hidden again if the route 403s — a gate that
+    /// slipped is a stale local subscriber flag, not something to show a price for.
+    private var canSeedDefaults: Bool {
+        authState.user?.isSubscriber == true && !seedGateClosed
+    }
 
     var body: some View {
         NavigationStack {
@@ -1217,6 +1225,22 @@ private struct TemplatePickerView: View {
                         Label("No Templates", systemImage: "doc.on.doc")
                     } description: {
                         Text("You have no document templates yet.")
+                    } actions: {
+                        // Subscriber-only, and absent rather than disabled for free
+                        // accounts — no control, no price, no upsell (Guideline 3.1.1).
+                        if canSeedDefaults {
+                            Button {
+                                Task { await seedDefaults() }
+                            } label: {
+                                if isSeeding {
+                                    ProgressView()
+                                } else {
+                                    Text("Add the default templates")
+                                }
+                            }
+                            .disabled(isSeeding)
+                            .accessibilityLabel("Add the default templates")
+                        }
                     }
                 } else {
                     List(templates) { template in
@@ -1276,6 +1300,29 @@ private struct TemplatePickerView: View {
             loadError = msg
         } catch {
             loadError = "Failed to load templates."
+        }
+    }
+
+    private func seedDefaults() async {
+        guard !isSeeding else { return }
+        isSeeding = true
+        defer { isSeeding = false }
+        do {
+            templates = try await APIClient.shared.seedDefaultDocumentTemplates()
+        } catch APIError.status(401) {
+            authState.handleUnauthorized()
+        } catch APIError.forbidden {
+            // The gate rejected us, so the local subscriber flag is stale. Hide the
+            // control and re-read the user rather than surfacing a payment message.
+            seedGateClosed = true
+            await authState.refreshUser()
+        } catch APIError.status(403) {
+            seedGateClosed = true
+            await authState.refreshUser()
+        } catch APIError.server(let msg) {
+            createError = msg
+        } catch {
+            createError = "Failed to add the default templates."
         }
     }
 
