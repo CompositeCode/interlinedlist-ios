@@ -49,6 +49,11 @@ extension APIClient {
         }
     }
 
+    /// No caller. The account document is the sync service's own state, not something
+    /// a user asks the app to discard — the web's Applications section forgets a
+    /// *device*, which is `forgetAppDevice(deviceId:)`. Kept because the route is part
+    /// of the six-route contract this file covers and deleting it would leave the
+    /// surface half-modelled; wire it if a "stop syncing this account" control appears.
     func deleteAppSettings() async throws {
         try await delete(appSettingsBase)
     }
@@ -111,6 +116,12 @@ extension APIClient {
     }
 
     // MARK: - Per-device document
+    //
+    // Neither of these has a caller, deliberately. iOS writes only the account-level
+    // document today, because it has no genuinely phone-specific persisted state worth
+    // syncing — see the account/device split recorded in #89. They exist so the first
+    // such setting has an obvious home instead of being appended to the shared
+    // document by default, which is the mistake that would be hard to undo later.
 
     func appDeviceSettings<S: Codable>(deviceId: String, _ type: S.Type = S.self) async throws -> SettingsDoc<S>? {
         do {
