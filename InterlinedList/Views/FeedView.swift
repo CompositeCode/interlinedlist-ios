@@ -559,7 +559,12 @@ struct FeedView: View {
         do {
             try await APIClient.shared.deleteMessage(id: message.id)
             messageToDelete = nil
+            // The local removals are load-bearing, not just faster: `FeedMerge` keeps
+            // rows the store's page does not hold (that is how pagination survives),
+            // so the store call below cannot evict a row this view already holds.
             messages.removeAll { $0.id == message.id }
+            searchResults.removeAll { $0.id == message.id }
+            store.removeFeedMessage(id: message.id)
         } catch APIError.status(401) {
             authState.handleUnauthorized()
             messageToDelete = nil
